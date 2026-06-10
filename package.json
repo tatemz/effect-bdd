@@ -1,6 +1,6 @@
 {
   "name": "effect-bdd",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "license": "MIT",
   "description": "An Effect-native API for testing Gherkin feature files",
@@ -56,12 +56,8 @@
     "./*/index": null
   },
   "files": [
-    "src/**/*.ts",
     "dist/**/*.js",
-    "dist/**/*.js.map",
-    "dist/**/*.d.ts",
-    "dist/**/*.d.ts.map",
-    "README.md"
+    "dist/**/*.d.ts"
   ],
   "publishConfig": {
     "access": "public",
@@ -69,7 +65,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && pnpm babel",
-    "babel": "babel dist --plugins annotate-pure-calls --out-dir dist --source-maps",
+    "babel": "babel dist --plugins annotate-pure-calls --out-dir dist",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:types": "tstyche",

@@ -13,8 +13,6 @@
     "erasableSyntaxOnly": true,
     "resolveJsonModule": true,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,
