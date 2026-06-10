@@ -85,16 +85,16 @@
   "dependencies": {
     "@cucumber/gherkin": "^39.1.0",
     "@cucumber/messages": "^32.3.1",
-    "@effect/platform-node": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3",
+    "@effect/platform-node": "4.0.0-beta.78",
     "glob": "^13.0.6"
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",
     "@changesets/cli": "^2.31.0",
-    "@effect/vitest": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3",
+    "@effect/vitest": "4.0.0-beta.78",
     "@types/node": "^25.9.2",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
-    "effect": "https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3",
+    "effect": "4.0.0-beta.78",
     "tstyche": "^7.2.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"

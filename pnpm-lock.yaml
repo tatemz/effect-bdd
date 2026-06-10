@@ -15,8 +15,8 @@ importers:
         specifier: ^32.3.1
         version: 32.3.1
       '@effect/platform-node':
-        specifier: https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
-        version: https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3(effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3)(ioredis@5.11.1)
+        specifier: 4.0.0-beta.78
+        version: 4.0.0-beta.78(effect@4.0.0-beta.78)(ioredis@5.11.1)
       glob:
         specifier: ^13.0.6
         version: 13.0.6
@@ -28,8 +28,8 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.9.2)
       '@effect/vitest':
-        specifier: https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
-        version: https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3(effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3)(vitest@4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(yaml@2.9.0)))
+        specifier: 4.0.0-beta.78
+        version: 4.0.0-beta.78(effect@4.0.0-beta.78)(vitest@4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(yaml@2.9.0)))
       '@types/node':
         specifier: ^25.9.2
         version: 25.9.2
@@ -37,8 +37,8 @@ importers:
         specifier: ^0.5.0
         version: 0.5.0(@babel/core@7.29.7)
       effect:
-        specifier: https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
-        version: https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
+        specifier: 4.0.0-beta.78
+        version: 4.0.0-beta.78
       tstyche:
         specifier: ^7.2.1
         version: 7.2.1(typescript@6.0.3)
@@ -190,24 +190,21 @@ packages:
   '@cucumber/messages@32.3.1':
     resolution: {integrity: sha512-yNQq1KoXRYaEKrWMFmpUQX7TdeQuU9jeGgJAZ3dArTsC/T4NpJ6DnqaJIIgwPnz/wtQIQTNX7/h0rOuF5xY4qQ==}
 
-  '@effect/platform-node-shared@https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node-shared@5e9b9e217b164ebfd4a002dd4380b3b1563200c3':
-    resolution: {tarball: https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node-shared@5e9b9e217b164ebfd4a002dd4380b3b1563200c3}
-    version: 4.0.0-beta.78
+  '@effect/platform-node-shared@4.0.0-beta.78':
+    resolution: {integrity: sha512-mo0ddTPATyCMyqzQasYDL7+NI29vozoMplom+qu9f/onDTd4xG5hvEEfGxfL0Ljygui6keG/YE/E9OZVf2z5WA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       effect: ^4.0.0-beta.78
 
-  '@effect/platform-node@https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3':
-    resolution: {tarball: https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3}
-    version: 4.0.0-beta.78
+  '@effect/platform-node@4.0.0-beta.78':
+    resolution: {integrity: sha512-8ONrIS5/R9dq+0BJ6v3kUXNEkfjU6S3GzIYCH5gmHdiriRvIoBhXYNAITfRvZpfx1JPrKuP70cHyuQDjmJcDkQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       effect: ^4.0.0-beta.78
       ioredis: ^5.7.0
 
-  '@effect/vitest@https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3':
-    resolution: {tarball: https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3}
-    version: 4.0.0-beta.78
+  '@effect/vitest@4.0.0-beta.78':
+    resolution: {integrity: sha512-5KQsQYrQ/o7mfOVAxRtNnfD9M0W4OI6yQd0n/m2N7OOLxTdX4FwN4s/X4obykBC7ZEwH+bzMrFJiB4pq9lrQKQ==}
     peerDependencies:
       effect: ^4.0.0-beta.78
       vitest: ^3.0.0 || ^4.0.0
@@ -582,9 +579,8 @@ packages:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
 
-  effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3:
-    resolution: {tarball: https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3}
-    version: 4.0.0-beta.78
+  effect@4.0.0-beta.78:
+    resolution: {integrity: sha512-j79Rl9QpHwMz/ZJWLNpZoiVj9N7zHqiLKN5EcYd/A8J1oqejILWQLfc4HPlvqHqKC8SK55LJ+X4gy4ONJ+JpfQ==}
 
   electron-to-chromium@1.5.371:
     resolution: {integrity: sha512-e9htk9mAYL6AzmkEhSvVVw7IWGSBJ/Bqdn2eRyRLrj1g6sncN4WbFt5qnILYoCktktr45pyjIrOiRvBThQ808w==}
@@ -1561,19 +1557,19 @@ snapshots:
       class-transformer: 0.5.1
       reflect-metadata: 0.2.2
 
-  '@effect/platform-node-shared@https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node-shared@5e9b9e217b164ebfd4a002dd4380b3b1563200c3(effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3)':
+  '@effect/platform-node-shared@4.0.0-beta.78(effect@4.0.0-beta.78)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
+      effect: 4.0.0-beta.78
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3(effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3)(ioredis@5.11.1)':
+  '@effect/platform-node@4.0.0-beta.78(effect@4.0.0-beta.78)(ioredis@5.11.1)':
     dependencies:
-      '@effect/platform-node-shared': https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node-shared@5e9b9e217b164ebfd4a002dd4380b3b1563200c3(effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3)
-      effect: https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
+      '@effect/platform-node-shared': 4.0.0-beta.78(effect@4.0.0-beta.78)
+      effect: 4.0.0-beta.78
       ioredis: 5.11.1
       mime: 4.1.0
       undici: 8.4.1
@@ -1581,9 +1577,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@effect/vitest@https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3(effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3)(vitest@4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(yaml@2.9.0)))':
+  '@effect/vitest@4.0.0-beta.78(effect@4.0.0-beta.78)(vitest@4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(yaml@2.9.0)))':
     dependencies:
-      effect: https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3
+      effect: 4.0.0-beta.78
       vitest: 4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(yaml@2.9.0))
 
   '@emnapi/core@1.10.0':
@@ -1913,7 +1909,7 @@ snapshots:
     dependencies:
       path-type: 4.0.0
 
-  effect@https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3:
+  effect@4.0.0-beta.78:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.8.0

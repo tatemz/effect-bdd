@@ -6,7 +6,7 @@ An Effect-native runner for testing Gherkin feature source with strongly typed s
 
 The package also ships an `effect-bdd` CLI for discovering feature files and step definition modules from globs.
 
-This package currently tracks Effect v4 beta builds from effect-smol. For matching local installs, use the pinned pkg.pr.new Effect build documented in `package.json`; npm registry `4.0.0-beta.x` packages remain the fallback when preview tarballs are unavailable.
+This package currently tracks the Effect v4 beta release train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform packages.
 
 ## When to Use `effect-bdd`
 
