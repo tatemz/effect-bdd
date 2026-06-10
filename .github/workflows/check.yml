@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - run: corepack enable && corepack prepare pnpm@10.16.1 --activate
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
-      - run: npm install --global pnpm@10.16.1
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
