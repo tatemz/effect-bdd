@@ -76,7 +76,8 @@
     "test": "vitest run",
     "test:types": "tstyche",
     "ci": "pnpm build && pnpm test && pnpm test:types",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "release": "pnpm build && changeset publish"
   },
   "peerDependencies": {
     "effect": "^4.0.0-beta.78"
