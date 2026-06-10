@@ -1,6 +1,6 @@
 {
   "name": "effect-bdd",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "license": "MIT",
   "description": "An Effect-native API for testing Gherkin feature files",
@@ -34,12 +34,22 @@
   "packageManager": "pnpm@10.16.1",
   "sideEffects": [],
   "bin": {
-    "effect-bdd": "./src/bin.ts"
+    "effect-bdd": "./dist/bin.js"
   },
   "exports": {
     "./package.json": "./package.json",
-    ".": "./src/index.ts",
-    "./*": "./src/*.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./Bdd": {
+      "types": "./dist/Bdd.d.ts",
+      "default": "./dist/Bdd.js"
+    },
+    "./Errors": {
+      "types": "./dist/Errors.d.ts",
+      "default": "./dist/Errors.js"
+    },
     "./bin": null,
     "./main": null,
     "./internal/*": null,
@@ -55,19 +65,7 @@
   ],
   "publishConfig": {
     "access": "public",
-    "provenance": true,
-    "bin": {
-      "effect-bdd": "./dist/bin.js"
-    },
-    "exports": {
-      "./package.json": "./package.json",
-      ".": "./dist/index.js",
-      "./*": "./dist/*.js",
-      "./bin": null,
-      "./main": null,
-      "./internal/*": null,
-      "./*/index": null
-    }
+    "provenance": true
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && pnpm babel",
@@ -98,5 +96,7 @@
     "tstyche": "^7.2.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
-  }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
 }
