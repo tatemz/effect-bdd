@@ -1,0 +1,101 @@
+{
+  "name": "effect-bdd",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "An Effect-native API for testing Gherkin feature files",
+  "homepage": "https://github.com/tatemz/effect-bdd#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tatemz/effect-bdd.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tatemz/effect-bdd/issues"
+  },
+  "tags": [
+    "bdd",
+    "gherkin",
+    "testing",
+    "typescript",
+    "algebraic-data-types",
+    "functional-programming"
+  ],
+  "keywords": [
+    "bdd",
+    "gherkin",
+    "testing",
+    "typescript",
+    "algebraic-data-types",
+    "functional-programming"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@10.16.1",
+  "sideEffects": [],
+  "bin": {
+    "effect-bdd": "./src/bin.ts"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./bin": null,
+    "./main": null,
+    "./internal/*": null,
+    "./*/index": null
+  },
+  "files": [
+    "src/**/*.ts",
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.ts.map",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "bin": {
+      "effect-bdd": "./dist/bin.js"
+    },
+    "exports": {
+      "./package.json": "./package.json",
+      ".": "./dist/index.js",
+      "./*": "./dist/*.js",
+      "./bin": null,
+      "./main": null,
+      "./internal/*": null,
+      "./*/index": null
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && pnpm babel",
+    "babel": "babel dist --plugins annotate-pure-calls --out-dir dist --source-maps",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:types": "tstyche",
+    "ci": "pnpm build && pnpm test && pnpm test:types",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-beta.78"
+  },
+  "dependencies": {
+    "@cucumber/gherkin": "^39.1.0",
+    "@cucumber/messages": "^32.3.1",
+    "@effect/platform-node": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@5e9b9e217b164ebfd4a002dd4380b3b1563200c3",
+    "glob": "^13.0.6"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.29.7",
+    "@changesets/cli": "^2.31.0",
+    "@effect/vitest": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@5e9b9e217b164ebfd4a002dd4380b3b1563200c3",
+    "@types/node": "^25.9.2",
+    "babel-plugin-annotate-pure-calls": "^0.5.0",
+    "effect": "https://pkg.pr.new/Effect-TS/effect-smol/effect@5e9b9e217b164ebfd4a002dd4380b3b1563200c3",
+    "tstyche": "^7.2.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.DS_Store
+scratchpad/
+test/.effect-bdd-*
+test/.effect-bdd-report-*
