@@ -3,9 +3,6 @@ name: Release
 on:
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 permissions:
   contents: read
   id-token: write
@@ -15,14 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.16.1
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      - run: npm install --global pnpm@10.16.1
       - run: pnpm install --frozen-lockfile
       - run: pnpm run ci
       - run: npm pack --dry-run
