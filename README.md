@@ -8,6 +8,20 @@ The package also ships an `effect-bdd` CLI for discovering feature files and ste
 
 This package currently tracks the Effect v4 beta release train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform packages.
 
+## Installation
+
+```sh
+pnpm add effect-bdd effect@4.0.0-beta.78
+```
+
+The `effect-bdd` CLI is published with the package:
+
+```sh
+pnpm effect-bdd --features "features/**/*.feature" --steps "features/**/*.step.ts"
+```
+
+Use `effect-bdd@0.1.1` or newer. Version `0.1.0` was the first registry publish and had incorrect CLI bin metadata.
+
 ## When to Use `effect-bdd`
 
 Use `effect-bdd` when a Gherkin feature should drive a typed state machine:
