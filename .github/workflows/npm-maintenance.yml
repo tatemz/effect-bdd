@@ -1,0 +1,19 @@
+name: NPM Maintenance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deprecate-bad-initial-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm deprecate effect-bdd@0.1.0 "This first publish had incorrect CLI bin metadata. Use effect-bdd@0.1.2 or newer."
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
