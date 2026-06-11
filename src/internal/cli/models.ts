@@ -1,6 +1,4 @@
-import type { PickleStep } from "@cucumber/messages"
 import type * as Bdd from "../../Bdd.ts"
-import type * as Parser from "../parser.ts"
 import type * as CoreRunner from "../runner.ts"
 
 /** @internal */
@@ -12,19 +10,19 @@ export interface FeatureSource {
 /** @internal */
 export interface ScenarioTask {
   readonly featurePath: string
-  readonly core: CoreRunner.ScenarioTask<unknown, unknown, never>
+  readonly core: CoreRunner.ScenarioTask<unknown, never>
 }
 
 /** @internal */
 export type ScenarioOutcome =
   | {
-    readonly _tag: "Passed"
-    readonly steps: number
-  }
+      readonly _tag: "Passed"
+      readonly steps: number
+    }
   | {
-    readonly _tag: "Failed"
-    readonly error: Bdd.RunError
-  }
+      readonly _tag: "Failed"
+      readonly error: Bdd.RunError
+    }
 
 /** @internal */
 export interface ScenarioResult {
@@ -45,44 +43,31 @@ export interface RunSummary {
 /** @internal */
 export type CliDiagnostic =
   | {
-    readonly _tag: "UnmatchedFeature"
-    readonly featurePath: string
-    readonly featureName: string
-    readonly line: number
-    readonly message: string
-  }
+      readonly _tag: "UnmatchedFeature"
+      readonly featurePath: string
+      readonly featureName: string
+      readonly line: number
+      readonly message: string
+    }
   | {
-    readonly _tag: "UnmatchedStep"
-    readonly featurePath: string
-    readonly featureName: string
-    readonly scenarioName: string
-    readonly scenarioLine: number
-    readonly step: PickleStep
-    readonly source: Parser.SourceIndex
-    readonly reason: "NoMatch" | "WrongKeyword" | "MultipleMatches"
-    readonly candidates: ReadonlyArray<string>
-    readonly message: string
-  }
+      readonly _tag: "UnmatchedScenario"
+      readonly featurePath: string
+      readonly featureName: string
+      readonly scenarioName: string
+      readonly scenarioLine: number
+      readonly message: string
+    }
   | {
-    readonly _tag: "UnmatchedScenario"
-    readonly featurePath: string
-    readonly featureName: string
-    readonly scenarioName: string
-    readonly scenarioLine: number
-    readonly message: string
-  }
+      readonly _tag: "UnusedFeatureDefinition"
+      readonly featureName: string
+      readonly message: string
+    }
   | {
-    readonly _tag: "UnusedFeatureDefinition"
-    readonly featureName: string
-    readonly message: string
-  }
-  | {
-    readonly _tag: "UnusedStepDefinition"
-    readonly featureName: string
-    readonly expression: string
-    readonly kind: string
-    readonly message: string
-  }
+      readonly _tag: "UnusedScenarioDefinition"
+      readonly featureName: string
+      readonly scenarioName: string
+      readonly message: string
+    }
 
 /** @internal */
 export interface CliRunResult {

@@ -14,50 +14,40 @@ import { ModuleLoader } from "./moduleLoader.ts"
 /** @internal */
 export const loadFeatureSources: (
   patterns: ReadonlyArray<string>
-) => Effect.Effect<ReadonlyArray<FeatureSource>, DiscoveryError, FileSystem.FileSystem | GlobResolver> = Effect
-  .fnUntraced(function*(
-    patterns: ReadonlyArray<string>
-  ) {
+) => Effect.Effect<ReadonlyArray<FeatureSource>, DiscoveryError, FileSystem.FileSystem | GlobResolver> =
+  Effect.fnUntraced(function* (patterns: ReadonlyArray<string>) {
     const fs = yield* FileSystem.FileSystem
     const glob = yield* GlobResolver
-    const paths = yield* nonEmptyPaths(
-      yield* glob.resolve(patterns),
-      "No feature files matched --features"
-    )
+    const paths = yield* nonEmptyPaths(yield* glob.resolve(patterns), "No feature files matched --features")
     return yield* Effect.forEach(paths, (path) =>
       pipe(
         fs.readFileString(path),
         Effect.map((source): FeatureSource => ({ path, source })),
-        Effect.mapError((cause) =>
-          new DiscoveryError({
-            message: `Could not read feature file "${path}"`,
-            cause
-          })
+        Effect.mapError(
+          (cause) =>
+            new DiscoveryError({
+              message: `Could not read feature file "${path}"`,
+              cause
+            })
         )
-      ))
+      )
+    )
   })
 
 /** @internal */
 export const loadFeatureDefinitions: (
   patterns: ReadonlyArray<string>
 ) => Effect.Effect<
-  ReadonlyArray<Bdd.Feature<unknown, unknown, never>>,
+  ReadonlyArray<Bdd.Feature<unknown, never>>,
   DiscoveryError | ModuleLoadError,
   GlobResolver | ModuleLoader | Path.Path
-> = Effect.fnUntraced(function*(
-  patterns: ReadonlyArray<string>
-) {
+> = Effect.fnUntraced(function* (patterns: ReadonlyArray<string>) {
   const glob = yield* GlobResolver
   const loader = yield* ModuleLoader
-  const paths = yield* nonEmptyPaths(
-    yield* glob.resolve(patterns),
-    "No step definition modules matched --steps"
-  )
+  const paths = yield* nonEmptyPaths(yield* glob.resolve(patterns), "No step definition modules matched --steps")
   const definitions = yield* Effect.forEach(paths, (path) =>
-    pipe(
-      loader.load(path),
-      Effect.map(extractFeatureDefinitions)
-    ))
+    pipe(loader.load(path), Effect.map(extractFeatureDefinitions))
+  )
   return yield* nonEmptyDefinitions(Arr.flatten(definitions))
 })
 
@@ -65,21 +55,17 @@ const nonEmptyPaths = (
   paths: ReadonlyArray<string>,
   message: string
 ): Effect.Effect<ReadonlyArray<string>, DiscoveryError> =>
-  paths.length === 0
-    ? Effect.fail(new DiscoveryError({ message }))
-    : Effect.succeed(paths)
+  paths.length === 0 ? Effect.fail(new DiscoveryError({ message })) : Effect.succeed(paths)
 
 const nonEmptyDefinitions = (
-  definitions: ReadonlyArray<Bdd.Feature<unknown, unknown, never>>
-): Effect.Effect<ReadonlyArray<Bdd.Feature<unknown, unknown, never>>, DiscoveryError> =>
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>
+): Effect.Effect<ReadonlyArray<Bdd.Feature<unknown, never>>, DiscoveryError> =>
   definitions.length === 0
     ? Effect.fail(new DiscoveryError({ message: "No Bdd.Feature exports found in matched step definition modules" }))
     : Effect.succeed(definitions)
 
-const extractFeatureDefinitions = (
-  module: Record<string, unknown>
-): ReadonlyArray<Bdd.Feature<unknown, unknown, never>> =>
+const extractFeatureDefinitions = (module: Record<string, unknown>): ReadonlyArray<Bdd.Feature<unknown, never>> =>
   pipe(
     Record_.values(module),
-    Arr.filter((value): value is Bdd.Feature<unknown, unknown, never> => isFeature(value))
+    Arr.filter((value): value is Bdd.Feature<unknown, never> => isFeature(value))
   )

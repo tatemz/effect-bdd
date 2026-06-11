@@ -54,7 +54,10 @@ const outputFileJunit = Flag.file("output-file.junit").pipe(
 const parallel = Flag.integer("parallel").pipe(
   Flag.withAlias("p"),
   Flag.withDescription("Number of scenarios to run concurrently."),
-  Flag.filter((value) => value > 0, (value) => `Expected --parallel to be greater than 0, got ${value}`),
+  Flag.filter(
+    (value) => value > 0,
+    (value) => `Expected --parallel to be greater than 0, got ${value}`
+  ),
   Flag.withDefault(1)
 )
 
@@ -96,22 +99,20 @@ export const cli = Command.make(
     name,
     failFast
   },
-  Effect.fnUntraced(function*(
-    {
-      features,
-      steps,
-      reporter,
-      outputFileText,
-      outputFileHtml,
-      outputFileJson,
-      outputFileJunit,
-      parallel,
-      verbose,
-      tags,
-      name,
-      failFast
-    }
-  ) {
+  Effect.fnUntraced(function* ({
+    features,
+    steps,
+    reporter,
+    outputFileText,
+    outputFileHtml,
+    outputFileJson,
+    outputFileJunit,
+    parallel,
+    verbose,
+    tags,
+    name,
+    failFast
+  }) {
     const options: CliOptions = {
       features,
       steps,
@@ -133,18 +134,15 @@ export const cli = Command.make(
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, { verbose }).pipe(
       Effect.mapError(toUserError)
     )
-    const result = yield* Runner.run(options).pipe(
-      Effect.mapError(toUserError)
-    )
-    yield* Reporter.emitAll(reporters, result).pipe(
-      Effect.mapError(toUserError)
-    )
+    const result = yield* Runner.run(options).pipe(Effect.mapError(toUserError))
+    yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError))
     if (result.summary.failed > 0 || result.diagnostics.length > 0) {
       return yield* Effect.fail(
         new CliError.UserError({
-          cause: result.summary.failed > 0
-            ? `${result.summary.failed} scenario(s) failed`
-            : `${result.diagnostics.length} diagnostic(s) reported`
+          cause:
+            result.summary.failed > 0
+              ? `${result.summary.failed} scenario(s) failed`
+              : `${result.diagnostics.length} diagnostic(s) reported`
         })
       )
     }

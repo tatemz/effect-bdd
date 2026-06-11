@@ -11,6 +11,8 @@ import type {
   GherkinCompiler as GherkinCompiler_,
   Report as Report_,
   RunError as RunError_,
+  Scenario as Scenario_,
+  Step as Step_,
   TableArg as TableArg_
 } from "./Bdd.ts"
 
@@ -34,7 +36,29 @@ export declare namespace Bdd {
    * @category models
    * @since 0.1.0
    */
-  export type Feature<State, E = never, R = never> = Feature_<State, E, R>
+  export type Feature<E = never, R = never> = Feature_<E, R>
+
+  /**
+   * A named scenario chain.
+   *
+   * @category models
+   * @since 0.3.0
+   */
+  export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R>
+
+  /**
+   * A standalone step definition.
+   *
+   * @category models
+   * @since 0.3.0
+   */
+  export type Step<Kind extends "Step" | "Given" | "When" | "Then", In, Out, E = never, R = never> = Step_<
+    Kind,
+    In,
+    Out,
+    E,
+    R
+  >
 
   /**
    * Result returned after all scenarios pass.
@@ -123,7 +147,29 @@ export type DocStringArg<A> = DocStringArg_<A>
  * @category re-exports
  * @since 0.1.0
  */
-export type Feature<State, E = never, R = never> = Feature_<State, E, R>
+export type Feature<E = never, R = never> = Feature_<E, R>
+
+/**
+ * A named scenario chain.
+ *
+ * @category re-exports
+ * @since 0.3.0
+ */
+export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R>
+
+/**
+ * A standalone step definition.
+ *
+ * @category re-exports
+ * @since 0.3.0
+ */
+export type Step<Kind extends "Step" | "Given" | "When" | "Then", In, Out, E = never, R = never> = Step_<
+  Kind,
+  In,
+  Out,
+  E,
+  R
+>
 
 /**
  * Result returned after all scenarios pass.

@@ -2,11 +2,13 @@ import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as Path from "effect/Path"
+import { pipe } from "effect/Function"
 import { isError } from "effect/Predicate"
+import * as Str from "effect/String"
 import { pathToFileURL } from "node:url"
 import { ModuleLoadError } from "./errors.ts"
 
-const load = Effect.fnUntraced(function*(path: string) {
+const load = Effect.fnUntraced(function* (path: string) {
   const pathService = yield* Path.Path
   const resolved = pathService.resolve(path)
   return yield* Effect.tryPromise({
@@ -16,9 +18,12 @@ const load = Effect.fnUntraced(function*(path: string) {
 })
 
 /** @internal */
-export class ModuleLoader extends Context.Service<ModuleLoader, {
-  readonly load: (path: string) => Effect.Effect<Record<string, unknown>, ModuleLoadError, Path.Path>
-}>()("effect-bdd/cli/ModuleLoader") {
+export class ModuleLoader extends Context.Service<
+  ModuleLoader,
+  {
+    readonly load: (path: string) => Effect.Effect<Record<string, unknown>, ModuleLoadError, Path.Path>
+  }
+>()("effect-bdd/cli/ModuleLoader") {
   static readonly layer = Layer.succeed(ModuleLoader, {
     load
   })
@@ -26,7 +31,7 @@ export class ModuleLoader extends Context.Service<ModuleLoader, {
 
 const moduleLoadError = (path: string, cause: unknown): ModuleLoadError => {
   const reason = isError(cause) ? cause.message : String(cause)
-  const isTsLoaderFailure = reason.includes("Unknown file extension") && reason.includes(".ts")
+  const isTsLoaderFailure = pipe(reason, Str.includes("Unknown file extension")) && pipe(reason, Str.includes(".ts"))
   return new ModuleLoadError({
     path,
     message: isTsLoaderFailure

@@ -70,21 +70,20 @@ describe("public API", () => {
     )
 
     it.effect("Bdd.run compiles through the provided service", () =>
-      Effect.gen(function*() {
-        const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
-          Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
+      Effect.gen(function* () {
+        const feature = Bdd.feature("Counter").pipe(
+          Bdd.scenario("Stubbed increment").pipe(Bdd.when`increment`(() => Effect.succeed(1)))
         )
 
         // Not valid Gherkin: proves the stub compiler is used instead of Cucumber.
-        const report = yield* Bdd.run(feature, "this is not gherkin").pipe(
-          Effect.provide(layerStub)
-        )
+        const report = yield* Bdd.run(feature, "this is not gherkin").pipe(Effect.provide(layerStub))
 
         assert.deepStrictEqual(report, {
           feature: "Counter",
           scenarios: [{ name: "Stubbed increment", steps: 1, tags: [] }]
         })
-      }))
+      })
+    )
   })
 
   describe("effect-bdd/Errors subpath", () => {

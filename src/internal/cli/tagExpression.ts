@@ -1,6 +1,7 @@
 import * as Arr from "effect/Array"
 import * as Effect from "effect/Effect"
 import { pipe } from "effect/Function"
+import * as Option from "effect/Option"
 import * as Str from "effect/String"
 import { DiscoveryError } from "./errors.ts"
 
@@ -9,23 +10,23 @@ export type TagPredicate = (tags: ReadonlyArray<string>) => boolean
 
 type Expression =
   | {
-    readonly _tag: "Tag"
-    readonly tag: string
-  }
+      readonly _tag: "Tag"
+      readonly tag: string
+    }
   | {
-    readonly _tag: "Not"
-    readonly expression: Expression
-  }
+      readonly _tag: "Not"
+      readonly expression: Expression
+    }
   | {
-    readonly _tag: "And"
-    readonly left: Expression
-    readonly right: Expression
-  }
+      readonly _tag: "And"
+      readonly left: Expression
+      readonly right: Expression
+    }
   | {
-    readonly _tag: "Or"
-    readonly left: Expression
-    readonly right: Expression
-  }
+      readonly _tag: "Or"
+      readonly left: Expression
+      readonly right: Expression
+    }
 
 interface ParseResult {
   readonly expression: Expression
@@ -33,9 +34,7 @@ interface ParseResult {
 }
 
 /** @internal */
-export const compileAll = (
-  expressions: ReadonlyArray<string>
-): Effect.Effect<TagPredicate, DiscoveryError> =>
+export const compileAll = (expressions: ReadonlyArray<string>): Effect.Effect<TagPredicate, DiscoveryError> =>
   Effect.forEach(expressions, compile).pipe(
     Effect.map((predicates) => (tags) => Arr.every(predicates, (predicate) => predicate(tags)))
   )
@@ -112,12 +111,12 @@ const parseNot = (tokens: ReadonlyArray<string>, index: number): ParseResult | u
   return result === undefined
     ? undefined
     : {
-      expression: {
-        _tag: "Not",
-        expression: result.expression
-      },
-      index: result.index
-    }
+        expression: {
+          _tag: "Not",
+          expression: result.expression
+        },
+        index: result.index
+      }
 }
 
 const parsePrimary = (tokens: ReadonlyArray<string>, index: number): ParseResult | undefined => {
@@ -129,19 +128,19 @@ const parsePrimary = (tokens: ReadonlyArray<string>, index: number): ParseResult
     const result = parseOr(tokens, index + 1)
     return result !== undefined && tokens[result.index] === ")"
       ? {
-        expression: result.expression,
-        index: result.index + 1
-      }
+          expression: result.expression,
+          index: result.index + 1
+        }
       : undefined
   }
   return pipe(token, Str.startsWith("@"))
     ? {
-      expression: {
-        _tag: "Tag",
-        tag: token
-      },
-      index: index + 1
-    }
+        expression: {
+          _tag: "Tag",
+          tag: token
+        },
+        index: index + 1
+      }
     : undefined
 }
 
@@ -163,7 +162,11 @@ const evaluate = (expression: Expression, tags: ReadonlyArray<string>): boolean 
 }
 
 const tokenize = (expression: string): ReadonlyArray<string> | undefined => {
-  const matches = expression.match(/\(|\)|\b(?:and|or|not)\b|@[A-Za-z0-9][A-Za-z0-9_-]*/g) ?? []
+  const matches = pipe(
+    expression,
+    Str.match(/\(|\)|\b(?:and|or|not)\b|@[A-Za-z0-9][A-Za-z0-9_-]*/g),
+    Option.getOrElse((): ReadonlyArray<string> => [])
+  )
   const normalized = pipe(expression, Str.replace(/\s+/g, ""))
   const matched = pipe(matches, Arr.join(""))
   return normalized === matched ? matches : undefined

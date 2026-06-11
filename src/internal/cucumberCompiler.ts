@@ -1,5 +1,6 @@
 import { AstBuilder, compile, GherkinClassicTokenMatcher, Parser } from "@cucumber/gherkin"
 import { IdGenerator } from "@cucumber/messages"
+import * as Arr from "effect/Array"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import { isError } from "effect/Predicate"
@@ -36,7 +37,10 @@ const parseErrorFromCause = (cause: unknown): ParseError => {
 
 const causeLocation = (cause: unknown): { readonly line: number; readonly column?: number } | undefined => {
   if (
-    typeof cause === "object" && cause !== null && "errors" in cause && Array.isArray(cause.errors) &&
+    typeof cause === "object" &&
+    cause !== null &&
+    "errors" in cause &&
+    Arr.isArray(cause.errors) &&
     cause.errors.length > 0
   ) {
     return causeLocation(cause.errors[0])

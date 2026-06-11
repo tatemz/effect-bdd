@@ -1,0 +1,9 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+  `Effect.orDie($...)` as $call,
+  `$effect.pipe(Effect.orDie)` as $call
+} where {
+  register_diagnostic(span=$call, message="Keep failures typed; do not convert recoverable errors into defects with Effect.orDie.")
+}

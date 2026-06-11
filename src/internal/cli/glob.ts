@@ -4,8 +4,10 @@ import * as Effect from "effect/Effect"
 import * as FileSystem from "effect/FileSystem"
 import { pipe } from "effect/Function"
 import * as Layer from "effect/Layer"
+import * as Option from "effect/Option"
 import * as Order from "effect/Order"
 import * as Path from "effect/Path"
+import * as Str from "effect/String"
 import type { DiscoveryError } from "./errors.ts"
 
 /**
@@ -17,23 +19,21 @@ import type { DiscoveryError } from "./errors.ts"
  *
  * @internal
  */
-export class GlobResolver extends Context.Service<GlobResolver, {
-  readonly resolve: (patterns: ReadonlyArray<string>) => Effect.Effect<ReadonlyArray<string>, DiscoveryError>
-}>()("effect-bdd/cli/GlobResolver") {
+export class GlobResolver extends Context.Service<
+  GlobResolver,
+  {
+    readonly resolve: (patterns: ReadonlyArray<string>) => Effect.Effect<ReadonlyArray<string>, DiscoveryError>
+  }
+>()("effect-bdd/cli/GlobResolver") {
   static readonly layer: Layer.Layer<GlobResolver, never, FileSystem.FileSystem | Path.Path> = Layer.effect(
     GlobResolver,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       return GlobResolver.of({
-        resolve: Effect.fnUntraced(function*(patterns) {
+        resolve: Effect.fnUntraced(function* (patterns) {
           const matches = yield* Effect.forEach(patterns, (pattern) => resolvePattern(fs, path, pattern))
-          return pipe(
-            matches,
-            Arr.flatten,
-            Arr.dedupe,
-            Arr.sort(Order.String)
-          )
+          return pipe(matches, Arr.flatten, Arr.dedupe, Arr.sort(Order.String))
         })
       })
     })
@@ -45,19 +45,28 @@ const resolvePattern = (
   path: Path.Path,
   pattern: string
 ): Effect.Effect<ReadonlyArray<string>, DiscoveryError> => {
-  const segments = path.resolve(pattern).split("/").filter((segment) => segment.length > 0)
-  const magicIndex = segments.findIndex(hasWildcard)
-  return magicIndex === -1
-    ? fileOrEmpty(fs, `/${segments.join("/")}`)
-    : matchWildcards(fs, `/${segments.slice(0, magicIndex).join("/")}`, segments.slice(magicIndex))
+  const segments = pipe(
+    Str.split(path.resolve(pattern), "/"),
+    Arr.filter((segment) => segment.length > 0)
+  )
+  return pipe(
+    Arr.findFirstIndex(segments, hasWildcard),
+    Option.match({
+      onNone: () => fileOrEmpty(fs, `/${Arr.join(segments, "/")}`),
+      onSome: (magicIndex) => {
+        const [literal, magic] = Arr.splitAt(segments, magicIndex)
+        return matchWildcards(fs, `/${Arr.join(literal, "/")}`, magic)
+      }
+    })
+  )
 }
 
-const fileOrEmpty = Effect.fnUntraced(function*(fs: FileSystem.FileSystem, file: string) {
+const fileOrEmpty = Effect.fnUntraced(function* (fs: FileSystem.FileSystem, file: string) {
   const info = yield* Effect.orElseSucceed(fs.stat(file), () => undefined)
   return info?.type === "File" ? [file] : []
 })
 
-const matchWildcards = Effect.fnUntraced(function*(
+const matchWildcards = Effect.fnUntraced(function* (
   fs: FileSystem.FileSystem,
   base: string,
   segments: ReadonlyArray<string>
@@ -72,24 +81,19 @@ const matchWildcards = Effect.fnUntraced(function*(
   return Arr.flatten(files)
 })
 
-const hasWildcard = (segment: string): boolean => segment.includes("*") || segment.includes("?")
+const hasWildcard = (segment: string): boolean => pipe(segment, Str.includes("*")) || pipe(segment, Str.includes("?"))
 
 const compileMatcher = (segments: ReadonlyArray<string>): RegExp =>
-  new RegExp(`^${
-    pipe(
+  new RegExp(
+    `^${pipe(
       segments,
       Arr.map((segment, index) => {
         const last = index === segments.length - 1
-        return segment === "**"
-          ? (last ? ".*" : "(?:[^/]+/)*")
-          : `${segmentToRegExp(segment)}${last ? "" : "/"}`
+        return segment === "**" ? (last ? ".*" : "(?:[^/]+/)*") : `${segmentToRegExp(segment)}${last ? "" : "/"}`
       }),
       Arr.join("")
-    )
-  }$`)
+    )}$`
+  )
 
 const segmentToRegExp = (segment: string): string =>
-  segment
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, "[^/]*")
-    .replace(/\?/g, "[^/]")
+  pipe(segment, Str.replace(/[.+^${}()|[\]\\]/g, "\\$&"), Str.replace(/\*/g, "[^/]*"), Str.replace(/\?/g, "[^/]"))
