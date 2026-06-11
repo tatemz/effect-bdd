@@ -147,26 +147,24 @@ const runScenarios = (
   tasks: ReadonlyArray<ScenarioTask>
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, never> =>
   options.filters.failFast
-    ? runScenariosFailFast(tasks, [])
+    ? runScenariosFailFast(tasks)
     : Effect.forEach(tasks, runScenario, { concurrency: options.parallel })
 
-const runScenariosFailFast = (
-  tasks: ReadonlyArray<ScenarioTask>,
-  results: ReadonlyArray<ScenarioResult>,
-  index = 0
-): Effect.Effect<ReadonlyArray<ScenarioResult>, never, never> => {
-  if (index >= tasks.length) {
-    return Effect.succeed(results)
+const runScenariosFailFast: (
+  tasks: ReadonlyArray<ScenarioTask>
+) => Effect.Effect<ReadonlyArray<ScenarioResult>, never, never> = Effect.fnUntraced(function*(
+  tasks: ReadonlyArray<ScenarioTask>
+) {
+  const results: Array<ScenarioResult> = []
+  for (const task of tasks) {
+    const result = yield* runScenario(task)
+    results.push(result)
+    if (result.outcome._tag === "Failed") {
+      break
+    }
   }
-  return pipe(
-    runScenario(tasks[index]),
-    Effect.flatMap((result) =>
-      result.outcome._tag === "Failed"
-        ? Effect.succeed(Arr.append(results, result))
-        : runScenariosFailFast(tasks, Arr.append(results, result), index + 1)
-    )
-  )
-}
+  return results
+})
 
 const filterTasks = (
   options: CliOptions,

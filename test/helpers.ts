@@ -3,7 +3,7 @@ import { assert } from "@effect/vitest"
 import { Cause, Effect, Option } from "effect"
 
 export const runBdd = <State, E, R>(feature: Bdd.Feature<State, E, R>, source: string) =>
-  Bdd.run(feature, source).pipe(Effect.provide(Bdd.GherkinCompiler.Cucumber))
+  Bdd.run(feature, source).pipe(Effect.provide(Bdd.layerCucumber))
 
 export const runError = <A, R>(effect: Effect.Effect<A, Bdd.RunError, R>): Effect.Effect<Bdd.RunError, never, R> =>
   Effect.gen(function*() {

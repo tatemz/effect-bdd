@@ -19,7 +19,7 @@
     "noUnusedParameters": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "stripInternal": false,
+    "stripInternal": true,
     "skipLibCheck": true,
     "noErrorTruncation": true,
     "types": ["node"]

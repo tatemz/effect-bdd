@@ -2,11 +2,12 @@ import { AstBuilder, compile, GherkinClassicTokenMatcher, Parser } from "@cucumb
 import { IdGenerator } from "@cucumber/messages"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
+import { isError } from "effect/Predicate"
 import { ParseError } from "../Errors.ts"
 import { GherkinCompiler, type ParsedSource } from "./parser.ts"
 
 /** @internal */
-export const Cucumber = Layer.succeed(GherkinCompiler, {
+export const layerCucumber = Layer.succeed(GherkinCompiler, {
   compile: (source, uri) =>
     Effect.try({
       try: () => compileWithCucumber(source, uri),
@@ -27,7 +28,7 @@ const compileWithCucumber = (source: string, uri: string): ParsedSource => {
 const parseErrorFromCause = (cause: unknown): ParseError => {
   const location = causeLocation(cause)
   return new ParseError({
-    message: causeMessage(cause),
+    message: isError(cause) ? cause.message : String(cause),
     line: location?.line ?? 1,
     column: location?.column ?? 1
   })
@@ -51,8 +52,3 @@ const causeLocation = (cause: unknown): { readonly line: number; readonly column
   }
   return undefined
 }
-
-const causeMessage = (cause: unknown): string =>
-  typeof cause === "object" && cause !== null && "message" in cause && typeof cause.message === "string"
-    ? cause.message
-    : String(cause)

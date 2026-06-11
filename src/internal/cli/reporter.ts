@@ -3,7 +3,9 @@ import * as Console from "effect/Console"
 import * as Effect from "effect/Effect"
 import * as FileSystem from "effect/FileSystem"
 import { pipe } from "effect/Function"
+import * as Inspectable from "effect/Inspectable"
 import * as Path from "effect/Path"
+import { isError } from "effect/Predicate"
 import * as Str from "effect/String"
 import * as Parser from "../parser.ts"
 import { ReporterError } from "./errors.ts"
@@ -344,15 +346,12 @@ const renderError = (error: { readonly _tag: string; readonly message: string; r
     : `${error._tag}: ${error.message}\n  Cause: ${cause}`
 }
 
-const renderCause = (cause: unknown): string | undefined => {
-  if (cause === undefined) {
-    return undefined
-  }
-  if (typeof cause === "object" && cause !== null && "message" in cause && typeof cause.message === "string") {
-    return cause.message
-  }
-  return String(cause)
-}
+const renderCause = (cause: unknown): string | undefined =>
+  cause === undefined
+    ? undefined
+    : isError(cause)
+    ? cause.message
+    : Inspectable.toStringUnknown(cause, 0)
 
 const escapeHtml = (text: string): string =>
   pipe(

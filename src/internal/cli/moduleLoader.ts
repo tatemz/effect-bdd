@@ -2,6 +2,7 @@ import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as Path from "effect/Path"
+import { isError } from "effect/Predicate"
 import { pathToFileURL } from "node:url"
 import { ModuleLoadError } from "./errors.ts"
 
@@ -18,13 +19,13 @@ const load = Effect.fnUntraced(function*(path: string) {
 export class ModuleLoader extends Context.Service<ModuleLoader, {
   readonly load: (path: string) => Effect.Effect<Record<string, unknown>, ModuleLoadError, Path.Path>
 }>()("effect-bdd/cli/ModuleLoader") {
-  static readonly Live = Layer.succeed(ModuleLoader, {
+  static readonly layer = Layer.succeed(ModuleLoader, {
     load
   })
 }
 
 const moduleLoadError = (path: string, cause: unknown): ModuleLoadError => {
-  const reason = causeMessage(cause)
+  const reason = isError(cause) ? cause.message : String(cause)
   const isTsLoaderFailure = reason.includes("Unknown file extension") && reason.includes(".ts")
   return new ModuleLoadError({
     path,
@@ -34,8 +35,3 @@ const moduleLoadError = (path: string, cause: unknown): ModuleLoadError => {
     cause
   })
 }
-
-const causeMessage = (cause: unknown): string =>
-  typeof cause === "object" && cause !== null && "message" in cause && typeof cause.message === "string"
-    ? cause.message
-    : String(cause)

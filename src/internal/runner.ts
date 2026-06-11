@@ -1,4 +1,4 @@
-import type { Pickle, PickleDocString, PickleStep, PickleTable } from "@cucumber/messages"
+import type { Pickle, PickleStep } from "@cucumber/messages"
 import * as Arr from "effect/Array"
 import * as Effect from "effect/Effect"
 import { pipe } from "effect/Function"
@@ -10,10 +10,18 @@ import * as Matching from "./matching.ts"
 import * as Parser from "./parser.ts"
 
 /** @internal */
-export type DataTableInput = PickleTable
+export interface DataTableInput {
+  readonly rows: ReadonlyArray<{
+    readonly cells: ReadonlyArray<{
+      readonly value: string
+    }>
+  }>
+}
 
 /** @internal */
-export type DocStringInput = PickleDocString
+export interface DocStringInput {
+  readonly content: string
+}
 
 /** @internal */
 export type StepKind = "Step" | "Given" | "When" | "Then"
@@ -91,7 +99,7 @@ export type ScenarioReport = Report["scenarios"][number]
 /** @internal */
 export const decodeTable = <S extends Schema.Decoder<unknown, never>>(row: S) => {
   const decode = Schema.decodeUnknownEffect(row)
-  return (table: PickleTable): Effect.Effect<ReadonlyArray<S["Type"]>, unknown> => {
+  return (table: DataTableInput): Effect.Effect<ReadonlyArray<S["Type"]>, unknown> => {
     const [headers, ...rows] = table.rows.map((row) => row.cells.map((cell) => cell.value))
     if (headers === undefined) {
       return Effect.succeed([])
@@ -103,7 +111,7 @@ export const decodeTable = <S extends Schema.Decoder<unknown, never>>(row: S) =>
 /** @internal */
 export const decodeDocString = <S extends Schema.Decoder<unknown, never>>(schema: S) => {
   const decode = Schema.decodeUnknownEffect(schema)
-  return (docString: PickleDocString): Effect.Effect<S["Type"], unknown> => decode(docString.content)
+  return (docString: DocStringInput): Effect.Effect<S["Type"], unknown> => decode(docString.content)
 }
 
 /** @internal */
@@ -186,20 +194,25 @@ export const runScenarioTask = <State, E, R>(
     })
   )
 
-const runSteps = <State, E, R>(
+const runSteps: <State, E, R>(
   featureDefinition: Feature<State, E, R>,
   scenario: string,
   steps: ReadonlyArray<PickleStep>,
   source: Parser.SourceIndex,
-  state: State,
-  index = 0
-): Effect.Effect<State, RunError, R> =>
-  index >= steps.length
-    ? Effect.succeed(state)
-    : pipe(
-      runStep(featureDefinition, scenario, steps[index], source, state),
-      Effect.flatMap((state) => runSteps(featureDefinition, scenario, steps, source, state, index + 1))
-    )
+  state: State
+) => Effect.Effect<State, RunError, R> = Effect.fnUntraced(function*<State, E, R>(
+  featureDefinition: Feature<State, E, R>,
+  scenario: string,
+  steps: ReadonlyArray<PickleStep>,
+  source: Parser.SourceIndex,
+  initial: State
+) {
+  let state = initial
+  for (const step of steps) {
+    state = yield* runStep(featureDefinition, scenario, step, source, state)
+  }
+  return state
+})
 
 const runStep = <State, E, R>(
   featureDefinition: Feature<State, E, R>,

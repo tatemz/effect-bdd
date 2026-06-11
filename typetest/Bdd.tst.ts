@@ -29,6 +29,27 @@ describe("Bdd", () => {
     expect(Bdd.capture).type.not.toBeCallableWith("qty", Schema.Number)
   })
 
+  test("isFeature narrows unknown values to Feature", () => {
+    const value: unknown = Bdd.feature("Counter", { initial: 0 })
+
+    if (Bdd.isFeature(value)) {
+      expect(value).type.toBe<Bdd.Feature<unknown, unknown, unknown>>()
+    }
+
+    expect(Bdd.isFeature).type.toBeCallableWith({})
+  })
+
+  test("feature definitions carry the Feature brand", () => {
+    const feature = Bdd.feature("Counter", { initial: 0 })
+
+    expect(feature).type.toBeAssignableTo<Bdd.Feature<number>>()
+    expect<{
+      readonly name: string
+      readonly initial: number
+      readonly transitions: ReadonlyArray<never>
+    }>().type.not.toBeAssignableTo<Bdd.Feature<number>>()
+  })
+
   test("feature state is stable across transitions", () => {
     const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
       Bdd.given`zero`((_captures, state) => Effect.succeed(state)),

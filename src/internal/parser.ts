@@ -23,13 +23,24 @@ export interface CompiledFeature {
   readonly source: SourceIndex
 }
 
-/** @internal */
+/**
+ * The parsed Gherkin document and compiled pickles produced by a
+ * `GherkinCompiler` implementation.
+ *
+ * Not marked internal because it is part of the public `GherkinCompiler`
+ * service contract re-exported from `Bdd.ts`.
+ */
 export interface ParsedSource {
   readonly document: GherkinDocument
   readonly pickles: ReadonlyArray<Pickle>
 }
 
-/** @internal */
+/**
+ * Service used to compile Gherkin source into executable scenarios.
+ *
+ * Not marked internal because it is re-exported as public API from `Bdd.ts`;
+ * `stripInternal` would otherwise remove it from the emitted declarations.
+ */
 export class GherkinCompiler extends Context.Service<GherkinCompiler, {
   readonly compile: (source: string, uri: string) => Effect.Effect<ParsedSource, ParseError>
 }>()("effect-bdd/GherkinCompiler") {}

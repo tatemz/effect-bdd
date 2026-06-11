@@ -60,7 +60,7 @@ Feature: Counter
     Given zero
     When increment by 2
 `
-).pipe(Effect.provide(Bdd.GherkinCompiler.Cucumber))
+).pipe(Effect.provide(Bdd.layerCucumber))
 ```
 
 ## Model
@@ -87,6 +87,15 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - models and errors: `Bdd.Feature`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`
 
 The deeper `effect-bdd/Bdd` module also exposes lower-level types such as `Transition`, `AnyTransition`, `StepBuilder`, and `Expression`. Those types describe the builder and feature-definition machinery for advanced typing and documentation. `Transition` tracks a concrete capture and step argument type, while `AnyTransition` is the existential type used by `Bdd.Feature` to store heterogeneous transitions. They are not intended as a separate registration API; prefer the namespace constructors unless you are writing type-level helpers around `Bdd.feature`.
+
+### Internal Dependency Direction
+
+The source tree enforces a strict dependency direction so the package could be split mechanically if it is ever upstreamed:
+
+- **core** (`Bdd.ts`, `Errors.ts`, `internal/runner.ts`, `internal/matching.ts`, `internal/expression.ts`, `internal/parser.ts`) — platform-agnostic; depends only on `effect`. `Bdd.run` requires the `Bdd.GherkinCompiler` service rather than a concrete parser.
+- **cucumber adapter** (`internal/cucumberCompiler.ts`) — the only module importing `@cucumber/gherkin`; provides `Bdd.layerCucumber`.
+- **cli** (`main.ts`, `internal/cli/*`) — depends on core and `effect/FileSystem`/`effect/Path` services; never imported by core.
+- **bin** (`bin.ts`) — the only module importing `@effect/platform-node`; wires Node services into the CLI.
 
 ## Captures
 
@@ -198,7 +207,7 @@ const feature = Bdd.feature("Cart", { initial: 100 }).pipe(
 )
 
 const program = Bdd.run(feature, source).pipe(
-  Effect.provide(Bdd.GherkinCompiler.Cucumber),
+  Effect.provide(Bdd.layerCucumber),
   Effect.provideService(TaxRate, { rate: 0.1 })
 )
 ```
@@ -229,11 +238,11 @@ Scenario Outlines are expanded before execution. Every Examples row runs as an i
 
 ```ts
 const program = Bdd.run(feature, source).pipe(
-  Effect.provide(Bdd.GherkinCompiler.Cucumber)
+  Effect.provide(Bdd.layerCucumber)
 )
 ```
 
-`Bdd.run` depends on the `Bdd.GherkinCompiler` service. The built-in `Bdd.GherkinCompiler.Cucumber` layer uses Cucumber's parser and Pickle compiler; tests and applications can provide another implementation if the parser backend changes.
+`Bdd.run` depends on the `Bdd.GherkinCompiler` service. The built-in `Bdd.layerCucumber` layer uses Cucumber's parser and Pickle compiler; tests and applications can provide another implementation if the parser backend changes.
 
 The compiler service is the package boundary around Gherkin parsing. The current internal executable model is still Cucumber Pickle-compatible, so a replacement compiler must preserve the same compiled step, argument, tag, and source-location semantics. This is a deliberate bounded dependency, not a claim that arbitrary Gherkin parsers can be plugged in without an adapter.
 
@@ -260,7 +269,7 @@ Schema decode failures are preserved on `MatchError.cause`. Step implementation 
 
 ```ts
 const program = Effect.exit(
-  Bdd.run(feature, source).pipe(Effect.provide(Bdd.GherkinCompiler.Cucumber))
+  Bdd.run(feature, source).pipe(Effect.provide(Bdd.layerCucumber))
 )
 ```
 
@@ -330,7 +339,7 @@ Diagnostics are contract failures, not warnings. A feature file with no matching
 
 ### Globs
 
-Both `--features` (`-f`) and `--steps` (`-s`) are required, repeatable, and support glob patterns:
+Both `--features` (`-f`) and `--steps` (`-s`) are required, repeatable, and support a deliberately minimal glob syntax: `*` (any characters within a path segment), `?` (a single character within a segment), and `**` (zero or more path segments). Patterns without wildcards are treated as literal file paths. Brace expansion, extglobs, and negation are not supported:
 
 ```sh
 effect-bdd \

@@ -4,6 +4,7 @@ import * as FileSystem from "effect/FileSystem"
 import { pipe } from "effect/Function"
 import type * as Path from "effect/Path"
 import * as Record_ from "effect/Record"
+import { isFeature } from "../../Bdd.ts"
 import type * as Bdd from "../../Bdd.ts"
 import { DiscoveryError, type ModuleLoadError } from "./errors.ts"
 import { GlobResolver } from "./glob.ts"
@@ -80,21 +81,5 @@ const extractFeatureDefinitions = (
 ): ReadonlyArray<Bdd.Feature<unknown, unknown, never>> =>
   pipe(
     Record_.values(module),
-    Arr.filter(isFeatureDefinition)
+    Arr.filter((value): value is Bdd.Feature<unknown, unknown, never> => isFeature(value))
   )
-
-const isFeatureDefinition = (value: unknown): value is Bdd.Feature<unknown, unknown, never> => {
-  if (typeof value !== "object" || value === null) {
-    return false
-  }
-  const candidate = value as {
-    readonly _tag?: unknown
-    readonly initial?: unknown
-    readonly name?: unknown
-    readonly transitions?: unknown
-  }
-  return candidate._tag === "Feature" &&
-    "initial" in candidate &&
-    typeof candidate.name === "string" &&
-    Array.isArray(candidate.transitions)
-}

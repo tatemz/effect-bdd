@@ -7,3 +7,4 @@ coverage/
 scratchpad/
 test/.effect-bdd-*
 test/.effect-bdd-report-*
+.examples/

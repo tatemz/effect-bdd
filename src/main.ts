@@ -151,7 +151,7 @@ export const cli = Command.make(
   })
 ).pipe(
   Command.withDescription("Run effect-bdd feature files"),
-  Command.provide(Layer.mergeAll(GlobResolver.Live, ModuleLoader.Live, CucumberCompiler.Cucumber))
+  Command.provide(Layer.mergeAll(GlobResolver.layer, ModuleLoader.layer, CucumberCompiler.layerCucumber))
 )
 
 /** @internal */
@@ -159,11 +159,5 @@ export const run = Command.run(cli, {
   version: PackageJson.version
 })
 
-const toUserError = (error: unknown): CliError.UserError => new CliError.UserError({ cause: renderUserError(error) })
-
-const renderUserError = (error: unknown): string => {
-  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
-    return error.message
-  }
-  return String(error)
-}
+const toUserError = (error: { readonly message: string }): CliError.UserError =>
+  new CliError.UserError({ cause: error.message })
