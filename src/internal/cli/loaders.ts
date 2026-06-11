@@ -41,7 +41,7 @@ export const loadFeatureSources: (
 export const loadFeatureDefinitions: (
   patterns: ReadonlyArray<string>
 ) => Effect.Effect<
-  ReadonlyArray<Bdd.Feature<unknown, unknown, never>>,
+  ReadonlyArray<Bdd.Feature<unknown, never>>,
   DiscoveryError | ModuleLoadError,
   GlobResolver | ModuleLoader | Path.Path
 > = Effect.fnUntraced(function*(
@@ -70,16 +70,16 @@ const nonEmptyPaths = (
     : Effect.succeed(paths)
 
 const nonEmptyDefinitions = (
-  definitions: ReadonlyArray<Bdd.Feature<unknown, unknown, never>>
-): Effect.Effect<ReadonlyArray<Bdd.Feature<unknown, unknown, never>>, DiscoveryError> =>
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>
+): Effect.Effect<ReadonlyArray<Bdd.Feature<unknown, never>>, DiscoveryError> =>
   definitions.length === 0
     ? Effect.fail(new DiscoveryError({ message: "No Bdd.Feature exports found in matched step definition modules" }))
     : Effect.succeed(definitions)
 
 const extractFeatureDefinitions = (
   module: Record<string, unknown>
-): ReadonlyArray<Bdd.Feature<unknown, unknown, never>> =>
+): ReadonlyArray<Bdd.Feature<unknown, never>> =>
   pipe(
     Record_.values(module),
-    Arr.filter((value): value is Bdd.Feature<unknown, unknown, never> => isFeature(value))
+    Arr.filter((value): value is Bdd.Feature<unknown, never> => isFeature(value))
   )

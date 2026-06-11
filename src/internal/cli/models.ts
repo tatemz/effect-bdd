@@ -1,6 +1,4 @@
-import type { PickleStep } from "@cucumber/messages"
 import type * as Bdd from "../../Bdd.ts"
-import type * as Parser from "../parser.ts"
 import type * as CoreRunner from "../runner.ts"
 
 /** @internal */
@@ -12,7 +10,7 @@ export interface FeatureSource {
 /** @internal */
 export interface ScenarioTask {
   readonly featurePath: string
-  readonly core: CoreRunner.ScenarioTask<unknown, unknown, never>
+  readonly core: CoreRunner.ScenarioTask<unknown, never>
 }
 
 /** @internal */
@@ -52,18 +50,6 @@ export type CliDiagnostic =
     readonly message: string
   }
   | {
-    readonly _tag: "UnmatchedStep"
-    readonly featurePath: string
-    readonly featureName: string
-    readonly scenarioName: string
-    readonly scenarioLine: number
-    readonly step: PickleStep
-    readonly source: Parser.SourceIndex
-    readonly reason: "NoMatch" | "WrongKeyword" | "MultipleMatches"
-    readonly candidates: ReadonlyArray<string>
-    readonly message: string
-  }
-  | {
     readonly _tag: "UnmatchedScenario"
     readonly featurePath: string
     readonly featureName: string
@@ -77,10 +63,9 @@ export type CliDiagnostic =
     readonly message: string
   }
   | {
-    readonly _tag: "UnusedStepDefinition"
+    readonly _tag: "UnusedScenarioDefinition"
     readonly featureName: string
-    readonly expression: string
-    readonly kind: string
+    readonly scenarioName: string
     readonly message: string
   }
 

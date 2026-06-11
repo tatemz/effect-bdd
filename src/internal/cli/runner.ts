@@ -7,7 +7,6 @@ import * as Option from "effect/Option"
 import type * as Path from "effect/Path"
 import type * as Bdd from "../../Bdd.ts"
 import type { ParseError } from "../../Errors.ts"
-import * as Matching from "../matching.ts"
 import * as Parser from "../parser.ts"
 import * as CoreRunner from "../runner.ts"
 import { DiscoveryError, type ModuleLoadError } from "./errors.ts"
@@ -31,11 +30,6 @@ interface BuiltScenarios {
   readonly matchedFeatureNames: ReadonlyArray<string>
 }
 
-interface StepCoverage {
-  readonly diagnostics: ReadonlyArray<CliDiagnostic>
-  readonly usedTransitionKeys: ReadonlyArray<string>
-}
-
 /** @internal */
 export const run: (
   options: CliOptions
@@ -53,18 +47,11 @@ export const run: (
     Effect.map(combineBuiltScenarios)
   )
   const filteredTasks = yield* filterTasks(options, built.tasks)
-  const coverage = collectStepCoverage(filteredTasks)
   const results = yield* runScenarios(options, filteredTasks)
   const finishedAt = yield* Clock.currentTimeMillis
   const diagnostics: ReadonlyArray<CliDiagnostic> = pipe(
     built.diagnostics,
-    Arr.appendAll(coverage.diagnostics),
-    Arr.appendAll(unusedFeatureDefinitions(definitions, built.matchedFeatureNames)),
-    Arr.appendAll(
-      hasScenarioFilter(options)
-        ? []
-        : unusedStepDefinitions(definitions, built.matchedFeatureNames, coverage.usedTransitionKeys)
-    )
+    Arr.appendAll(unusedFeatureDefinitions(definitions, built.matchedFeatureNames))
   )
   return {
     results,
@@ -75,10 +62,10 @@ export const run: (
 
 const buildScenarioTasks: (
   source: FeatureSource,
-  definitions: ReadonlyArray<Bdd.Feature<unknown, unknown, never>>
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>
 ) => Effect.Effect<BuiltScenarios, DiscoveryError | ParseError, Parser.GherkinCompiler> = Effect.fnUntraced(function*(
   source: FeatureSource,
-  definitions: ReadonlyArray<Bdd.Feature<unknown, unknown, never>>
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>
 ) {
   const parsed = yield* Parser.parse(source.source, source.path)
   const matches = Arr.filter(definitions, (definition) => definition.name === parsed.name)
@@ -115,18 +102,87 @@ const buildScenarioTasks: (
       matchedFeatureNames: []
     }
   }
-  return pipe(
-    CoreRunner.buildScenarioTasks(definition, parsed),
-    Arr.map((task): ScenarioTask => ({
+  const duplicateScenario = duplicateScenarioDefinition(definition)
+  if (duplicateScenario !== undefined) {
+    return yield* Effect.fail(
+      new DiscoveryError({
+        message: `Duplicate scenario chain name in "${definition.name}": ${duplicateScenario}`
+      })
+    )
+  }
+
+  const scenarioDefinitions = new Map(Arr.map(definition.scenarios, (scenario) => [scenario.name, scenario] as const))
+  const tasks: Array<ScenarioTask> = []
+  const diagnostics: Array<CliDiagnostic> = []
+  const usedScenarioNames: Array<string> = []
+
+  for (const [scenarioIndex, pickle] of parsed.pickles.entries()) {
+    const sourceScenario = Parser.findScenario(pickle, parsed.source)
+    const scenarioName = pipe(
+      sourceScenario,
+      Option.map(({ scenario }) => scenario.name),
+      Option.getOrElse(() => pickle.name)
+    )
+    const scenarioLine = pickle.location?.line ?? pipe(
+      sourceScenario,
+      Option.map(({ scenario }) => scenario.location.line),
+      Option.getOrElse(() => parsed.line)
+    )
+    const scenarioDefinition = scenarioDefinitions.get(scenarioName)
+    if (scenarioDefinition === undefined) {
+      diagnostics.push({
+        _tag: "UnmatchedScenario",
+        featurePath: source.path,
+        featureName: parsed.name,
+        scenarioName,
+        scenarioLine,
+        message: `Scenario has no matching Bdd.scenario chain: ${scenarioName}`
+      })
+      continue
+    }
+    usedScenarioNames.push(scenarioName)
+    const rule = pipe(
+      sourceScenario,
+      Option.map(({ rule }) => rule),
+      Option.getOrUndefined
+    )
+    tasks.push({
       featurePath: source.path,
-      core: task
-    })),
-    (tasks): BuiltScenarios => ({
-      tasks,
-      diagnostics: [],
-      matchedFeatureNames: [definition.name]
+      core: {
+        featureDefinition: definition,
+        scenarioDefinition,
+        featureName: parsed.name,
+        scenarioName: pickle.name,
+        sourceScenarioName: scenarioName,
+        scenarioIndex,
+        scenarioLine,
+        ...(rule === undefined ? {} : {
+          ruleName: rule.name,
+          ruleLine: rule.location.line
+        }),
+        tags: pickle.tags.map((tag) => tag.name),
+        pickle,
+        source: parsed.source
+      }
     })
-  )
+  }
+
+  for (const scenario of definition.scenarios) {
+    if (!Arr.contains(scenario.name)(usedScenarioNames)) {
+      diagnostics.push({
+        _tag: "UnusedScenarioDefinition",
+        featureName: definition.name,
+        scenarioName: scenario.name,
+        message: `Scenario chain exported but no source scenario matched: ${definition.name} / ${scenario.name}`
+      })
+    }
+  }
+
+  return {
+    tasks,
+    diagnostics,
+    matchedFeatureNames: [definition.name]
+  }
 })
 
 const runScenario = Effect.fnUntraced(function*(task: ScenarioTask) {
@@ -188,9 +244,6 @@ const matchesNameFilter = (patterns: ReadonlyArray<string>, task: ScenarioTask):
   patterns.length === 0 ||
   Arr.some(patterns, (pattern) => `${task.core.featureName} / ${task.core.scenarioName}`.includes(pattern))
 
-const hasScenarioFilter = (options: CliOptions): boolean =>
-  options.filters.tags.length > 0 || options.filters.names.length > 0
-
 const summarize = (features: number, results: ReadonlyArray<ScenarioResult>, durationMillis: number): RunSummary => {
   const failed = Arr.filter(results, (result) => result.outcome._tag === "Failed").length
   return {
@@ -212,84 +265,8 @@ const combineBuiltScenarios = (built: ReadonlyArray<BuiltScenarios>): BuiltScena
   )
 })
 
-const collectStepCoverage = (tasks: ReadonlyArray<ScenarioTask>): StepCoverage =>
-  pipe(
-    tasks,
-    Arr.reduce({ diagnostics: [], usedTransitionKeys: [] } as StepCoverage, (coverage, task) =>
-      pipe(
-        task.core.pickle.steps,
-        Arr.reduce(coverage, (coverage, step) => appendStepCoverage(coverage, task, step))
-      ))
-  )
-
-const appendStepCoverage = (
-  coverage: StepCoverage,
-  task: ScenarioTask,
-  step: CoreRunner.ScenarioTask<unknown, unknown, never>["pickle"]["steps"][number]
-): StepCoverage => {
-  const kind = Matching.concreteStepKind(step)
-  const textMatches = Matching.matchingTextTransitions(task.core.featureDefinition.transitions, step.text)
-  const matches = pipe(
-    kind,
-    Option.match({
-      onNone: () => [],
-      onSome: (kind) => Matching.matchingKeywordTransitions(textMatches, kind)
-    })
-  )
-  if (matches.length === 0) {
-    return {
-      diagnostics: Arr.append(coverage.diagnostics, {
-        _tag: "UnmatchedStep",
-        featurePath: task.featurePath,
-        featureName: task.core.featureName,
-        scenarioName: task.core.scenarioName,
-        scenarioLine: task.core.scenarioLine,
-        step,
-        source: task.core.source,
-        reason: textMatches.length === 0 ? "NoMatch" : "WrongKeyword",
-        candidates: textMatches.length === 0
-          ? Arr.map(task.core.featureDefinition.transitions, (transition) => transition.expression.source)
-          : Arr.map(textMatches, (match) => match.transition.expression.source),
-        message: textMatches.length === 0
-          ? `No transition matched step "${step.text}"`
-          : `No ${
-            pipe(kind, Option.getOrElse(() => "Step"))
-          } transition matched step "${step.text}"; matching text exists for ${
-            Matching.renderTransitionKinds(Arr.map(textMatches, (match) => match.transition))
-          }`
-      }),
-      usedTransitionKeys: coverage.usedTransitionKeys
-    }
-  }
-  if (matches.length > 1) {
-    return {
-      diagnostics: Arr.append(coverage.diagnostics, {
-        _tag: "UnmatchedStep",
-        featurePath: task.featurePath,
-        featureName: task.core.featureName,
-        scenarioName: task.core.scenarioName,
-        scenarioLine: task.core.scenarioLine,
-        step,
-        source: task.core.source,
-        reason: "MultipleMatches",
-        candidates: Arr.map(matches, (match) => match.transition.expression.source),
-        message: `Multiple transitions matched step "${step.text}"`
-      }),
-      usedTransitionKeys: coverage.usedTransitionKeys
-    }
-  }
-  return {
-    diagnostics: coverage.diagnostics,
-    usedTransitionKeys: pipe(
-      coverage.usedTransitionKeys,
-      Arr.append(transitionKey(task.core.featureName, matches[0].transition)),
-      Arr.dedupe
-    )
-  }
-}
-
 const unusedFeatureDefinitions = (
-  definitions: ReadonlyArray<Bdd.Feature<unknown, unknown, never>>,
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
   matchedFeatureNames: ReadonlyArray<string>
 ): ReadonlyArray<CliDiagnostic> =>
   pipe(
@@ -302,33 +279,16 @@ const unusedFeatureDefinitions = (
     }))
   )
 
-const unusedStepDefinitions = (
-  definitions: ReadonlyArray<Bdd.Feature<unknown, unknown, never>>,
-  matchedFeatureNames: ReadonlyArray<string>,
-  usedTransitionKeys: ReadonlyArray<string>
-): ReadonlyArray<CliDiagnostic> =>
-  pipe(
-    definitions,
-    Arr.filter((definition) => Arr.contains(definition.name)(matchedFeatureNames)),
-    Arr.flatMap((definition) =>
-      pipe(
-        definition.transitions,
-        Arr.filter((transition) => !Arr.contains(transitionKey(definition.name, transition))(usedTransitionKeys)),
-        Arr.map((transition): CliDiagnostic => ({
-          _tag: "UnusedStepDefinition",
-          featureName: definition.name,
-          expression: transition.expression.source,
-          kind: transition.kind,
-          message: `Step definition never matched: ${transition.expression.source}`
-        }))
-      )
-    )
-  )
-
-const transitionKey = (
-  featureName: string,
-  transition: Bdd.Transition<unknown, unknown, never>
-): string => `${featureName}:${transition.kind}:${transition.expression.source}`
+const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): string | undefined => {
+  const seen = new Set<string>()
+  for (const scenario of definition.scenarios) {
+    if (seen.has(scenario.name)) {
+      return scenario.name
+    }
+    seen.add(scenario.name)
+  }
+  return undefined
+}
 
 /** @internal */
 export type CliRunError = DiscoveryError | ModuleLoadError | ParseError

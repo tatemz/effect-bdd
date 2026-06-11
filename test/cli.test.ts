@@ -92,7 +92,10 @@ Feature: Counter
   Scenario: Starts clean
     Then the counter is 0
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
 
       const textReport = fixture.path("report.txt")
@@ -136,7 +139,9 @@ Feature: Counter
   Scenario: Fails
     Then the counter is 1
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Fails").pipe(thenCounterIs)
+`)
       })
       const textReport = fixture.path("failure.txt")
 
@@ -172,7 +177,9 @@ Feature: Missing source
   Scenario: Cannot run
     Then the counter is 0
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
       const textReport = fixture.path("unmatched-feature.txt")
 
@@ -210,7 +217,9 @@ Feature: Counter
   Scenario: Unknown step
     Then a missing transition runs
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Unknown step").pipe(thenCounterIs)
+`)
       })
       const textReport = fixture.path("unmatched-step.txt")
 
@@ -233,9 +242,7 @@ Feature: Counter
       const text = yield* fs.readFileString(textReport)
 
       assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Unknown step/)
-      assert.match(text, /Unmatched source:/)
-      assert.match(text, /Step: Then a missing transition runs/)
-      assert.match(text, /Reason: No transition matched step "a missing transition runs"/)
+      assert.match(text, /Step 1 text mismatch/)
     })).pipe(Effect.provide(NodeServices.layer)))
 
   it.effect("reports source steps that only match a different keyword", () =>
@@ -247,7 +254,9 @@ Feature: Counter
   Scenario: Wrong keyword
     Given increment
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Wrong keyword").pipe(whenIncrement)
+`)
       })
       const textReport = fixture.path("wrong-keyword.txt")
 
@@ -270,8 +279,7 @@ Feature: Counter
       const text = yield* fs.readFileString(textReport)
 
       assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Wrong keyword/)
-      assert.match(text, /Step: Given increment/)
-      assert.match(text, /Reason: No Given transition matched step "increment"; matching text exists for When/)
+      assert.match(text, /keyword mismatch/)
     })).pipe(Effect.provide(NodeServices.layer)))
 
   it.effect("filters scenarios by tag expression", () =>
@@ -289,7 +297,10 @@ Feature: Counter
   Scenario: Starts clean
     Then a missing transition runs
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
       const textReport = fixture.path("tags.txt")
 
@@ -329,7 +340,10 @@ Feature: Counter
   Scenario: Starts clean
     Then the counter is 0
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
       const textReport = fixture.path("name.txt")
 
@@ -367,7 +381,10 @@ Feature: Counter
   Scenario: Fails later
     Then the counter is 2
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Fails first").pipe(thenCounterIs),
+  Bdd.scenario("Fails later").pipe(thenCounterIs)
+`)
       })
       const textReport = fixture.path("fail-fast.txt")
 
@@ -409,7 +426,10 @@ Feature: Counter
   Scenario: Starts clean
     Then the counter is 0
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
       const jsonReport = fixture.path("report.json")
       const junitReport = fixture.path("report.xml")
@@ -448,10 +468,14 @@ Feature: Counter
   Scenario: Starts clean
     Then the counter is 0
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
       const fs = yield* FileSystem.FileSystem
-      yield* fs.writeFileString(fixture.path("duplicate.mjs"), counterSteps)
+      yield* fs.writeFileString(fixture.path("duplicate.mjs"), counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`))
 
       const exit = yield* Effect.exit(
         runCli([
@@ -518,7 +542,9 @@ Feature: Counter
   Scenario: Starts clean
     Then the counter is 0
 `,
-        steps: counterSteps
+        steps: counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`)
       })
 
       const exit = yield* Effect.exit(
@@ -567,18 +593,19 @@ const makeFixture = Effect.fnUntraced(function*(options: {
   }
 })
 
-const counterSteps = `
+const counterStepsFor = (scenarios: string) => `
 import { Bdd } from "effect-bdd"
 import { Effect, Schema } from "effect"
 
 const expected = Bdd.capture("expected", Schema.NumberFromString)
+const whenIncrement = Bdd.when\`increment\`((state) => Effect.succeed((state ?? 0) + 1))
+const thenCounterIs = Bdd.then\`the counter is \${expected}\`(({ expected }, state) =>
+  (state ?? 0) === expected
+    ? Effect.succeed(state ?? 0)
+    : Effect.fail(\`expected \${expected}, got \${state ?? 0}\`)
+)
 
-export const counter = Bdd.feature("Counter", { initial: 0 }).pipe(
-  Bdd.when\`increment\`((_captures, state) => Effect.succeed(state + 1)),
-  Bdd.then\`the counter is \${expected}\`(({ expected }, state) =>
-    state === expected
-      ? Effect.succeed(state)
-      : Effect.fail(\`expected \${expected}, got \${state}\`)
-  )
+export const counter = Bdd.feature("Counter").pipe(
+${scenarios}
 )
 `

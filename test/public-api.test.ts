@@ -71,8 +71,10 @@ describe("public API", () => {
 
     it.effect("Bdd.run compiles through the provided service", () =>
       Effect.gen(function*() {
-        const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
-          Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
+        const feature = Bdd.feature("Counter").pipe(
+          Bdd.scenario("Stubbed increment").pipe(
+            Bdd.when`increment`(() => Effect.succeed(1))
+          )
         )
 
         // Not valid Gherkin: proves the stub compiler is used instead of Cucumber.

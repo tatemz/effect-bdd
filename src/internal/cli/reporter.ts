@@ -7,7 +7,6 @@ import * as Inspectable from "effect/Inspectable"
 import * as Path from "effect/Path"
 import { isError } from "effect/Predicate"
 import * as Str from "effect/String"
-import * as Parser from "../parser.ts"
 import { ReporterError } from "./errors.ts"
 import type { CliDiagnostic, CliRunResult, ReporterName, ScenarioResult } from "./models.ts"
 
@@ -225,15 +224,14 @@ const renderDiagnosticsText = (diagnostics: ReadonlyArray<CliDiagnostic>): Reado
     diagnostics,
     Arr.filter((diagnostic) =>
       diagnostic._tag === "UnmatchedFeature" ||
-      diagnostic._tag === "UnmatchedScenario" ||
-      diagnostic._tag === "UnmatchedStep"
+      diagnostic._tag === "UnmatchedScenario"
     )
   )
   const unused = pipe(
     diagnostics,
     Arr.filter((diagnostic) =>
       diagnostic._tag === "UnusedFeatureDefinition" ||
-      diagnostic._tag === "UnusedStepDefinition"
+      diagnostic._tag === "UnusedScenarioDefinition"
     )
   )
   return pipe(
@@ -252,17 +250,10 @@ const renderDiagnosticText = (diagnostic: CliDiagnostic): string => {
     case "UnmatchedScenario": {
       return `  ${diagnostic.featurePath}:${diagnostic.scenarioLine}\n    Scenario: ${diagnostic.scenarioName}\n    Reason: ${diagnostic.message}`
     }
-    case "UnmatchedStep": {
-      return `  ${diagnostic.featurePath}:${
-        Parser.stepLine(diagnostic.step, diagnostic.source)
-      }\n    Scenario: ${diagnostic.featureName} / ${diagnostic.scenarioName}\n    Step: ${
-        Parser.stepKeyword(diagnostic.step, diagnostic.source)
-      } ${diagnostic.step.text}\n    Reason: ${diagnostic.message}`
-    }
     case "UnusedFeatureDefinition": {
       return `  ${diagnostic.message}`
     }
-    case "UnusedStepDefinition": {
+    case "UnusedScenarioDefinition": {
       return `  ${diagnostic.message}`
     }
   }

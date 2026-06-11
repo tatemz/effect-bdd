@@ -14,25 +14,11 @@ import * as parser from "./internal/parser.ts"
 import * as runner from "./internal/runner.ts"
 
 const FeatureTypeId = "~effect-bdd/Bdd/Feature"
+const ScenarioTypeId = "~effect-bdd/Bdd/Scenario"
+const StepTypeId = "~effect-bdd/Bdd/Step"
 
 /**
  * Error type returned by `Bdd.run`.
- *
- * @example
- * ```ts
- * import type { Bdd } from "effect-bdd"
- *
- * const describe = (error: Bdd.RunError): string => {
- *   switch (error._tag) {
- *     case "ParseError":
- *       return `Gherkin parse failure at line ${error.line}`
- *     case "MatchError":
- *       return `No step matched "${error.step}"`
- *     case "StepError":
- *       return `Step implementation failed: ${error.step}`
- *   }
- * }
- * ```
  *
  * @category errors
  * @since 0.1.0
@@ -42,23 +28,6 @@ export type RunError = ParseError | MatchError | StepError
 /**
  * Service used to compile Gherkin source into executable scenarios.
  *
- * **Details**
- *
- * The built-in {@link layerCucumber} layer uses Cucumber's parser and Pickle
- * compiler. Custom implementations must preserve the compiled step, argument,
- * tag, and source-location semantics expected by the runner.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const program = Effect.gen(function*() {
- *   const compiler = yield* Bdd.GherkinCompiler
- *   return yield* compiler.compile("Feature: Counter", "<inline>")
- * })
- * ```
- *
  * @category services
  * @since 0.1.0
  */
@@ -66,20 +35,6 @@ export const GherkinCompiler = parser.GherkinCompiler
 
 /**
  * Service used to compile Gherkin source into executable scenarios.
- *
- * **Details**
- *
- * The built-in {@link layerCucumber} layer uses Cucumber's parser and Pickle
- * compiler. Custom implementations must preserve the compiled step, argument,
- * tag, and source-location semantics expected by the runner.
- *
- * @example
- * ```ts
- * import type { Effect } from "effect"
- * import type { Bdd } from "effect-bdd"
- *
- * declare const requiresCompiler: Effect.Effect<void, never, Bdd.GherkinCompiler>
- * ```
  *
  * @category services
  * @since 0.1.0
@@ -90,32 +45,13 @@ export type GherkinCompiler = parser.GherkinCompiler
  * A {@link GherkinCompiler} layer backed by Cucumber's parser and Pickle
  * compiler.
  *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 })
- *
- * const program = Bdd.run(feature, "Feature: Counter").pipe(
- *   Effect.provide(Bdd.layerCucumber)
- * )
- * ```
- *
  * @category layers
  * @since 0.2.0
  */
 export const layerCucumber: Layer.Layer<GherkinCompiler> = cucumberCompiler.layerCucumber
 
 /**
- * Advanced keyword metadata attached to a transition.
- *
- * @example
- * ```ts
- * import type { StepKind } from "effect-bdd/Bdd"
- *
- * const kinds: ReadonlyArray<StepKind> = ["Step", "Given", "When", "Then"]
- * ```
+ * Gherkin step keyword metadata attached to a step definition.
  *
  * @category models
  * @since 0.1.0
@@ -124,14 +60,6 @@ export type StepKind = "Step" | "Given" | "When" | "Then"
 
 /**
  * A named capture decoded from step text with a Schema.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const qty: Bdd.Capture<"qty", number> = Bdd.capture("qty", Schema.FiniteFromString)
- * ```
  *
  * @category models
  * @since 0.1.0
@@ -143,43 +71,20 @@ export interface Capture<Name extends string, A> {
 }
 
 /**
- * Advanced type helper that maps capture definitions to decoded values.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- * import type { CapturesOf } from "effect-bdd/Bdd"
- *
- * const qty = Bdd.capture("qty", Schema.FiniteFromString)
- * const sku = Bdd.capture("sku", Schema.String)
- *
- * type Decoded = CapturesOf<[typeof qty, typeof sku]>
- * // { readonly qty: number; readonly sku: string }
- * ```
+ * Maps capture definitions to their decoded handler shape.
  *
  * @category type-level
  * @since 0.1.0
  */
-export type CapturesOf<Captures extends ReadonlyArray<Capture<string, unknown>>> = {
+export type CapturesOf<Captures extends ReadonlyArray<Capture<string, any>>> = {
   readonly [C in Captures[number] as C["name"]]: C extends Capture<string, infer A> ? A
     : never
 }
 
+type EmptyCaptures<Captures> = keyof Captures extends never ? true : false
+
 /**
- * Advanced matcher type for a compiled step expression.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const qty = Bdd.capture("qty", Schema.FiniteFromString)
- * const matcher = Bdd.when`add ${qty} items`.expression
- *
- * console.log(matcher.source) // "add {qty} items"
- * console.log(matcher.match("add 3 items")) // Some({ qty: 3 })
- * ```
+ * A compiled step expression.
  *
  * @category models
  * @since 0.1.0
@@ -192,18 +97,6 @@ export interface Expression<A> {
 /**
  * The cell structure of a Gherkin DataTable supplied to a {@link TableArg}
  * decoder.
- *
- * @example
- * ```ts
- * import type { Bdd } from "effect-bdd"
- *
- * const table: Bdd.DataTable = {
- *   rows: [
- *     { cells: [{ value: "sku" }, { value: "qty" }] },
- *     { cells: [{ value: "apple" }, { value: "3" }] }
- *   ]
- * }
- * ```
  *
  * @category models
  * @since 0.2.0
@@ -220,13 +113,6 @@ export interface DataTable {
  * The content of a Gherkin DocString supplied to a {@link DocStringArg}
  * decoder.
  *
- * @example
- * ```ts
- * import type { Bdd } from "effect-bdd"
- *
- * const docString: Bdd.DocString = { content: "{ \"sku\": \"apple\" }" }
- * ```
- *
  * @category models
  * @since 0.2.0
  */
@@ -236,19 +122,6 @@ export interface DocString {
 
 /**
  * A decoded DataTable argument.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const Item = Schema.Struct({
- *   sku: Schema.String,
- *   qty: Schema.FiniteFromString
- * })
- *
- * const items: Bdd.TableArg<ReadonlyArray<typeof Item.Type>> = Bdd.table(Item)
- * ```
  *
  * @category models
  * @since 0.1.0
@@ -261,18 +134,6 @@ export interface TableArg<A> {
 /**
  * A decoded DocString argument.
  *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const Payload = Schema.Struct({ sku: Schema.String })
- *
- * const payload: Bdd.DocStringArg<typeof Payload.Type> = Bdd.docString(
- *   Schema.fromJsonString(Payload)
- * )
- * ```
- *
  * @category models
  * @since 0.1.0
  */
@@ -284,129 +145,82 @@ export interface DocStringArg<A> {
 /**
  * Advanced union of decoded step argument descriptors.
  *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- * import type { StepArg } from "effect-bdd/Bdd"
- *
- * const Item = Schema.Struct({ sku: Schema.String })
- *
- * const arg: StepArg<ReadonlyArray<typeof Item.Type>> = Bdd.table(Item)
- * ```
- *
  * @category models
  * @since 0.1.0
  */
 export type StepArg<A> = TableArg<A> | DocStringArg<A>
 
 /**
- * Advanced model for a transition registered on a feature definition.
- *
- * @example
- * ```ts
- * import { Effect, Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- * import type { Transition } from "effect-bdd/Bdd"
- *
- * const qty = Bdd.capture("qty", Schema.FiniteFromString)
- *
- * const transition: Transition<number, never, never, { readonly qty: number }> = {
- *   kind: "When",
- *   expression: Bdd.when`add ${qty}`.expression,
- *   run: (captures, _argument, state) => Effect.succeed(state + captures.qty)
- * }
- * ```
+ * A standalone step definition. A step is both executable metadata and a
+ * scenario transformer.
  *
  * @category models
- * @since 0.1.0
+ * @since 0.3.0
  */
-export interface Transition<State, E, R, Captures = unknown, Argument = unknown> {
-  readonly kind: StepKind
+export interface Step<
+  Kind extends StepKind,
+  In,
+  Out,
+  E = never,
+  R = never,
+  Captures = unknown,
+  Argument = undefined
+> {
+  <State extends In, E0, R0>(self: Scenario<State, E0, R0>): Scenario<Out, E | E0, R | R0>
+  readonly [StepTypeId]: typeof StepTypeId
+  readonly kind: Kind
   readonly expression: Expression<Captures>
   readonly argument?: StepArg<Argument>
-  readonly run: (captures: Captures, argument: Argument, state: State) => Effect.Effect<State, E, R>
+  readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>
 }
 
 /**
- * Existential transition type stored by feature definitions.
- *
- * **Details**
- *
- * A feature can contain many transitions with different capture and step
- * argument shapes. The public constructors keep those shapes typed at the
- * handler boundary, while the runtime matcher stores transitions through this
- * existential type.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- * import type { AnyTransition } from "effect-bdd/Bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
- * )
- *
- * const transitions: ReadonlyArray<AnyTransition<number, never, never>> = feature.transitions
- * ```
+ * Existential step type stored in scenario chains.
  *
  * @category models
- * @since 0.1.0
+ * @since 0.3.0
  */
-export type AnyTransition<State, E, R> = Transition<State, E, R, any, any>
+export type AnyStep = Step<StepKind, any, any, any, any, any, any>
 
 /**
- * A local immutable feature definition used to interpret scenarios from Gherkin source.
+ * A named scenario chain. The type parameter tracks the current state after
+ * the last appended step.
  *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature: Bdd.Feature<number> = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
- * )
- * ```
+ * @category models
+ * @since 0.3.0
+ */
+export interface Scenario<State = void, E = never, R = never> extends Pipeable {
+  <E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0>
+  readonly [ScenarioTypeId]: typeof ScenarioTypeId
+  readonly _State?: (_: State) => State
+  readonly name: string
+  readonly steps: ReadonlyArray<AnyStep>
+}
+
+/**
+ * A feature definition made from explicit scenario chains.
  *
  * @category models
  * @since 0.1.0
  */
-export interface Feature<State, E = never, R = never> extends Pipeable {
+export interface Feature<E = never, R = never> extends Pipeable {
   readonly [FeatureTypeId]: typeof FeatureTypeId
+  readonly _E?: E
+  readonly _R?: R
   readonly name: string
-  readonly initial: State
-  readonly transitions: ReadonlyArray<AnyTransition<State, E, R>>
+  readonly scenarios: ReadonlyArray<Scenario<any, any, any>>
 }
 
 /**
  * Checks whether a value is a {@link Feature} definition.
  *
- * @example
- * ```ts
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 })
- *
- * console.log(Bdd.isFeature(feature)) // true
- * console.log(Bdd.isFeature({ name: "Counter" })) // false
- * ```
- *
  * @category guards
  * @since 0.2.0
  */
-export const isFeature = (u: unknown): u is Feature<unknown, unknown, unknown> => hasProperty(u, FeatureTypeId)
+export const isFeature = (u: unknown): u is Feature<unknown, unknown> => hasProperty(u, FeatureTypeId)
 
 /**
  * Result returned after all scenarios pass.
- *
- * @example
- * ```ts
- * import type { Bdd } from "effect-bdd"
- *
- * const summarize = (report: Bdd.Report): string =>
- *   `${report.feature}: ${report.scenarios.length} scenario(s) passed`
- * ```
  *
  * @category models
  * @since 0.1.0
@@ -420,7 +234,17 @@ export interface Report {
   }>
 }
 
-type FeatureType<State, E, R> = Feature<State, E, R>
+type FeatureType<E, R> = Feature<E, R>
+type ScenarioType<State, E, R> = Scenario<State, E, R>
+type StepType<Kind extends StepKind, In, Out, E, R, Captures, Argument> = Step<
+  Kind,
+  In,
+  Out,
+  E,
+  R,
+  Captures,
+  Argument
+>
 type ReportType = Report
 type RunErrorType = RunError
 type GherkinCompilerType = GherkinCompiler
@@ -433,21 +257,6 @@ type DocStringType = DocString
 /**
  * Creates a named capture decoded from step text.
  *
- * **When to use**
- *
- * Use a capture when a Gherkin step contains a value that should be decoded
- * before it reaches the step implementation.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const qty = Bdd.capture("qty", Schema.FiniteFromString)
- *
- * const step = Bdd.when`${qty} items are added`
- * ```
- *
  * @category constructors
  * @since 0.1.0
  */
@@ -458,25 +267,6 @@ const capture_: <const Name extends string, A>(
 
 /**
  * Creates a DataTable decoder from a row Schema.
- *
- * **Details**
- *
- * The first row of the Gherkin table is interpreted as the header row. Each
- * following row is converted into an object and decoded with the supplied
- * Schema.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const Item = Schema.Struct({
- *   sku: Schema.String,
- *   qty: Schema.FiniteFromString
- * })
- *
- * const items = Bdd.table(Item)
- * ```
  *
  * @category constructors
  * @since 0.1.0
@@ -489,24 +279,6 @@ const table_ = <S extends Schema.Decoder<unknown, never>>(row: S): TableArg<Read
 /**
  * Creates a DocString decoder from a Schema.
  *
- * **When to use**
- *
- * Use `docString` for larger step arguments, such as JSON payloads or plain
- * text blocks, that should be decoded before the step implementation runs.
- *
- * @example
- * ```ts
- * import { Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const Payload = Schema.Struct({
- *   sku: Schema.String,
- *   qty: Schema.Number
- * })
- *
- * const payload = Bdd.docString(Schema.fromJsonString(Payload))
- * ```
- *
  * @category constructors
  * @since 0.1.0
  */
@@ -516,49 +288,23 @@ const docString_ = <S extends Schema.Decoder<unknown, never>>(schema: S): DocStr
 })
 
 /**
- * Creates a feature definition with an explicit initial state.
- *
- * **Details**
- *
- * A feature definition is an immutable state machine. Each registered step
- * receives the current state and returns the next state in an `Effect`.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.given`zero`(() => Effect.succeed(0)),
- *   Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
- * )
- * ```
+ * Creates a feature definition.
  *
  * @category constructors
  * @since 0.1.0
  */
-const feature_ = <State>(name: string, options: {
-  readonly initial: State
-}): Feature<State> => makeFeature(name, options.initial, [])
+const feature_ = (name: string): Feature => makeFeature(name, [])
 
 /**
- * Tagged-template transition factory that does not attach Gherkin keyword metadata.
+ * Creates a scenario chain.
  *
- * **When to use**
- *
- * Use `step` for a transition that is semantically valid as any concrete
- * Gherkin step kind. Prefer `given`, `when`, or `then` when the transition
- * represents setup, action, or assertion specifically.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.step`the counter exists`((_captures, state) => Effect.succeed(state))
- * )
- * ```
+ * @category constructors
+ * @since 0.3.0
+ */
+const scenario_ = (name: string): Scenario<void> => makeScenario(name, [])
+
+/**
+ * Tagged-template step factory that is keyword agnostic.
  *
  * @category constructors
  * @since 0.1.0
@@ -566,25 +312,7 @@ const feature_ = <State>(name: string, options: {
 const step_: StepTag<"Step"> = makeStepTag("Step")
 
 /**
- * Tagged-template transition factory for `Given` steps.
- *
- * **Details**
- *
- * A source `Given` step only matches `given` or keyword-agnostic `step`
- * transitions.
- *
- * `And` and `But` steps inherit the previous concrete Gherkin keyword before
- * matching, so they can match a `given` transition when they follow a `Given`.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.given`a fresh counter`(() => Effect.succeed(0))
- * )
- * ```
+ * Tagged-template step factory for `Given`.
  *
  * @category constructors
  * @since 0.1.0
@@ -592,25 +320,7 @@ const step_: StepTag<"Step"> = makeStepTag("Step")
 const given_: StepTag<"Given"> = makeStepTag("Given")
 
 /**
- * Tagged-template transition factory for `When` steps.
- *
- * **Details**
- *
- * A source `When` step only matches `when` or keyword-agnostic `step`
- * transitions.
- *
- * `And` and `But` steps inherit the previous concrete Gherkin keyword before
- * matching, so they can match a `when` transition when they follow a `When`.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
- * )
- * ```
+ * Tagged-template step factory for `When`.
  *
  * @category constructors
  * @since 0.1.0
@@ -618,29 +328,7 @@ const given_: StepTag<"Given"> = makeStepTag("Given")
 const when_: StepTag<"When"> = makeStepTag("When")
 
 /**
- * Tagged-template transition factory for `Then` steps.
- *
- * **Details**
- *
- * A source `Then` step only matches `then` or keyword-agnostic `step`
- * transitions.
- *
- * `And` and `But` steps inherit the previous concrete Gherkin keyword before
- * matching, so they can match a `then` transition when they follow a `Then`.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.then`the counter is positive`((_captures, state) =>
- *     state > 0
- *       ? Effect.succeed(state)
- *       : Effect.fail(`expected a positive counter, got ${state}`)
- *   )
- * )
- * ```
+ * Tagged-template step factory for `Then`.
  *
  * @category constructors
  * @since 0.1.0
@@ -650,67 +338,16 @@ const then_: StepTag<"Then"> = makeStepTag("Then")
 /**
  * Runs Gherkin source against a feature definition.
  *
- * **Details**
- *
- * The feature definition name must match the Gherkin `Feature:` name. Every
- * scenario starts from the feature's initial state. Background steps run before
- * each scenario, then scenario steps run in source order.
- *
- * @example
- * ```ts
- * import { Effect } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.given`zero`(() => Effect.succeed(0)),
- *   Bdd.when`increment`((_captures, state) => Effect.succeed(state + 1))
- * )
- *
- * const program = Bdd.run(feature, `
- * Feature: Counter
- *
- *   Scenario: Increment
- *     Given zero
- *     When increment
- * `).pipe(Effect.provide(Bdd.layerCucumber))
- * ```
- *
  * @category execution
  * @since 0.1.0
  */
-const run_ = <State, E, R>(
-  self: Feature<State, E, R>,
+const run_ = <E, R>(
+  self: Feature<E, R>,
   source: string
 ): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source)
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
- *
- * **Details**
- *
- * The namespace contains constructors for captures, step arguments, feature
- * definitions, step transitions, and the Gherkin runner.
- *
- * @example
- * ```ts
- * import { Effect, Schema } from "effect"
- * import { Bdd } from "effect-bdd"
- *
- * const qty = Bdd.capture("qty", Schema.FiniteFromString)
- *
- * const feature = Bdd.feature("Counter", { initial: 0 }).pipe(
- *   Bdd.given`zero`(() => Effect.succeed(0)),
- *   Bdd.when`increment by ${qty}`(({ qty }, state) => Effect.succeed(state + qty))
- * )
- *
- * const program = Bdd.run(feature, `
- * Feature: Counter
- *
- *   Scenario: Increment
- *     Given zero
- *     When increment by 2
- * `).pipe(Effect.provide(Bdd.layerCucumber))
- * ```
  *
  * @category namespaces
  * @since 0.1.0
@@ -726,6 +363,7 @@ export const Bdd = {
   table: table_,
   docString: docString_,
   feature: feature_,
+  scenario: scenario_,
   step: step_,
   given: given_,
   when: when_,
@@ -741,12 +379,36 @@ export const Bdd = {
  */
 export declare namespace Bdd {
   /**
-   * A local immutable feature definition used to interpret scenarios from Gherkin source.
+   * A feature definition made from explicit scenario chains.
    *
    * @category models
    * @since 0.1.0
    */
-  export type Feature<State, E = never, R = never> = FeatureType<State, E, R>
+  export type Feature<E = never, R = never> = FeatureType<E, R>
+
+  /**
+   * A named scenario chain.
+   *
+   * @category models
+   * @since 0.3.0
+   */
+  export type Scenario<State = void, E = never, R = never> = ScenarioType<State, E, R>
+
+  /**
+   * A standalone step definition.
+   *
+   * @category models
+   * @since 0.3.0
+   */
+  export type Step<
+    Kind extends StepKind,
+    In,
+    Out,
+    E = never,
+    R = never,
+    Captures = unknown,
+    Argument = undefined
+  > = StepType<Kind, In, Out, E, R, Captures, Argument>
 
   /**
    * Result returned after all scenarios pass.
@@ -814,97 +476,152 @@ export declare namespace Bdd {
 }
 
 /**
- * Advanced tagged-template function type used to register transitions.
- *
- * @example
- * ```ts
- * import { Bdd } from "effect-bdd"
- * import type { StepTag } from "effect-bdd/Bdd"
- *
- * const when: StepTag<"When"> = Bdd.when
- * ```
+ * Tagged-template function type used to create steps.
  *
  * @category models
- * @since 0.1.0
+ * @since 0.3.0
  */
 export interface StepTag<Kind extends StepKind> {
-  <const Captures extends ReadonlyArray<Capture<string, unknown>>>(
+  (strings: TemplateStringsArray): EmptyStepFactory<Kind>
+  <const Captures extends readonly [Capture<string, any>, ...Array<Capture<string, any>>]>(
     strings: TemplateStringsArray,
     ...captures: Captures
-  ): StepBuilder<CapturesOf<Captures>, Kind>
+  ): CapturedStepFactory<CapturesOf<Captures>, Kind>
 }
 
-/**
- * Advanced builder returned by a tagged-template transition.
- *
- * @example
- * ```ts
- * import { Bdd } from "effect-bdd"
- * import type { StepBuilder } from "effect-bdd/Bdd"
- *
- * const builder: StepBuilder<{}, "When"> = Bdd.when`increment`
- *
- * console.log(builder.kind) // "When"
- * console.log(builder.expression.source) // "increment"
- * ```
- *
- * @category models
- * @since 0.1.0
- */
-export interface StepBuilder<Captures, Kind extends StepKind> {
-  <State, E, R>(
-    impl: (captures: Captures, state: State) => Effect.Effect<State, E, R>
-  ): <E0, R0>(self: Feature<State, E0, R0>) => Feature<State, E | E0, R | R0>
-  <State, Arg, E, R>(
+type StepFactory<Captures, Kind extends StepKind> = EmptyCaptures<Captures> extends true ? EmptyStepFactory<Kind>
+  : CapturedStepFactory<Captures, Kind>
+
+interface EmptyStepFactory<Kind extends StepKind> {
+  readonly kind: Kind
+  readonly expression: Expression<{}>
+  <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, {}>
+  <In, Out, E, R>(
+    impl: (state: In) => Effect.Effect<Out, E, R>
+  ): Step<Kind, In, Out, E, R, {}>
+  <Arg, Out, E, R>(
     arg: StepArg<Arg>,
-    impl: (captures: Captures, arg: Arg, state: State) => Effect.Effect<State, E, R>
-  ): <E0, R0>(self: Feature<State, E0, R0>) => Feature<State, E | E0, R | R0>
+    impl: (arg: Arg) => Effect.Effect<Out, E, R>
+  ): Step<Kind, unknown, Out, E, R, {}, Arg>
+  <Arg, In, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (arg: Arg, state: In) => Effect.Effect<Out, E, R>
+  ): Step<Kind, In, Out, E, R, {}, Arg>
+}
+
+interface CapturedStepFactory<Captures, Kind extends StepKind> {
   readonly kind: Kind
   readonly expression: Expression<Captures>
+  <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, Captures>
+  <Out, E, R>(impl: (captures: Captures) => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, Captures>
+  <In, Out, E, R>(
+    impl: (captures: Captures, state: In) => Effect.Effect<Out, E, R>
+  ): Step<Kind, In, Out, E, R, Captures>
+  <Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (captures: Captures, arg: Arg) => Effect.Effect<Out, E, R>
+  ): Step<Kind, unknown, Out, E, R, Captures, Arg>
+  <Arg, In, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (captures: Captures, arg: Arg, state: In) => Effect.Effect<Out, E, R>
+  ): Step<Kind, In, Out, E, R, Captures, Arg>
 }
 
-const makeFeature = <State, E, R>(
+const makeFeature = <E, R>(
   name: string,
-  initial: State,
-  transitions: ReadonlyArray<AnyTransition<State, E, R>>
-): Feature<State, E, R> => ({
+  scenarios: ReadonlyArray<Scenario<any, any, any>>
+): Feature<E, R> => ({
   [FeatureTypeId]: FeatureTypeId,
   name,
-  initial,
-  transitions,
+  scenarios,
   pipe() {
     return pipeArguments(this, arguments)
   }
 })
 
-function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
-  return ((strings: TemplateStringsArray, ...captures: ReadonlyArray<Capture<string, unknown>>) => {
-    const matcher = expression.makeMatcher(strings, captures)
-    const builder = ((first: unknown, second?: unknown) => (self: Feature<unknown, unknown, unknown>) => {
-      const transition: AnyTransition<unknown, unknown, unknown> = second === undefined ?
-        {
-          kind,
-          expression: matcher,
-          run: (captures, _argument, state) =>
-            (first as (captures: unknown, state: unknown) => Effect.Effect<unknown, unknown, unknown>)(captures, state)
-        } :
-        {
-          kind,
-          expression: matcher,
-          argument: first as StepArg<unknown>,
-          run: (captures, argument, state) =>
-            (second as (
-              captures: unknown,
-              argument: unknown,
-              state: unknown
-            ) => Effect.Effect<unknown, unknown, unknown>)(captures, argument, state)
-        }
-      return makeFeature(self.name, self.initial, [...self.transitions, transition])
-    }) as StepBuilder<unknown, Kind>
-    Object.defineProperties(builder, {
-      kind: { value: kind },
-      expression: { value: matcher }
-    })
-    return builder
-  }) as StepTag<Kind>
+const makeScenario = <State, E, R>(
+  name: string,
+  steps: ReadonlyArray<AnyStep>
+): Scenario<State, E, R> => {
+  const appendScenario = ((self: Feature<unknown, unknown>) =>
+    makeFeature(self.name, [...self.scenarios, appendScenario as Scenario<State, E, R>])) as Scenario<State, E, R>
+  Object.defineProperties(appendScenario, {
+    [ScenarioTypeId]: { value: ScenarioTypeId },
+    name: { value: name },
+    steps: { value: steps },
+    pipe: {
+      value() {
+        return pipeArguments(this, arguments)
+      }
+    }
+  })
+  return appendScenario
 }
+
+function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
+  return ((strings: TemplateStringsArray, ...captures: ReadonlyArray<Capture<string, unknown>>) =>
+    makeStepFactory(kind, expression.makeMatcher(strings, captures), captures.length > 0)) as StepTag<Kind>
+}
+
+const makeStepFactory = <Kind extends StepKind, Captures>(
+  kind: Kind,
+  matcher: Expression<Captures>,
+  hasCaptures: boolean
+): StepFactory<Captures, Kind> => {
+  const factory = ((first: unknown, second?: unknown) => {
+    const hasArgument = isStepArg(first)
+    const argument = hasArgument ? first : undefined
+    const impl = (hasArgument ? second : first) as (...args: ReadonlyArray<unknown>) => Effect.Effect<unknown, unknown, unknown>
+    const step = ((self: Scenario<unknown, unknown, unknown>) =>
+      makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
+        Kind,
+        unknown,
+        unknown,
+        unknown,
+        unknown,
+        Captures,
+        unknown
+      >
+    Object.defineProperties(step, {
+      [StepTypeId]: { value: StepTypeId },
+      kind: { value: kind },
+      expression: { value: matcher },
+      ...(argument === undefined ? {} : { argument: { value: argument } }),
+      run: {
+        value: (captures: Captures, decodedArgument: unknown, state: unknown) =>
+          impl(...handlerArgs(impl, hasCaptures, argument !== undefined, captures, decodedArgument, state))
+      }
+    })
+    return step
+  }) as StepFactory<Captures, Kind>
+  Object.defineProperties(factory, {
+    kind: { value: kind },
+    expression: { value: matcher }
+  })
+  return factory
+}
+
+const handlerArgs = (
+  impl: (...args: ReadonlyArray<unknown>) => unknown,
+  hasCaptures: boolean,
+  hasArgument: boolean,
+  captures: unknown,
+  argument: unknown,
+  state: unknown
+): ReadonlyArray<unknown> => {
+  const args: Array<unknown> = []
+  if (hasCaptures) {
+    args.push(captures)
+  }
+  if (hasArgument) {
+    args.push(argument)
+  }
+  if (impl.length > args.length) {
+    args.push(state)
+  }
+  return args
+}
+
+const isStepArg = (u: unknown): u is StepArg<unknown> =>
+  typeof u === "object" && u !== null && ("_tag" in u) &&
+  ((u as { readonly _tag: unknown })._tag === "TableArg" || (u as { readonly _tag: unknown })._tag === "DocStringArg")
