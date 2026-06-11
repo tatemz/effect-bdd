@@ -11,23 +11,27 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const sources = ["src/index.ts", "src/Bdd.ts", "src/Errors.ts"]
+const sources = ["src/index.ts", "src/Bdd.ts", "src/Errors.ts", "README.md"]
 const outDir = join(root, ".examples")
+
+const fenceBody = (fence) => fence.split("\n").slice(1, -1).join("\n")
 
 const extractExamples = (file) => {
   const text = readFileSync(join(root, file), "utf8")
+  if (file.endsWith(".md")) {
+    return (text.match(/```ts\n[\s\S]*?```/g) ?? []).map(fenceBody)
+  }
   const examples = []
   const docComments = text.match(/\/\*\*[\s\S]*?\*\//g) ?? []
   for (const comment of docComments) {
     if (!comment.includes("@example")) continue
-    const fences = comment.match(/```ts\n[\s\S]*?```/g) ?? []
-    for (const fence of fences) {
-      const body = fence
-        .split("\n")
-        .slice(1, -1)
-        .map((line) => line.replace(/^\s*\* ?/, ""))
-        .join("\n")
-      examples.push(body)
+    for (const fence of comment.match(/```ts\n[\s\S]*?```/g) ?? []) {
+      examples.push(
+        fenceBody(fence)
+          .split("\n")
+          .map((line) => line.replace(/^\s*\* ?/, ""))
+          .join("\n")
+      )
     }
   }
   return examples

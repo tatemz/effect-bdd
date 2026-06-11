@@ -83,8 +83,11 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - constructors: `Bdd.capture`, `Bdd.table`, `Bdd.docString`, `Bdd.feature`
 - transitions: `Bdd.given`, `Bdd.when`, `Bdd.then`, `Bdd.step`
 - runner: `Bdd.run`
-- parser/compiler service: `Bdd.GherkinCompiler`
+- parser/compiler service and layer: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
+- guards: `Bdd.isFeature`
 - models and errors: `Bdd.Feature`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`
+
+The error classes are also importable directly from the `effect-bdd/Errors` subpath.
 
 The deeper `effect-bdd/Bdd` module also exposes lower-level types such as `Transition`, `AnyTransition`, `StepBuilder`, and `Expression`. Those types describe the builder and feature-definition machinery for advanced typing and documentation. `Transition` tracks a concrete capture and step argument type, while `AnyTransition` is the existential type used by `Bdd.Feature` to store heterogeneous transitions. They are not intended as a separate registration API; prefer the namespace constructors unless you are writing type-level helpers around `Bdd.feature`.
 
@@ -92,7 +95,7 @@ The deeper `effect-bdd/Bdd` module also exposes lower-level types such as `Trans
 
 The source tree enforces a strict dependency direction so the package could be split mechanically if it is ever upstreamed:
 
-- **core** (`Bdd.ts`, `Errors.ts`, `internal/runner.ts`, `internal/matching.ts`, `internal/expression.ts`, `internal/parser.ts`) — platform-agnostic; depends only on `effect`. `Bdd.run` requires the `Bdd.GherkinCompiler` service rather than a concrete parser.
+- **core** (`Bdd.ts`, `Errors.ts`, `internal/runner.ts`, `internal/matching.ts`, `internal/expression.ts`, `internal/parser.ts`) — platform-agnostic; depends on `effect` and the `@cucumber/messages` types that define the compiled Pickle contract, but never on the Gherkin parser itself. `Bdd.run` requires the `Bdd.GherkinCompiler` service rather than a concrete parser.
 - **cucumber adapter** (`internal/cucumberCompiler.ts`) — the only module importing `@cucumber/gherkin`; provides `Bdd.layerCucumber`.
 - **cli** (`main.ts`, `internal/cli/*`) — depends on core and `effect/FileSystem`/`effect/Path` services; never imported by core.
 - **bin** (`bin.ts`) — the only module importing `@effect/platform-node`; wires Node services into the CLI.
@@ -206,6 +209,8 @@ const feature = Bdd.feature("Cart", { initial: 100 }).pipe(
   )
 )
 
+declare const source: string
+
 const program = Bdd.run(feature, source).pipe(
   Effect.provide(Bdd.layerCucumber),
   Effect.provideService(TaxRate, { rate: 0.1 })
@@ -237,6 +242,12 @@ Scenario Outlines are expanded before execution. Every Examples row runs as an i
 `Bdd.run(feature, source)` parses the Gherkin source, matches every scenario step, runs each transition in order, and returns a report when all scenarios pass.
 
 ```ts
+import { Bdd } from "effect-bdd"
+import { Effect } from "effect"
+
+declare const feature: Bdd.Feature<number>
+declare const source: string
+
 const program = Bdd.run(feature, source).pipe(
   Effect.provide(Bdd.layerCucumber)
 )
@@ -249,7 +260,9 @@ The compiler service is the package boundary around Gherkin parsing. The current
 Reports include the feature name, scenario names, step counts, and inherited tags:
 
 ```ts
-{
+import type { Bdd } from "effect-bdd"
+
+const report: Bdd.Report = {
   feature: "Shopping cart",
   scenarios: [
     { name: "Adding items", steps: 3, tags: ["@checkout"] }
@@ -268,6 +281,12 @@ Reports include the feature name, scenario names, step counts, and inherited tag
 Schema decode failures are preserved on `MatchError.cause`. Step implementation failures are preserved on `StepError.cause`.
 
 ```ts
+import { Bdd } from "effect-bdd"
+import { Effect } from "effect"
+
+declare const feature: Bdd.Feature<number>
+declare const source: string
+
 const program = Effect.exit(
   Bdd.run(feature, source).pipe(Effect.provide(Bdd.layerCucumber))
 )
