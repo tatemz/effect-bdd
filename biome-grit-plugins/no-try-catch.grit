@@ -1,0 +1,6 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+JsTryStatement() as $try where {
+  register_diagnostic(span=$try, message="Use Effect.try, Effect.tryPromise, or Effect error handling instead of try/catch.")
+}

@@ -1,6 +1,7 @@
 /**
  * @since 0.1.0
  */
+import * as Arr from "effect/Array"
 import type * as Effect from "effect/Effect"
 import type * as Layer from "effect/Layer"
 import type * as Option from "effect/Option"
@@ -77,8 +78,7 @@ export interface Capture<Name extends string, A> {
  * @since 0.1.0
  */
 export type CapturesOf<Captures extends ReadonlyArray<Capture<string, any>>> = {
-  readonly [C in Captures[number] as C["name"]]: C extends Capture<string, infer A> ? A
-    : never
+  readonly [C in Captures[number] as C["name"]]: C extends Capture<string, infer A> ? A : never
 }
 
 type EmptyCaptures<Captures> = keyof Captures extends never ? true : false
@@ -157,15 +157,7 @@ export type StepArg<A> = TableArg<A> | DocStringArg<A>
  * @category models
  * @since 0.3.0
  */
-export interface Step<
-  Kind extends StepKind,
-  In,
-  Out,
-  E = never,
-  R = never,
-  Captures = unknown,
-  Argument = undefined
-> {
+export interface Step<Kind extends StepKind, In, Out, E = never, R = never, Captures = unknown, Argument = undefined> {
   <State extends In, E0, R0>(self: Scenario<State, E0, R0>): Scenario<Out, E | E0, R | R0>
   readonly [StepTypeId]: typeof StepTypeId
   readonly kind: Kind
@@ -236,15 +228,7 @@ export interface Report {
 
 type FeatureType<E, R> = Feature<E, R>
 type ScenarioType<State, E, R> = Scenario<State, E, R>
-type StepType<Kind extends StepKind, In, Out, E, R, Captures, Argument> = Step<
-  Kind,
-  In,
-  Out,
-  E,
-  R,
-  Captures,
-  Argument
->
+type StepType<Kind extends StepKind, In, Out, E, R, Captures, Argument> = Step<Kind, In, Out, E, R, Captures, Argument>
 type ReportType = Report
 type RunErrorType = RunError
 type GherkinCompilerType = GherkinCompiler
@@ -260,10 +244,8 @@ type DocStringType = DocString
  * @category constructors
  * @since 0.1.0
  */
-const capture_: <const Name extends string, A>(
-  name: Name,
-  schema: Schema.Codec<A, string>
-) => Capture<Name, A> = expression.makeCapture
+const capture_: <const Name extends string, A>(name: Name, schema: Schema.Codec<A, string>) => Capture<Name, A> =
+  expression.makeCapture
 
 /**
  * Creates a DataTable decoder from a row Schema.
@@ -341,10 +323,8 @@ const then_: StepTag<"Then"> = makeStepTag("Then")
  * @category execution
  * @since 0.1.0
  */
-const run_ = <E, R>(
-  self: Feature<E, R>,
-  source: string
-): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source)
+const run_ = <E, R>(self: Feature<E, R>, source: string): Effect.Effect<Report, RunError, R | GherkinCompiler> =>
+  runner.run(self, source)
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -489,16 +469,14 @@ export interface StepTag<Kind extends StepKind> {
   ): CapturedStepFactory<CapturesOf<Captures>, Kind>
 }
 
-type StepFactory<Captures, Kind extends StepKind> = EmptyCaptures<Captures> extends true ? EmptyStepFactory<Kind>
-  : CapturedStepFactory<Captures, Kind>
+type StepFactory<Captures, Kind extends StepKind> =
+  EmptyCaptures<Captures> extends true ? EmptyStepFactory<Kind> : CapturedStepFactory<Captures, Kind>
 
 interface EmptyStepFactory<Kind extends StepKind> {
   readonly kind: Kind
   readonly expression: Expression<{}>
   <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, {}>
-  <In, Out, E, R>(
-    impl: (state: In) => Effect.Effect<Out, E, R>
-  ): Step<Kind, In, Out, E, R, {}>
+  <In, Out, E, R>(impl: (state: In) => Effect.Effect<Out, E, R>): Step<Kind, In, Out, E, R, {}>
   <Arg, Out, E, R>(
     arg: StepArg<Arg>,
     impl: (arg: Arg) => Effect.Effect<Out, E, R>
@@ -527,10 +505,7 @@ interface CapturedStepFactory<Captures, Kind extends StepKind> {
   ): Step<Kind, In, Out, E, R, Captures, Arg>
 }
 
-const makeFeature = <E, R>(
-  name: string,
-  scenarios: ReadonlyArray<Scenario<any, any, any>>
-): Feature<E, R> => ({
+const makeFeature = <E, R>(name: string, scenarios: ReadonlyArray<Scenario<any, any, any>>): Feature<E, R> => ({
   [FeatureTypeId]: FeatureTypeId,
   name,
   scenarios,
@@ -539,10 +514,7 @@ const makeFeature = <E, R>(
   }
 })
 
-const makeScenario = <State, E, R>(
-  name: string,
-  steps: ReadonlyArray<AnyStep>
-): Scenario<State, E, R> => {
+const makeScenario = <State, E, R>(name: string, steps: ReadonlyArray<AnyStep>): Scenario<State, E, R> => {
   const appendScenario = ((self: Feature<unknown, unknown>) =>
     makeFeature(self.name, [...self.scenarios, appendScenario as Scenario<State, E, R>])) as Scenario<State, E, R>
   Object.defineProperties(appendScenario, {
@@ -571,17 +543,19 @@ const makeStepFactory = <Kind extends StepKind, Captures>(
   const factory = ((first: unknown, second?: unknown) => {
     const hasArgument = isStepArg(first)
     const argument = hasArgument ? first : undefined
-    const impl = (hasArgument ? second : first) as (...args: ReadonlyArray<unknown>) => Effect.Effect<unknown, unknown, unknown>
+    const impl = (hasArgument ? second : first) as (
+      ...args: ReadonlyArray<unknown>
+    ) => Effect.Effect<unknown, unknown, unknown>
     const step = ((self: Scenario<unknown, unknown, unknown>) =>
       makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
-        Kind,
-        unknown,
-        unknown,
-        unknown,
-        unknown,
-        Captures,
-        unknown
-      >
+      Kind,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      Captures,
+      unknown
+    >
     Object.defineProperties(step, {
       [StepTypeId]: { value: StepTypeId },
       kind: { value: kind },
@@ -609,19 +583,12 @@ const handlerArgs = (
   argument: unknown,
   state: unknown
 ): ReadonlyArray<unknown> => {
-  const args: Array<unknown> = []
-  if (hasCaptures) {
-    args.push(captures)
-  }
-  if (hasArgument) {
-    args.push(argument)
-  }
-  if (impl.length > args.length) {
-    args.push(state)
-  }
-  return args
+  const args: ReadonlyArray<unknown> = [...(hasCaptures ? [captures] : []), ...(hasArgument ? [argument] : [])]
+  return impl.length > args.length ? Arr.append(args, state) : args
 }
 
 const isStepArg = (u: unknown): u is StepArg<unknown> =>
-  typeof u === "object" && u !== null && ("_tag" in u) &&
+  typeof u === "object" &&
+  u !== null &&
+  "_tag" in u &&
   ((u as { readonly _tag: unknown })._tag === "TableArg" || (u as { readonly _tag: unknown })._tag === "DocStringArg")

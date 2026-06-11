@@ -1,0 +1,12 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+  `$condition ? Effect.gen($args) : $other` as $mixed,
+  `$condition ? $other : Effect.gen($args)` as $mixed,
+  JsYieldExpression() as $mixed where { $mixed <: r"(?s)yield\*\s*Effect\.gen\(.*" },
+  `Effect.flatMap(($params) => Effect.gen($args))` as $mixed,
+  `Effect.flatMap($effect, ($params) => Effect.gen($args))` as $mixed
+} where {
+  register_diagnostic(span=$mixed, message="Use Effect.gen as the direct body of an Effect-producing function; do not nest inline generators inside another effect flow.")
+}

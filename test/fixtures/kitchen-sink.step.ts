@@ -1,9 +1,12 @@
 import { Bdd } from "effect-bdd"
 import { Context, Effect, Schema } from "effect"
 
-class TaxRate extends Context.Service<TaxRate, {
-  readonly rate: number
-}>()("TaxRate") {}
+class TaxRate extends Context.Service<
+  TaxRate,
+  {
+    readonly rate: number
+  }
+>()("TaxRate") {}
 
 const Item = Schema.Struct({
   sku: Schema.String,
@@ -48,12 +51,11 @@ const subtotalOf = (cart: Cart): number => cart.items.reduce((sum, item) => sum 
 const givenEmptyCart = Bdd.given`an empty cart`(() => Effect.succeed(emptyCart))
 const givenTaxEnabled = Bdd.given`tax is enabled`((state: Cart) => Effect.succeed({ ...state, taxEnabled: true }))
 const givenCartStartsEmpty = Bdd.step`the cart starts empty`(() => Effect.succeed(emptyCart))
-const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(
-  ({ qty, sku, price }, state: Cart) => Effect.succeed(addItem(state, sku, qty, price))
+const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(({ qty, sku, price }, state: Cart) =>
+  Effect.succeed(addItem(state, sku, qty, price))
 )
-const whenTableItemsAdded = Bdd.when`the following items are added:`(
-  Bdd.table(Item),
-  (items, state: Cart) => Effect.succeed(items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state))
+const whenTableItemsAdded = Bdd.when`the following items are added:`(Bdd.table(Item), (items, state: Cart) =>
+  Effect.succeed(items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state))
 )
 const whenRequestBody = Bdd.when`the request body is:`(
   Bdd.docString(Schema.fromJsonString(Payload)),
@@ -65,12 +67,10 @@ const thenSubtotal = Bdd.then`the subtotal is ${expected}`(({ expected }, state:
     : Effect.fail(`expected subtotal ${expected}, got ${subtotalOf(state)}` as const)
 )
 const thenTaxedTotal = Bdd.then`the taxed total is ${expected}`(({ expected }, state: Cart) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const taxRate = yield* TaxRate
     const actual = Math.round(subtotalOf(state) * (1 + taxRate.rate))
-    return actual === expected
-      ? state
-      : yield* Effect.fail(`expected taxed total ${expected}, got ${actual}` as const)
+    return actual === expected ? state : yield* Effect.fail(`expected taxed total ${expected}, got ${actual}` as const)
   }).pipe(Effect.provideService(TaxRate, { rate: state.taxEnabled ? 0.1 : 0 }))
 )
 const thenPayloadAccepted = Bdd.then`the payload is accepted`((state: Cart) => {

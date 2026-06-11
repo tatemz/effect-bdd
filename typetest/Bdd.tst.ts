@@ -52,11 +52,7 @@ describe("Bdd", () => {
       return Effect.succeed(state)
     })
 
-    const scenario = Bdd.scenario("Creating a counter").pipe(
-      givenNoCounter,
-      whenCreated,
-      thenZero
-    )
+    const scenario = Bdd.scenario("Creating a counter").pipe(givenNoCounter, whenCreated, thenZero)
 
     expect(scenario).type.toBe<Bdd.Scenario<{ readonly value: number }, never, never>>()
   })
@@ -79,8 +75,8 @@ describe("Bdd", () => {
 
     const scenario = Bdd.scenario("Failure").pipe(
       Bdd.given`zero`(() => Effect.succeed(0) as Effect.Effect<number, "given failed", Inventory>),
-      Bdd.when`increment`((state: number) =>
-        Effect.succeed(state + 1) as Effect.Effect<number, "when failed", Pricing>
+      Bdd.when`increment`(
+        (state: number) => Effect.succeed(state + 1) as Effect.Effect<number, "when failed", Pricing>
       ),
       Bdd.then`one`((state: number) => Effect.succeed(state) as Effect.Effect<number, "then failed">)
     )

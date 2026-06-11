@@ -19,7 +19,6 @@ const givenBackgroundMinimalism = Bdd.given`the minimalism inside a background`(
 const givenTheText = Bdd.given`the ${text}`(({ text }, state: Events | undefined) =>
   Effect.succeed(append(state, text))
 )
-const givenAText = Bdd.given`a ${text}`(({ text }, state: Events | undefined) => Effect.succeed(append(state, text)))
 const givenATextTable = Bdd.given`a ${text}`(table, ({ text }, _table, state: Events | undefined) =>
   Effect.succeed(append(state, text))
 )
@@ -38,9 +37,7 @@ const givenDelimits = Bdd.given`the @delimits tags`((state: Events | undefined) 
   Effect.succeed(append(state, "joined tags"))
 )
 
-export const minimal = Bdd.feature("Minimal").pipe(
-  Bdd.scenario("minimalistic").pipe(givenMinimalism)
-)
+export const minimal = Bdd.feature("Minimal").pipe(Bdd.scenario("minimalistic").pipe(givenMinimalism))
 
 export const background = Bdd.feature("Background").pipe(
   Bdd.scenario("minimalistic").pipe(givenBackgroundMinimalism, givenMinimalism),

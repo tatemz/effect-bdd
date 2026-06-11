@@ -3,9 +3,12 @@ import { assert, describe, it } from "@effect/vitest"
 import { Context, Effect, Schema } from "effect"
 import { runError } from "./helpers.ts"
 
-class TaxRate extends Context.Service<TaxRate, {
-  readonly rate: number
-}>()("TaxRate") {}
+class TaxRate extends Context.Service<
+  TaxRate,
+  {
+    readonly rate: number
+  }
+>()("TaxRate") {}
 
 const Payload = Schema.Struct({
   sku: Schema.String,
@@ -44,12 +47,11 @@ const Item = Schema.Struct({
 
 const givenEmptyCart = Bdd.given`an empty cart`(() => Effect.succeed(emptyCart))
 const givenCartStartsEmpty = Bdd.step`the cart starts empty`(() => Effect.succeed(emptyCart))
-const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(
-  ({ qty, sku, price }, state: Cart) => Effect.succeed(addItem(state, sku, qty, price))
+const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(({ qty, sku, price }, state: Cart) =>
+  Effect.succeed(addItem(state, sku, qty, price))
 )
-const whenItemsAdded = Bdd.when`the following items are added:`(
-  Bdd.table(Item),
-  (items, state: Cart) => Effect.succeed(items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state))
+const whenItemsAdded = Bdd.when`the following items are added:`(Bdd.table(Item), (items, state: Cart) =>
+  Effect.succeed(items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state))
 )
 const whenRequestBody = Bdd.when`the request body is:`(
   Bdd.docString(Schema.fromJsonString(Payload)),
@@ -62,12 +64,10 @@ const thenSubtotal = Bdd.then`the subtotal is ${expected}`(({ expected }, state:
     : Effect.fail(`expected subtotal ${expected}, got ${actual}` as const)
 })
 const thenTaxedTotal = Bdd.then`the taxed total is ${expected}`(({ expected }, state: Cart) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const taxRate = yield* TaxRate
     const actual = Math.round(subtotalOf(state) * (1 + taxRate.rate))
-    return actual === expected
-      ? state
-      : yield* Effect.fail(`expected taxed total ${expected}, got ${actual}` as const)
+    return actual === expected ? state : yield* Effect.fail(`expected taxed total ${expected}, got ${actual}` as const)
   })
 )
 const thenPayloadAccepted = Bdd.then`the payload is accepted`((state: Cart) => {
@@ -94,23 +94,12 @@ const shoppingCart = Bdd.feature("Shopping cart").pipe(
     thenSubtotal,
     thenNoDuplicate
   ),
-  Bdd.scenario("DocString JSON payload").pipe(
-    givenEmptyCart,
-    whenRequestBody,
-    thenPayloadAccepted
-  ),
-  Bdd.scenario("Bdd.step can match any concrete keyword").pipe(
-    givenEmptyCart,
-    givenCartStartsEmpty,
-    thenAnyKeyword
-  )
+  Bdd.scenario("DocString JSON payload").pipe(givenEmptyCart, whenRequestBody, thenPayloadAccepted),
+  Bdd.scenario("Bdd.step can match any concrete keyword").pipe(givenEmptyCart, givenCartStartsEmpty, thenAnyKeyword)
 )
 
 const runShoppingCart = (source: string) =>
-  Bdd.run(shoppingCart, source).pipe(
-    Effect.provide(Bdd.layerCucumber),
-    Effect.provideService(TaxRate, { rate: 0.1 })
-  )
+  Bdd.run(shoppingCart, source).pipe(Effect.provide(Bdd.layerCucumber), Effect.provideService(TaxRate, { rate: 0.1 }))
 
 const singleScenarioShoppingCart = Bdd.feature("Shopping cart").pipe(
   Bdd.scenario("Capture based item with a service-backed assertion").pipe(
@@ -197,7 +186,7 @@ Feature: Shopping cart
 
 describe("developer experience", () => {
   it.effect("runs a feature as explicit scenario chains", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const report = yield* runShoppingCart(feature)
 
       assert.deepStrictEqual(report, {
@@ -209,10 +198,11 @@ describe("developer experience", () => {
           { name: "Bdd.step can match any concrete keyword", steps: 3, tags: ["@checkout", "@keyword-agnostic"] }
         ]
       })
-    }))
+    })
+  )
 
   it.effect("surfaces ParseError, MatchError, and StepError as typed failures", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const stepError = yield* runError(runSingleScenarioShoppingCart(stepFailureFeature))
       assert.strictEqual(stepError._tag, "StepError")
       assert.strictEqual((stepError as { readonly cause: unknown }).cause, "expected subtotal 99, got 42")
@@ -223,13 +213,14 @@ describe("developer experience", () => {
         "{qty} {sku} are added at {price} each"
       ])
 
-      const parseError = yield* runError(Bdd.run(parseFailureShoppingCart, parseFailureFeature).pipe(
-        Effect.provide(Bdd.layerCucumber)
-      ))
+      const parseError = yield* runError(
+        Bdd.run(parseFailureShoppingCart, parseFailureFeature).pipe(Effect.provide(Bdd.layerCucumber))
+      )
       assert.strictEqual(parseError._tag, "ParseError")
       assert.strictEqual(
         (parseError as { readonly message: string }).message,
         "And found before a Given, When, or Then step"
       )
-    }))
+    })
+  )
 })

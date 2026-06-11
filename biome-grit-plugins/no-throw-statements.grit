@@ -1,0 +1,6 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+`throw $error` as $statement where {
+  register_diagnostic(span=$statement, message="Production code must not throw. Fail the Effect with a typed error instead.")
+}

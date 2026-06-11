@@ -67,10 +67,15 @@
     "build": "tsc -p tsconfig.json && pnpm babel",
     "babel": "babel dist --plugins annotate-pure-calls --out-dir dist",
     "check": "tsc -p tsconfig.json --noEmit",
+    "lint": "pnpm lint:grit-fixtures && pnpm lint:biome",
+    "lint:biome": "biome lint .",
+    "lint:grit-fixtures": "node scripts/lint-grit-fixtures.mjs",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "test": "vitest run",
     "test:types": "tstyche",
     "test:examples": "node scripts/check-examples.mjs",
-    "ci": "pnpm build && pnpm test && pnpm test:types && pnpm test:examples",
+    "ci": "pnpm build && pnpm lint && pnpm format:check && pnpm test && pnpm test:types && pnpm test:examples",
     "prepack": "pnpm build"
   },
   "peerDependencies": {
@@ -83,6 +88,7 @@
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",
+    "@biomejs/biome": "^2.4.16",
     "@effect/vitest": "4.0.0-beta.78",
     "@types/node": "^25.9.2",
     "babel-plugin-annotate-pure-calls": "^0.5.0",

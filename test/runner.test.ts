@@ -28,8 +28,8 @@ describe("runner", () => {
     const expected = Bdd.capture("expected", Schema.NumberFromString)
 
     const givenEmptyCart = Bdd.given`an empty cart`(() => Effect.succeed(emptyCart))
-    const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(
-      ({ qty, sku, price }, state: Cart) => Effect.succeed(addItem(state, sku, qty, price))
+    const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(({ qty, sku, price }, state: Cart) =>
+      Effect.succeed(addItem(state, sku, qty, price))
     )
     const thenTotal = Bdd.then`the cart total is ${expected}`(({ expected }, state: Cart) =>
       Effect.sync(() => {
@@ -39,14 +39,10 @@ describe("runner", () => {
     )
 
     const cart = Bdd.feature("Shopping cart").pipe(
-      Bdd.scenario("Adding items computes the total").pipe(
-        givenEmptyCart,
-        whenItemAdded,
-        thenTotal
-      )
+      Bdd.scenario("Adding items computes the total").pipe(givenEmptyCart, whenItemAdded, thenTotal)
     )
 
-    return Effect.gen(function*() {
+    return Effect.gen(function* () {
       const report = yield* runBdd(
         cart,
         `
@@ -70,9 +66,7 @@ Feature: Shopping cart
     assertMatchError(
       runBdd(
         Bdd.feature("Counter definition").pipe(
-          Bdd.scenario("Starts clean").pipe(
-            Bdd.then`the counter is 0`(() => Effect.succeed(0))
-          )
+          Bdd.scenario("Starts clean").pipe(Bdd.then`the counter is 0`(() => Effect.succeed(0)))
         ),
         `
 Feature: Counter source
@@ -82,15 +76,14 @@ Feature: Counter source
 `
       ),
       /Feature definition "Counter definition" does not match Gherkin feature "Counter source"/
-    ))
+    )
+  )
 
   it.effect("fails when a source scenario has no chain", () =>
     assertMatchError(
       runBdd(
         Bdd.feature("Shopping cart").pipe(
-          Bdd.scenario("Different scenario").pipe(
-            Bdd.given`an empty cart`(() => Effect.succeed(emptyCart))
-          )
+          Bdd.scenario("Different scenario").pipe(Bdd.given`an empty cart`(() => Effect.succeed(emptyCart)))
         ),
         `
 Feature: Shopping cart
@@ -100,15 +93,14 @@ Feature: Shopping cart
 `
       ),
       /No scenario chain matched source scenario "Missing chain"/
-    ))
+    )
+  )
 
   it.effect("fails when a chain has an extra or missing step", () =>
     assertMatchError(
       runBdd(
         Bdd.feature("Shopping cart").pipe(
-          Bdd.scenario("Missing step").pipe(
-            Bdd.given`an empty cart`(() => Effect.succeed(emptyCart))
-          )
+          Bdd.scenario("Missing step").pipe(Bdd.given`an empty cart`(() => Effect.succeed(emptyCart)))
         ),
         `
 Feature: Shopping cart
@@ -119,15 +111,14 @@ Feature: Shopping cart
 `
       ),
       /has 2 source step\(s\), but its chain has 1 step\(s\)/
-    ))
+    )
+  )
 
   it.effect("fails when a chain step has the wrong keyword", () =>
     assertMatchError(
       runBdd(
         Bdd.feature("Keyword semantics").pipe(
-          Bdd.scenario("Given requires given").pipe(
-            Bdd.when`shared phrase`(() => Effect.succeed(0))
-          )
+          Bdd.scenario("Given requires given").pipe(Bdd.when`shared phrase`(() => Effect.succeed(0)))
         ),
         `
 Feature: Keyword semantics
@@ -137,7 +128,8 @@ Feature: Keyword semantics
 `
       ),
       /keyword mismatch/
-    ))
+    )
+  )
 
   it.effect("allows Bdd.step to satisfy any concrete keyword position", () => {
     const shared = Bdd.step`shared phrase`(() => Effect.succeed(0))
@@ -147,7 +139,7 @@ Feature: Keyword semantics
       Bdd.scenario("Then wildcard").pipe(shared)
     )
 
-    return Effect.gen(function*() {
+    return Effect.gen(function* () {
       const report = yield* runBdd(
         feature,
         `
@@ -221,13 +213,11 @@ Feature: Keyword inheritance
       readonly payload?: Schema.Schema.Type<typeof Payload>
     }
     const givenEmpty = Bdd.given`an empty cart`(() => Effect.succeed({ cart: emptyCart } as State))
-    const whenItems = Bdd.when`the following items are added:`(
-      Bdd.table(Item),
-      (items, state: State) =>
-        Effect.succeed({
-          ...state,
-          cart: items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state.cart)
-        })
+    const whenItems = Bdd.when`the following items are added:`(Bdd.table(Item), (items, state: State) =>
+      Effect.succeed({
+        ...state,
+        cart: items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state.cart)
+      })
     )
     const whenPayload = Bdd.when`the request body is:`(
       Bdd.docString(Schema.fromJsonString(Payload)),
@@ -271,17 +261,15 @@ Feature: Shopping cart
     })
     const feature = Bdd.feature("Shopping cart").pipe(
       Bdd.scenario("Invalid table").pipe(
-        Bdd.when`the following items are added:`(
-          Bdd.table(Item),
-          (items) => Effect.succeed(items)
-        )
+        Bdd.when`the following items are added:`(Bdd.table(Item), (items) => Effect.succeed(items))
       )
     )
 
-    return Effect.gen(function*() {
-      const result = yield* Effect.exit(runBdd(
-        feature,
-        `
+    return Effect.gen(function* () {
+      const result = yield* Effect.exit(
+        runBdd(
+          feature,
+          `
 Feature: Shopping cart
 
   Scenario: Invalid table
@@ -289,7 +277,8 @@ Feature: Shopping cart
       | sku  | qty |
       | book | nope |
 `
-      ))
+        )
+      )
 
       assert.strictEqual(result._tag, "Failure")
       if (result._tag === "Failure") {
@@ -307,16 +296,18 @@ Feature: Shopping cart
       )
     )
 
-    return Effect.gen(function*() {
-      const result = yield* Effect.exit(runBdd(
-        feature,
-        `
+    return Effect.gen(function* () {
+      const result = yield* Effect.exit(
+        runBdd(
+          feature,
+          `
 Feature: Shopping cart
 
   Scenario: Failed assertion
     Then the cart total is wrong
 `
-      ))
+        )
+      )
 
       assert.strictEqual(result._tag, "Failure")
       if (result._tag === "Failure") {
@@ -342,7 +333,7 @@ Feature: Shopping cart
       Bdd.scenario("Uses rule background").pipe(featureSetup, ruleSetup, scenarioRuns, thenDone)
     )
 
-    return Effect.gen(function*() {
+    return Effect.gen(function* () {
       const report = yield* runBdd(
         feature,
         `
@@ -364,11 +355,13 @@ Feature: Checkout
 `
       )
 
-      assert.deepStrictEqual(report.scenarios, [{
-        name: "Uses rule background",
-        steps: 4,
-        tags: ["@feature", "@rule", "@scenario"]
-      }])
+      assert.deepStrictEqual(report.scenarios, [
+        {
+          name: "Uses rule background",
+          steps: 4,
+          tags: ["@feature", "@rule", "@scenario"]
+        }
+      ])
     })
   })
 })

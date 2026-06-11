@@ -16,13 +16,13 @@ export interface ScenarioTask {
 /** @internal */
 export type ScenarioOutcome =
   | {
-    readonly _tag: "Passed"
-    readonly steps: number
-  }
+      readonly _tag: "Passed"
+      readonly steps: number
+    }
   | {
-    readonly _tag: "Failed"
-    readonly error: Bdd.RunError
-  }
+      readonly _tag: "Failed"
+      readonly error: Bdd.RunError
+    }
 
 /** @internal */
 export interface ScenarioResult {
@@ -43,31 +43,31 @@ export interface RunSummary {
 /** @internal */
 export type CliDiagnostic =
   | {
-    readonly _tag: "UnmatchedFeature"
-    readonly featurePath: string
-    readonly featureName: string
-    readonly line: number
-    readonly message: string
-  }
+      readonly _tag: "UnmatchedFeature"
+      readonly featurePath: string
+      readonly featureName: string
+      readonly line: number
+      readonly message: string
+    }
   | {
-    readonly _tag: "UnmatchedScenario"
-    readonly featurePath: string
-    readonly featureName: string
-    readonly scenarioName: string
-    readonly scenarioLine: number
-    readonly message: string
-  }
+      readonly _tag: "UnmatchedScenario"
+      readonly featurePath: string
+      readonly featureName: string
+      readonly scenarioName: string
+      readonly scenarioLine: number
+      readonly message: string
+    }
   | {
-    readonly _tag: "UnusedFeatureDefinition"
-    readonly featureName: string
-    readonly message: string
-  }
+      readonly _tag: "UnusedFeatureDefinition"
+      readonly featureName: string
+      readonly message: string
+    }
   | {
-    readonly _tag: "UnusedScenarioDefinition"
-    readonly featureName: string
-    readonly scenarioName: string
-    readonly message: string
-  }
+      readonly _tag: "UnusedScenarioDefinition"
+      readonly featureName: string
+      readonly scenarioName: string
+      readonly message: string
+    }
 
 /** @internal */
 export interface CliRunResult {

@@ -23,7 +23,7 @@ describe("parser", () => {
       Bdd.scenario("Adding items").pipe(givenEmpty, whenItems, thenHasItems)
     )
 
-    return Effect.gen(function*() {
+    return Effect.gen(function* () {
       const report = yield* runBdd(
         feature,
         `
@@ -43,32 +43,33 @@ Feature: Shopping cart
   })
 
   it.effect("rejects And before a concrete step", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const feature = Bdd.feature("Shopping cart").pipe(
         Bdd.scenario("Invalid").pipe(Bdd.given`an empty cart`(() => Effect.succeed(0)))
       )
-      const error = yield* runError(runBdd(
-        feature,
-        `
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
 Feature: Shopping cart
 
   Scenario: Invalid
     And an empty cart
 `
-      ))
+        )
+      )
 
       assert.strictEqual(error._tag, "ParseError")
       assert.strictEqual(error.line, 5)
-    }))
+    })
+  )
 
   it.effect("ignores comments and accepts descriptions", () => {
     const feature = Bdd.feature("Shopping cart").pipe(
-      Bdd.scenario("Described scenario").pipe(
-        Bdd.given`an empty cart`(() => Effect.succeed(0))
-      )
+      Bdd.scenario("Described scenario").pipe(Bdd.given`an empty cart`(() => Effect.succeed(0)))
     )
 
-    return Effect.gen(function*() {
+    return Effect.gen(function* () {
       const report = yield* runBdd(
         feature,
         `
@@ -121,7 +122,7 @@ Feature: Payload
       Bdd.scenario("CRLF").pipe(Bdd.given`an empty cart`(() => Effect.succeed(0)))
     )
 
-    return Effect.gen(function*() {
+    return Effect.gen(function* () {
       const report = yield* runBdd(
         feature,
         "Feature: Shopping cart\r\n\r\n  Scenario: CRLF\r\n    Given an empty cart\r\n"
@@ -132,25 +133,28 @@ Feature: Payload
   })
 
   it.effect("rejects invalid Gherkin syntax", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const feature = Bdd.feature("Shopping cart")
-      const error = yield* runError(runBdd(
-        feature,
-        `
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
 Given a step before the feature
 Feature: Shopping cart
 
   Scenario: Invalid syntax
     Given an empty cart
 `
-      ))
+        )
+      )
 
       assert.strictEqual(error._tag, "ParseError")
       assert.strictEqual(error.line, 2)
-    }))
+    })
+  )
 
   it.effect("expands Scenario Outline examples into executable scenarios", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const qty = Bdd.capture("qty", Schema.FiniteFromString)
       const feature = Bdd.feature("Shopping cart").pipe(
         Bdd.scenario("Adding <qty> items").pipe(
@@ -183,10 +187,11 @@ Feature: Shopping cart
         { name: "Adding 2 items", steps: 2, tags: [] },
         { name: "Adding 3 items", steps: 2, tags: [] }
       ])
-    }))
+    })
+  )
 
   it.effect("accepts Rule syntax and inherits rule tags", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const feature = Bdd.feature("Shopping cart").pipe(
         Bdd.scenario("Rule scenario").pipe(Bdd.given`an empty cart`(() => Effect.succeed(0)))
       )
@@ -206,10 +211,13 @@ Feature: Shopping cart
 `
       )
 
-      assert.deepStrictEqual(report.scenarios, [{
-        name: "Rule scenario",
-        steps: 1,
-        tags: ["@feature", "@rule", "@scenario"]
-      }])
-    }))
+      assert.deepStrictEqual(report.scenarios, [
+        {
+          name: "Rule scenario",
+          steps: 1,
+          tags: ["@feature", "@rule", "@scenario"]
+        }
+      ])
+    })
+  )
 })

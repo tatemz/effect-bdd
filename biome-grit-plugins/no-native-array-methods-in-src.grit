@@ -1,0 +1,52 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+  `$receiver.at($...)` as $call,
+  `$receiver.concat($...)` as $call,
+  `$receiver.entries($...)` as $call,
+  `$receiver.every($...)` as $call,
+  `$receiver.fill($...)` as $call,
+  `$receiver.filter($...)` as $call,
+  `$receiver.find($...)` as $call,
+  `$receiver.findIndex($...)` as $call,
+  `$receiver.findLast($...)` as $call,
+  `$receiver.findLastIndex($...)` as $call,
+  `$receiver.flat($...)` as $call,
+  `$receiver.flatMap($...)` as $call,
+  `$receiver.forEach($...)` as $call,
+  `$receiver.includes($...)` as $call,
+  `$receiver.indexOf($...)` as $call,
+  `$receiver.join($...)` as $call,
+  `$receiver.lastIndexOf($...)` as $call,
+  `$receiver.map($...)` as $call,
+  `$receiver.pop($...)` as $call,
+  `$receiver.push($...)` as $call,
+  `$receiver.reduce($...)` as $call,
+  `$receiver.reduceRight($...)` as $call,
+  `$receiver.reverse($...)` as $call,
+  `$receiver.shift($...)` as $call,
+  `$receiver.slice($...)` as $call,
+  `$receiver.some($...)` as $call,
+  `$receiver.sort($...)` as $call,
+  `$receiver.splice($...)` as $call,
+  `$receiver.unshift($...)` as $call,
+  `Array.from($...)` as $call,
+  `Array.isArray($...)` as $call,
+  `Array.of($...)` as $call
+} where {
+  $call <: not or {
+    `Arr.$method($...)`,
+    `Effect.$method($...)`,
+    `Option.$method($...)`,
+    `Result.$method($...)`,
+    `Record.$method($...)`,
+    `Record_.$method($...)`,
+    `Str.$method($...)`,
+    `Schema.$method($...)`,
+    `Stream.$method($...)`,
+    `Flag.$method($...)`,
+    `Iterable.$method($...)`
+  },
+  register_diagnostic(span=$call, message="Use effect/Array instead of native Array methods.")
+}
