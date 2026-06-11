@@ -1,21 +1,15 @@
 # effect-bdd
 
-An Effect-native runner for testing Gherkin feature source with explicit, typed scenario chains.
+An Effect-native runner for testing Gherkin feature files with explicit, typed scenario chains.
 
-`effect-bdd` uses Cucumber's Gherkin parser/compiler for feature-file syntax, but it does not use Cucumber's mutable `World` model. Code declares the executable scenario chains, and the feature file is verified against those chains position by position.
+`effect-bdd` uses Cucumber's parser/compiler for Gherkin syntax, but not Cucumber's mutable `World` model. Your code declares the executable scenario chains; the `.feature` file is verified against those chains position by position.
 
 This package currently tracks the Effect v4 beta release train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform packages.
 
-## Installation
+## Install
 
 ```sh
 pnpm add effect-bdd effect@4.0.0-beta.78
-```
-
-The `effect-bdd` CLI is published with the package:
-
-```sh
-pnpm effect-bdd --features "features/**/*.feature" --steps "features/**/*.step.ts"
 ```
 
 ## Quick Start
@@ -24,17 +18,15 @@ pnpm effect-bdd --features "features/**/*.feature" --steps "features/**/*.step.t
 import { Bdd } from "effect-bdd"
 import { Effect, Schema } from "effect"
 
-const counterValue = Bdd.capture("counterValue", Schema.FiniteFromString)
+const expected = Bdd.capture("expected", Schema.FiniteFromString)
 
 const givenNoCounter = Bdd.given`no counter exists`(() => Effect.void)
-
 const whenCounterIsCreated = Bdd.when`the counter is created`(() => Effect.succeed(0))
-
-const thenCounterValueIs = Bdd.then`the counter value is ${counterValue}`(
-  ({ counterValue }: { readonly counterValue: number }, state: number) =>
-    state === counterValue
+const thenCounterValueIs = Bdd.then`the counter value is ${expected}`(
+  ({ expected }: { readonly expected: number }, state: number) =>
+    state === expected
       ? Effect.succeed(state)
-      : Effect.fail(`expected ${counterValue}, got ${state}` as const)
+      : Effect.fail(`expected ${expected}, got ${state}` as const)
 )
 
 const creatingACounter = Bdd.scenario("Creating a counter").pipe(
@@ -60,7 +52,7 @@ Feature: Counter
 ).pipe(Effect.provide(Bdd.layerCucumber))
 ```
 
-## Model
+## The Model
 
 A feature is made of explicit scenario chains:
 
@@ -69,17 +61,26 @@ A feature is made of explicit scenario chains:
 - `Bdd.given`, `Bdd.when`, `Bdd.then`, and `Bdd.step` create reusable step values.
 - Steps pipe into scenarios; scenarios pipe into features.
 - Each step returns an `Effect` containing the next state.
-- The state type may evolve across a scenario: `void -> Draft -> Result -> Asserted`.
-- There is no feature-level `initial` state. The first step in each scenario sets up the first useful state.
+- State may evolve across a scenario: `void -> Draft -> Result -> Asserted`.
+- There is no feature-level `initial` state. The first step sets up the first useful state.
 
-The runner parses the feature source, compiles it with Cucumber, pairs each source scenario with the `Bdd.scenario(...)` chain of the same name, and verifies every step in order:
+The runner parses the feature source, compiles it with Cucumber, pairs each source scenario with the `Bdd.scenario(...)` chain of the same name, verifies every step in order, then runs the chain.
 
-1. same step count
-2. same concrete keyword (`Given`, `When`, `Then`), unless the chain step is `Bdd.step`
-3. same expression match
-4. same DataTable or DocString presence and Schema decoding
+## Recommended `steps.ts` Shape
 
-Only after verification does it run the chain.
+Keep step modules boring:
+
+```text
+imports
+schemas and captures
+domain types
+pure helpers
+reusable given/when/then step values
+scenario chains
+one exported Bdd.feature(...)
+```
+
+One Gherkin `Feature:` should map to one exported `Bdd.feature("Feature name")`. Do not split one feature across multiple exported feature definitions. Reusable steps can live anywhere, but compose them into a single feature export per feature name.
 
 ## Backgrounds
 
@@ -100,7 +101,7 @@ Feature: Cart
       Then the taxed total is 44
 ```
 
-Cucumber compiles that scenario into a flat step list:
+Cucumber compiles that scenario into this flat list:
 
 ```text
 Given an empty cart
@@ -109,10 +110,10 @@ When 2 book are added
 Then the taxed total is 44
 ```
 
-So the chain lists the same steps:
+So the chain must list the same steps:
 
 ```text
-const addingTaxedItems = Bdd.scenario("Adding taxed items").pipe(
+Bdd.scenario("Adding taxed items").pipe(
   givenEmptyCart,
   givenTaxEnabled,
   whenBooksAdded,
@@ -120,11 +121,25 @@ const addingTaxedItems = Bdd.scenario("Adding taxed items").pipe(
 )
 ```
 
-This is intentionally explicit. There is no `Bdd.background(...)` helper.
+There is intentionally no `Bdd.background(...)` helper.
+
+## Drift Detection
+
+The scenario chain must mirror the compiled feature-file steps exactly.
+
+- Missing background step: `Scenario "X" has 4 source step(s), but its chain has 3 step(s)`.
+- Wrong keyword: `Step 2 keyword mismatch: source is When, chain expects Given`.
+- Wrong order or text: `Step 2 text mismatch: source says "...", chain expects "..."`.
+- Missing scenario chain: `Scenario has no matching Bdd.scenario chain`.
+- Extra scenario chain: `Scenario chain exported but no source scenario matched`.
+- Duplicate feature exports: CLI discovery fails with `Multiple feature definitions matched "X"`.
+- Duplicate scenario chains in one feature: CLI discovery fails before running scenarios.
+
+`And` and `But` inherit the previous concrete keyword before verification. `Bdd.step` is the escape hatch for phrases that are genuinely valid in any keyword position; use it sparingly.
 
 ## Captures
 
-Captures are named values inside a tagged-template step expression. The source text is always a string, and the capture's `Schema` decides how to decode it before the step implementation runs.
+Captures are named values inside a tagged-template step expression. The source text is a string; the capture's `Schema` decodes it before the step implementation runs.
 
 ```ts
 import { Bdd } from "effect-bdd"
@@ -140,13 +155,13 @@ const thenTotalIs = Bdd.then`the cart total is ${expected}`(
 )
 ```
 
-The implementation receives `{ expected: number }`, not raw strings.
+Prefer strict schemas. `Schema.FiniteFromString` rejects `"abc"`, `""`, and `"Infinity"` as `MatchError`s.
 
-Prefer strict schemas. `Schema.FiniteFromString` rejects `"abc"`, `""`, and `"Infinity"`, surfacing a `MatchError` when a Gherkin value is malformed.
+Note: for now, examples annotate captured handler parameters explicitly. This keeps strict TypeScript and example checking honest around overloaded tagged-template inference.
 
-## DataTables
+## DataTables and DocStrings
 
-Use `Bdd.table(schema)` when a step has a Gherkin DataTable. The first table row is treated as headers. Each following row is converted into an object and decoded with the supplied row schema.
+Use `Bdd.table(schema)` for Gherkin DataTables. The first row is headers; each later row is decoded by the row schema.
 
 ```ts
 import { Bdd } from "effect-bdd"
@@ -154,8 +169,7 @@ import { Effect, Schema } from "effect"
 
 const Item = Schema.Struct({
   sku: Schema.String,
-  qty: Schema.FiniteFromString,
-  price: Schema.FiniteFromString
+  qty: Schema.FiniteFromString
 })
 
 const whenItemsAreAdded = Bdd.when`the following items are added:`(
@@ -164,15 +178,7 @@ const whenItemsAreAdded = Bdd.when`the following items are added:`(
 )
 ```
 
-```gherkin
-When the following items are added:
-  | sku  | qty | price |
-  | book | 2   | 21    |
-```
-
-## DocStrings
-
-Use `Bdd.docString(schema)` when a step has a Gherkin DocString.
+Use `Bdd.docString(schema)` for larger step arguments, including JSON payloads.
 
 ```ts
 import { Bdd } from "effect-bdd"
@@ -189,12 +195,7 @@ const whenRequestBodyIs = Bdd.when`the request body is:`(
 )
 ```
 
-```gherkin
-When the request body is:
-  """json
-  { "sku": "book", "qty": 2 }
-  """
-```
+Schema decode failures are preserved on `MatchError.cause`.
 
 ## Services
 
@@ -222,6 +223,41 @@ const thenTaxedTotalIs = Bdd.then`the taxed total is ${expected}`(
 )
 ```
 
+## CLI
+
+```sh
+effect-bdd \
+  --features "features/**/*.feature" \
+  --steps "features/**/*.step.ts" \
+  --reporter text
+```
+
+Important flags:
+
+- `--features`, `-f`: required, repeatable, supports `*`, `?`, and `**`.
+- `--steps`, `-s`: required, repeatable.
+- `--reporter`, `-r`: repeatable; `text`, `html`, `json`, or `junit`.
+- `--output-file.<reporter>`: write a reporter to a file.
+- `--tags`: Cucumber-style tag expression with `and`, `or`, `not`, and parentheses.
+- `--name`: run scenarios whose `Feature / Scenario` name contains the text.
+- `--parallel`: run scenarios concurrently.
+- `--fail-fast`: stop after the first failed scenario.
+- `--verbose`: show passing scenarios in text output.
+
+Node requires an explicit TypeScript loader for `.ts` step modules:
+
+```sh
+node --import tsx ./node_modules/.bin/effect-bdd \
+  --features "features/**/*.feature" \
+  --steps "features/**/*.step.ts"
+```
+
+Bun can load `.ts` step modules directly:
+
+```sh
+bunx --bun effect-bdd --features "features/**/*.feature" --steps "features/**/*.step.ts"
+```
+
 ## Supported Gherkin
 
 Feature files are parsed and compiled with Cucumber's Gherkin implementation. The runner supports:
@@ -232,196 +268,36 @@ Feature files are parsed and compiled with Cucumber's Gherkin implementation. Th
 - `Background`
 - `Rule`
 - tags on features, rules, scenarios, and examples
-- `Given`, `When`, `Then`
-- `And` and `But` keyword inheritance
+- `Given`, `When`, `Then`, `And`, and `But`
 - DataTables
 - DocStrings
 - comments and descriptions
 
 Scenario Outlines are expanded before execution. Every Examples row runs the same source scenario chain independently.
 
-## Failures
+## Errors
 
-`Bdd.run` fails with `Bdd.RunError`:
+`Bdd.run` fails with:
 
-- `ParseError` when Gherkin source is invalid.
-- `MatchError` when the feature name, scenario chain, positional step, keyword, argument presence, or Schema decoding does not match.
-- `StepError` when a matched step implementation fails.
+- `ParseError`: invalid Gherkin.
+- `MatchError`: feature/scenario/step verification or argument decoding failed.
+- `StepError`: a matched step implementation failed.
 
-Schema decode failures are preserved on `MatchError.cause`. Step implementation failures are preserved on `StepError.cause`.
-
-## CLI
-
-`effect-bdd` publishes an `effect-bdd` bin for running `.feature` files from exported `Bdd.feature(...)` definitions.
-
-Each matched step module should export one or more feature definitions. The feature definition name must match the Gherkin `Feature:` name, and each `Bdd.scenario(...)` name must match a source scenario name.
-
-```gherkin
-# features/counter.feature
-Feature: Counter
-
-  Scenario: Creating a counter
-    Given no counter exists
-    When the counter is created
-    Then the counter value is 0
-```
-
-```ts
-// features/counter.step.ts
-import { Bdd } from "effect-bdd"
-import { Effect, Schema } from "effect"
-
-const expected = Bdd.capture("expected", Schema.FiniteFromString)
-
-const givenNoCounter = Bdd.given`no counter exists`(() => Effect.void)
-const whenCreated = Bdd.when`the counter is created`(() => Effect.succeed(0))
-const thenValueIs = Bdd.then`the counter value is ${expected}`(
-  ({ expected }: { readonly expected: number }, state: number) =>
-    state === expected
-      ? Effect.succeed(state)
-      : Effect.fail(`expected ${expected}, got ${state}` as const)
-)
-
-export const counter = Bdd.feature("Counter").pipe(
-  Bdd.scenario("Creating a counter").pipe(
-    givenNoCounter,
-    whenCreated,
-    thenValueIs
-  )
-)
-```
-
-Add a package script:
-
-```json
-{
-  "scripts": {
-    "bdd": "effect-bdd --features \"features/**/*.feature\" --steps \"features/**/*.step.ts\" --reporter text"
-  }
-}
-```
-
-Then run:
-
-```sh
-pnpm bdd
-```
-
-The command exits with status `0` when every scenario passes and with a non-zero status when discovery, parsing, verification, reporting, diagnostics, or any scenario fails.
-
-### Globs
-
-Both `--features` (`-f`) and `--steps` (`-s`) are required, repeatable, and support a deliberately minimal glob syntax: `*`, `?`, and `**`.
-
-```sh
-effect-bdd \
-  --features "features/cart/**/*.feature" \
-  --features "features/checkout/**/*.feature" \
-  --steps "features/**/*.step.ts" \
-  --steps "test-support/**/*.step.ts"
-```
-
-Matched paths are deduplicated and sorted before execution so report order is stable.
-
-### Reporters
-
-Reporters are repeatable:
-
-```sh
-effect-bdd \
-  --features "features/**/*.feature" \
-  --steps "features/**/*.step.ts" \
-  --reporter text \
-  --reporter html \
-  --output-file.html reports/bdd.html
-```
-
-Built-in reporters:
-
-- `text`: writes to stdout by default, or `--output-file.text <path>`.
-- `html`: writes to `--output-file.html <path>`.
-- `json`: writes to stdout by default, or `--output-file.json <path>`.
-- `junit`: writes to `--output-file.junit <path>`.
-
-### Filtering
-
-Use `--tags <expression>` for Cucumber-style tag expressions:
-
-```sh
-effect-bdd \
-  --features "features/**/*.feature" \
-  --steps "features/**/*.step.ts" \
-  --tags "@event-sourcing and not @slow"
-```
-
-Supported tag operators are `and`, `or`, `not`, and parentheses. Repeated `--tags` flags are combined with `and`.
-
-Use `--name <text>` to run scenarios whose `Feature / Scenario` name contains the provided text. Repeated `--name` flags are combined with `or`.
-
-### Parallel Scenario Execution
-
-Use `--parallel <n>` to run scenarios concurrently:
-
-```sh
-effect-bdd \
-  --features "features/**/*.feature" \
-  --steps "features/**/*.step.ts" \
-  --parallel 4
-```
-
-Reports preserve feature/scenario source order even when scenarios run concurrently.
-
-Use `--fail-fast` to stop after the first failed scenario. When enabled, scenarios run sequentially so the stop point is deterministic.
-
-### TypeScript Step Modules
-
-Bun can load `.ts` step definition modules directly when the CLI is executed by Bun:
-
-```sh
-bunx --bun effect-bdd --features "features/**/*.feature" --steps "features/**/*.step.ts"
-```
-
-Node requires an explicit TypeScript loader. The CLI does not install or register one implicitly:
-
-```sh
-node --import tsx ./node_modules/.bin/effect-bdd \
-  --features "features/**/*.feature" \
-  --steps "features/**/*.step.ts"
-```
-
-## Public API Surface
+## Public API
 
 Most users should import from `effect-bdd` and use the `Bdd` namespace:
 
 - constructors: `Bdd.capture`, `Bdd.table`, `Bdd.docString`, `Bdd.feature`, `Bdd.scenario`
 - steps: `Bdd.given`, `Bdd.when`, `Bdd.then`, `Bdd.step`
 - runner: `Bdd.run`
-- parser/compiler service and layer: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
-- guards: `Bdd.isFeature`
-- models and errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`
+- compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
+- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`
 
-The error classes are also importable directly from the `effect-bdd/Errors` subpath.
-
-## Internal Dependency Direction
-
-- **core** (`Bdd.ts`, `Errors.ts`, `internal/runner.ts`, `internal/expression.ts`, `internal/parser.ts`) is platform-agnostic.
-- **cucumber adapter** (`internal/cucumberCompiler.ts`) is the only module importing `@cucumber/gherkin`.
-- **cli** (`main.ts`, `internal/cli/*`) depends on core and Effect platform services.
-- **bin** (`bin.ts`) is the only module importing `@effect/platform-node`.
+The error classes are also importable from `effect-bdd/Errors`.
 
 ## Non-Goals
 
-`effect-bdd` is not a drop-in replacement for Cucumber's runtime. The current package deliberately does not include:
-
-- mutable `World` objects or global step registries
-- hooks (`Before`, `After`, `BeforeStep`, `AfterStep`, `BeforeAll`, `AfterAll`)
-- attachments for screenshots, logs, or other report artifacts
-- snippet generation for unmatched steps
-- retry / rerun support
-- dry-run mode
-- Cucumber expression parameter registries such as `defineParameterType`
-- user-pluggable reporter APIs
-- generated scenario chain code
+`effect-bdd` is not a Cucumber runtime clone. It does not include mutable worlds, hooks, screenshot/log attachments, snippet generation, retries, dry-run mode, parameter registries, generated chain code, or user-pluggable reporter APIs.
 
 ## Provenance
 
