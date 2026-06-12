@@ -75,7 +75,8 @@
     "test": "vitest run",
     "test:types": "tstyche",
     "test:examples": "node scripts/check-examples.mjs",
-    "ci": "pnpm build && pnpm lint && pnpm format:check && pnpm test && pnpm test:types && pnpm test:examples",
+    "test:examples:run": "pnpm --dir examples test",
+    "ci": "pnpm build && pnpm lint && pnpm format:check && pnpm test && pnpm test:types && pnpm test:examples && pnpm test:examples:run",
     "prepack": "pnpm build"
   },
   "peerDependencies": {

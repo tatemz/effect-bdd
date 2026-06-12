@@ -1,0 +1,17 @@
+{
+  "name": "effect-bdd-counter-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json",
+    "test": "node --import tsx ./node_modules/effect-bdd/dist/bin.js --features counter.feature --steps counter.steps.ts"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.78",
+    "effect-bdd": "link:.."
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
