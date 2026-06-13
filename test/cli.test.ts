@@ -1,37 +1,37 @@
-import { NodeServices } from "@effect/platform-node"
-import { assert, describe, it } from "@effect/vitest"
-import { Cause, Effect, Exit, FileSystem, Option, Path } from "effect"
-import * as CliError from "effect/unstable/cli/CliError"
-import * as Command from "effect/unstable/cli/Command"
-import { execFile } from "node:child_process"
-import { fileURLToPath } from "node:url"
-import { promisify } from "node:util"
+import { NodeServices } from "@effect/platform-node";
+import { assert, describe, it } from "@effect/vitest";
+import { Cause, Effect, Exit, FileSystem, Option, Path } from "effect";
+import * as CliError from "effect/unstable/cli/CliError";
+import * as Command from "effect/unstable/cli/Command";
+import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
-const execFilePromise = promisify(execFile)
+const execFilePromise = promisify(execFile);
 
 const runCli = (args: ReadonlyArray<string>) =>
   Effect.gen(function* () {
-    const module = yield* loadMain
-    return yield* Command.runWith(module.cli, { version: "0.0.0" })(args)
-  })
+    const module = yield* loadMain;
+    return yield* Command.runWith(module.cli, { version: "0.0.0" })(args);
+  });
 
 const loadMain: Effect.Effect<{
-  readonly cli: Command.Command<string, any, any, any, any>
+  readonly cli: Command.Command<string, any, any, any, any>;
 }> = Effect.promise(
   () =>
     import(["../src", "main.ts"].join("/")) as Promise<{
-      readonly cli: Command.Command<string, any, any, any, any>
-    }>
-)
+      readonly cli: Command.Command<string, any, any, any, any>;
+    }>,
+);
 
 describe("cli", () => {
   it.effect("runs through the Node bin entrypoint", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const path = yield* Path.Path
-        const bddRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-        const repoRoot = path.dirname(path.dirname(bddRoot))
-        const fixtureRoot = path.join(bddRoot, "test", "fixtures")
+        const path = yield* Path.Path;
+        const bddRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+        const repoRoot = path.dirname(path.dirname(bddRoot));
+        const fixtureRoot = path.join(bddRoot, "test", "fixtures");
         const result = yield* Effect.promise(() =>
           execFilePromise(
             process.execPath,
@@ -44,24 +44,24 @@ describe("cli", () => {
               "--reporter",
               "text",
               "--parallel",
-              "2"
+              "2",
             ],
-            { cwd: repoRoot }
-          )
-        )
+            { cwd: repoRoot },
+          ),
+        );
 
-        assert.match(result.stdout, /Features: 9, Scenarios: 27, passed: 27, failed: 0/)
-        assert.strictEqual(/PASS .*fixtures/.test(result.stdout), false)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(result.stdout, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.strictEqual(/PASS .*fixtures/.test(result.stdout), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("runs checked-in feature and step fixtures", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const path = yield* Path.Path
-        const fixtureRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures")
-        const textReport = yield* makeReportFile("e2e-report.txt")
+        const path = yield* Path.Path;
+        const fixtureRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+        const textReport = yield* makeReportFile("e2e-report.txt");
 
         yield* runCli([
           "--features",
@@ -74,21 +74,27 @@ describe("cli", () => {
           textReport,
           "--verbose",
           "--parallel",
-          "2"
-        ])
+          "2",
+        ]);
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 9, Scenarios: 27, passed: 27, failed: 0/)
-        assert.match(text, /Minimal \/ minimalistic/)
-        assert.match(text, /Some rules \/ A \/ Example A/)
-        assert.match(text, /DocString variations \/ minimalistic/)
-        assert.match(text, /Effect BDD kitchen sink \/ Checkout totals \/ capture totals include tax/)
-        assert.match(text, /Effect BDD kitchen sink \/ Checkout totals \/ outline examples start from initial state/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.match(text, /Minimal \/ minimalistic/);
+        assert.match(text, /Some rules \/ A \/ Example A/);
+        assert.match(text, /DocString variations \/ minimalistic/);
+        assert.match(
+          text,
+          /Effect BDD kitchen sink \/ Checkout totals \/ capture totals include tax/,
+        );
+        assert.match(
+          text,
+          /Effect BDD kitchen sink \/ Checkout totals \/ outline examples start from initial state/,
+        );
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("runs repeated feature and step globs with text and html reporters", () =>
     Effect.scoped(
@@ -107,11 +113,11 @@ Feature: Counter
           steps: counterStepsFor(`
   Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
+`),
+        });
 
-        const textReport = fixture.path("report.txt")
-        const htmlReport = fixture.path("report.html")
+        const textReport = fixture.path("report.txt");
+        const htmlReport = fixture.path("report.html");
 
         yield* runCli([
           "--features",
@@ -128,21 +134,21 @@ Feature: Counter
           htmlReport,
           "--verbose",
           "--parallel",
-          "2"
-        ]).pipe(Effect.provide(NodeServices.layer))
+          "2",
+        ]).pipe(Effect.provide(NodeServices.layer));
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
-        const html = yield* fs.readFileString(htmlReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
+        const html = yield* fs.readFileString(htmlReport);
 
-        assert.match(text, /Features: 1, Scenarios: 2, passed: 2, failed: 0/)
-        assert.strictEqual(text.indexOf("Increment"), text.lastIndexOf("Increment"))
-        assert.ok(text.indexOf("Increment") < text.indexOf("Starts clean"))
-        assert.match(html, /effect-bdd report/)
-        assert.match(html, /Starts clean/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Features: 1, Scenarios: 2, passed: 2, failed: 0/);
+        assert.strictEqual(text.indexOf("Increment"), text.lastIndexOf("Increment"));
+        assert.ok(text.indexOf("Increment") < text.indexOf("Starts clean"));
+        assert.match(html, /effect-bdd report/);
+        assert.match(html, /Starts clean/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("emits reports before failing the command when a scenario fails", () =>
     Effect.scoped(
@@ -156,9 +162,9 @@ Feature: Counter
 `,
           steps: counterStepsFor(`
   Bdd.scenario("Fails").pipe(thenCounterIs)
-`)
-        })
-        const textReport = fixture.path("failure.txt")
+`),
+        });
+        const textReport = fixture.path("failure.txt");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -169,21 +175,21 @@ Feature: Counter
             "--reporter",
             "text",
             "--output-file.text",
-            textReport
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            textReport,
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/)
-        assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Fails/)
-        assert.match(text, /Cause: expected 1, got 0/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Fails/);
+        assert.match(text, /Cause: expected 1, got 0/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("reports unmatched feature files and unused feature definitions", () =>
     Effect.scoped(
@@ -197,9 +203,9 @@ Feature: Missing source
 `,
           steps: counterStepsFor(`
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
-        const textReport = fixture.path("unmatched-feature.txt")
+`),
+        });
+        const textReport = fixture.path("unmatched-feature.txt");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -210,23 +216,23 @@ Feature: Missing source
             "--reporter",
             "text",
             "--output-file.text",
-            textReport
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            textReport,
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Unmatched source:/)
-        assert.match(text, /Feature: Missing source/)
-        assert.match(text, /Scenario: Cannot run/)
-        assert.match(text, /Unused definitions:/)
-        assert.match(text, /Feature definition exported but no feature file matched: Counter/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Unmatched source:/);
+        assert.match(text, /Feature: Missing source/);
+        assert.match(text, /Scenario: Cannot run/);
+        assert.match(text, /Unused definitions:/);
+        assert.match(text, /Feature definition exported but no feature file matched: Counter/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("reports unmatched source steps", () =>
     Effect.scoped(
@@ -240,9 +246,9 @@ Feature: Counter
 `,
           steps: counterStepsFor(`
   Bdd.scenario("Unknown step").pipe(thenCounterIs)
-`)
-        })
-        const textReport = fixture.path("unmatched-step.txt")
+`),
+        });
+        const textReport = fixture.path("unmatched-step.txt");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -253,20 +259,20 @@ Feature: Counter
             "--reporter",
             "text",
             "--output-file.text",
-            textReport
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            textReport,
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Unknown step/)
-        assert.match(text, /Step 1 text mismatch/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Unknown step/);
+        assert.match(text, /Step 1 text mismatch/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("reports source steps that only match a different keyword", () =>
     Effect.scoped(
@@ -280,9 +286,9 @@ Feature: Counter
 `,
           steps: counterStepsFor(`
   Bdd.scenario("Wrong keyword").pipe(whenIncrement)
-`)
-        })
-        const textReport = fixture.path("wrong-keyword.txt")
+`),
+        });
+        const textReport = fixture.path("wrong-keyword.txt");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -293,20 +299,20 @@ Feature: Counter
             "--reporter",
             "text",
             "--output-file.text",
-            textReport
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            textReport,
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Wrong keyword/)
-        assert.match(text, /keyword mismatch/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Wrong keyword/);
+        assert.match(text, /keyword mismatch/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("filters scenarios by tag expression", () =>
     Effect.scoped(
@@ -327,9 +333,9 @@ Feature: Counter
           steps: counterStepsFor(`
   Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
-        const textReport = fixture.path("tags.txt")
+`),
+        });
+        const textReport = fixture.path("tags.txt");
 
         yield* runCli([
           "--features",
@@ -342,19 +348,19 @@ Feature: Counter
           textReport,
           "--tags",
           "@fast and not @slow",
-          "--verbose"
-        ]).pipe(Effect.provide(NodeServices.layer))
+          "--verbose",
+        ]).pipe(Effect.provide(NodeServices.layer));
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/)
-        assert.match(text, /Increment/)
-        assert.strictEqual(/Starts clean/.test(text), false)
-        assert.strictEqual(/Unmatched source/.test(text), false)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(text, /Increment/);
+        assert.strictEqual(/Starts clean/.test(text), false);
+        assert.strictEqual(/Unmatched source/.test(text), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("filters scenarios by name", () =>
     Effect.scoped(
@@ -373,9 +379,9 @@ Feature: Counter
           steps: counterStepsFor(`
   Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
-        const textReport = fixture.path("name.txt")
+`),
+        });
+        const textReport = fixture.path("name.txt");
 
         yield* runCli([
           "--features",
@@ -388,18 +394,18 @@ Feature: Counter
           textReport,
           "--name",
           "Starts",
-          "--verbose"
-        ]).pipe(Effect.provide(NodeServices.layer))
+          "--verbose",
+        ]).pipe(Effect.provide(NodeServices.layer));
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/)
-        assert.match(text, /Starts clean/)
-        assert.strictEqual(/Increment/.test(text), false)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(text, /Starts clean/);
+        assert.strictEqual(/Increment/.test(text), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("stops after the first failure with fail-fast", () =>
     Effect.scoped(
@@ -417,9 +423,9 @@ Feature: Counter
           steps: counterStepsFor(`
   Bdd.scenario("Fails first").pipe(thenCounterIs),
   Bdd.scenario("Fails later").pipe(thenCounterIs)
-`)
-        })
-        const textReport = fixture.path("fail-fast.txt")
+`),
+        });
+        const textReport = fixture.path("fail-fast.txt");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -432,21 +438,21 @@ Feature: Counter
             "--output-file.text",
             textReport,
             "--fail-fast",
-            "--verbose"
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            "--verbose",
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
 
-        const fs = yield* FileSystem.FileSystem
-        const text = yield* fs.readFileString(textReport)
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/)
-        assert.match(text, /Fails first/)
-        assert.strictEqual(/Fails later/.test(text), false)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /Fails first/);
+        assert.strictEqual(/Fails later/.test(text), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("writes json and junit reports", () =>
     Effect.scoped(
@@ -465,10 +471,10 @@ Feature: Counter
           steps: counterStepsFor(`
   Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
-        const jsonReport = fixture.path("report.json")
-        const junitReport = fixture.path("report.xml")
+`),
+        });
+        const jsonReport = fixture.path("report.json");
+        const junitReport = fixture.path("report.xml");
 
         yield* runCli([
           "--features",
@@ -482,20 +488,20 @@ Feature: Counter
           "--output-file.json",
           jsonReport,
           "--output-file.junit",
-          junitReport
-        ]).pipe(Effect.provide(NodeServices.layer))
+          junitReport,
+        ]).pipe(Effect.provide(NodeServices.layer));
 
-        const fs = yield* FileSystem.FileSystem
-        const json = yield* fs.readFileString(jsonReport)
-        const junit = yield* fs.readFileString(junitReport)
+        const fs = yield* FileSystem.FileSystem;
+        const json = yield* fs.readFileString(jsonReport);
+        const junit = yield* fs.readFileString(junitReport);
 
-        assert.match(json, /"summary"/)
-        assert.match(json, /"status": "passed"/)
-        assert.match(junit, /<testsuite name="effect-bdd"/)
-        assert.match(junit, /<testcase classname="Counter"/)
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+        assert.match(json, /"summary"/);
+        assert.match(json, /"status": "passed"/);
+        assert.match(junit, /<testsuite name="effect-bdd"/);
+        assert.match(junit, /<testcase classname="Counter"/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("fails when multiple step modules export the same feature definition", () =>
     Effect.scoped(
@@ -509,15 +515,15 @@ Feature: Counter
 `,
           steps: counterStepsFor(`
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
-        const fs = yield* FileSystem.FileSystem
+`),
+        });
+        const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(
           fixture.path("duplicate.mjs"),
           counterStepsFor(`
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        )
+`),
+        );
 
         const exit = yield* Effect.exit(
           runCli([
@@ -528,19 +534,22 @@ Feature: Counter
             "--reporter",
             "text",
             "--output-file.text",
-            fixture.path("duplicate.txt")
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            fixture.path("duplicate.txt"),
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
         if (Exit.isFailure(exit)) {
-          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause))
-          assert.strictEqual(error instanceof CliError.UserError, true)
-          assert.match(String((error as CliError.UserError).cause), /Multiple feature definitions matched/)
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+          assert.strictEqual(error instanceof CliError.UserError, true);
+          assert.match(
+            String((error as CliError.UserError).cause),
+            /Multiple feature definitions matched/,
+          );
         }
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("surfaces the underlying reason when a step module fails to load", () =>
     Effect.scoped(
@@ -552,8 +561,8 @@ Feature: Counter
   Scenario: Starts clean
     Then the counter is 0
 `,
-          steps: `throw new Error("boom while importing step module")`
-        })
+          steps: `throw new Error("boom while importing step module")`,
+        });
 
         const exit = yield* Effect.exit(
           runCli([
@@ -564,21 +573,21 @@ Feature: Counter
             "--reporter",
             "text",
             "--output-file.text",
-            fixture.path("load-error.txt")
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            fixture.path("load-error.txt"),
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
         if (Exit.isFailure(exit)) {
-          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause))
-          assert.strictEqual(error instanceof CliError.UserError, true)
-          const cause = String((error as CliError.UserError).cause)
-          assert.match(cause, /Could not load step module/)
-          assert.match(cause, /boom while importing step module/)
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+          assert.strictEqual(error instanceof CliError.UserError, true);
+          const cause = String((error as CliError.UserError).cause);
+          assert.match(cause, /Could not load step module/);
+          assert.match(cause, /boom while importing step module/);
         }
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("requires an output file for the html reporter", () =>
     Effect.scoped(
@@ -592,8 +601,8 @@ Feature: Counter
 `,
           steps: counterStepsFor(`
   Bdd.scenario("Starts clean").pipe(thenCounterIs)
-`)
-        })
+`),
+        });
 
         const exit = yield* Effect.exit(
           runCli([
@@ -602,43 +611,46 @@ Feature: Counter
             "--steps",
             fixture.path("*.mjs"),
             "--reporter",
-            "html"
-          ]).pipe(Effect.provide(NodeServices.layer))
-        )
+            "html",
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
 
-        assert.strictEqual(Exit.isFailure(exit), true)
+        assert.strictEqual(Exit.isFailure(exit), true);
         if (Exit.isFailure(exit)) {
-          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause))
-          assert.strictEqual(error instanceof CliError.UserError, true)
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+          assert.strictEqual(error instanceof CliError.UserError, true);
         }
-      })
-    ).pipe(Effect.provide(NodeServices.layer))
-  )
-})
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+});
 
 const makeReportFile = Effect.fnUntraced(function* (name: string) {
-  const fs = yield* FileSystem.FileSystem
-  const path = yield* Path.Path
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const directory = yield* fs.makeTempDirectoryScoped({
     directory: path.dirname(fileURLToPath(import.meta.url)),
-    prefix: ".effect-bdd-report-"
-  })
-  return path.join(directory, name)
-})
+    prefix: ".effect-bdd-report-",
+  });
+  return path.join(directory, name);
+});
 
-const makeFixture = Effect.fnUntraced(function* (options: { readonly feature: string; readonly steps: string }) {
-  const fs = yield* FileSystem.FileSystem
-  const path = yield* Path.Path
+const makeFixture = Effect.fnUntraced(function* (options: {
+  readonly feature: string;
+  readonly steps: string;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const directory = yield* fs.makeTempDirectoryScoped({
     directory: path.dirname(fileURLToPath(import.meta.url)),
-    prefix: ".effect-bdd-"
-  })
-  yield* fs.writeFileString(path.join(directory, "counter.feature"), options.feature)
-  yield* fs.writeFileString(path.join(directory, "steps.mjs"), options.steps)
+    prefix: ".effect-bdd-",
+  });
+  yield* fs.writeFileString(path.join(directory, "counter.feature"), options.feature);
+  yield* fs.writeFileString(path.join(directory, "steps.mjs"), options.steps);
   return {
-    path: (name: string) => path.join(directory, name)
-  }
-})
+    path: (name: string) => path.join(directory, name),
+  };
+});
 
 const counterStepsFor = (scenarios: string) => `
 import { Bdd } from "effect-bdd"
@@ -655,4 +667,4 @@ const thenCounterIs = Bdd.then\`the counter is \${expected}\`(({ expected }, sta
 export const counter = Bdd.feature("Counter").pipe(
 ${scenarios}
 )
-`
+`;

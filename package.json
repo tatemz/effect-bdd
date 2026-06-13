@@ -1,41 +1,35 @@
 {
   "name": "effect-bdd",
   "version": "0.3.0",
-  "type": "module",
-  "license": "MIT",
   "description": "An Effect-native API for testing Gherkin feature files",
+  "keywords": [
+    "algebraic-data-types",
+    "bdd",
+    "functional-programming",
+    "gherkin",
+    "testing",
+    "typescript"
+  ],
   "homepage": "https://github.com/tatemz/effect-bdd#readme",
+  "bugs": {
+    "url": "https://github.com/tatemz/effect-bdd/issues"
+  },
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tatemz/effect-bdd.git"
   },
-  "bugs": {
-    "url": "https://github.com/tatemz/effect-bdd/issues"
-  },
-  "tags": [
-    "bdd",
-    "gherkin",
-    "testing",
-    "typescript",
-    "algebraic-data-types",
-    "functional-programming"
-  ],
-  "keywords": [
-    "bdd",
-    "gherkin",
-    "testing",
-    "typescript",
-    "algebraic-data-types",
-    "functional-programming"
-  ],
-  "engines": {
-    "node": ">=22.0.0"
-  },
-  "packageManager": "pnpm@10.16.1",
-  "sideEffects": [],
   "bin": {
     "effect-bdd": "./dist/bin.js"
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -55,10 +49,6 @@
     "./internal/*": null,
     "./*/index": null
   },
-  "files": [
-    "dist/**/*.js",
-    "dist/**/*.d.ts"
-  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -67,20 +57,15 @@
     "build": "tsc -p tsconfig.json && pnpm babel",
     "babel": "babel dist --plugins annotate-pure-calls --out-dir dist",
     "check": "tsc -p tsconfig.json --noEmit",
-    "lint": "pnpm lint:grit-fixtures && pnpm lint:biome",
-    "lint:biome": "biome lint .",
-    "lint:grit-fixtures": "node scripts/lint-grit-fixtures.mjs",
-    "format": "biome format --write .",
-    "format:check": "biome format .",
+    "lint": "oxlint . --deny-warnings",
+    "format": "oxfmt .",
+    "format:check": "oxfmt . --check",
     "test": "vitest run",
     "test:types": "tstyche",
     "test:examples": "node scripts/check-examples.mjs",
     "test:examples:run": "pnpm --dir examples test",
     "ci": "pnpm build && pnpm lint && pnpm format:check && pnpm test && pnpm test:types && pnpm test:examples && pnpm test:examples:run",
     "prepack": "pnpm build"
-  },
-  "peerDependencies": {
-    "effect": "^4.0.0-beta.78"
   },
   "dependencies": {
     "@cucumber/gherkin": "^39.1.0",
@@ -89,15 +74,29 @@
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",
-    "@biomejs/biome": "^2.4.16",
     "@effect/vitest": "4.0.0-beta.78",
     "@types/node": "^25.9.2",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "effect": "4.0.0-beta.78",
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0",
     "tstyche": "^7.2.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts"
+  "peerDependencies": {
+    "effect": "^4.0.0-beta.78"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@10.16.1",
+  "tags": [
+    "bdd",
+    "gherkin",
+    "testing",
+    "typescript",
+    "algebraic-data-types",
+    "functional-programming"
+  ]
 }

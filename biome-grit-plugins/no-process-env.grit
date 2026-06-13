@@ -1,6 +1,0 @@
-engine biome(1.0)
-language js(typescript, jsx)
-
-`process.env` as $env where {
-  register_diagnostic(span=$env, message="Use Effect Config/ConfigProvider instead of reading runtime env directly.")
-}

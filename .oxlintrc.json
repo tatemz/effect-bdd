@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "plugins": ["typescript", "unicorn", "oxc", "node", "promise", "import", "vitest"],
+  "jsPlugins": ["./oxlint-rules/effect-bdd.mjs"],
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "ignorePatterns": ["pnpm-lock.yaml"],
+  "rules": {
+    "no-shadow": "off",
+    "no-underscore-dangle": "off",
+    "unicorn/no-array-sort": "off",
+    "effect-bdd/no-inline-nested-effect-gen": "error",
+    "effect-bdd/no-process-env": "error",
+    "effect-bdd/no-effect-or-die": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**"],
+      "rules": {
+        "effect-bdd/no-for-loops-in-src": "error",
+        "effect-bdd/no-native-array-methods-in-src": "error",
+        "effect-bdd/no-native-string-methods-in-src": "error",
+        "effect-bdd/no-native-object-methods-in-src": "error",
+        "effect-bdd/no-effect-named-imports-in-src": "error",
+        "effect-bdd/no-throw-statements": "error",
+        "effect-bdd/no-try-catch": "error"
+      }
+    },
+    {
+      "files": ["src/**"],
+      "rules": {
+        "effect-bdd/no-native-date-url-json-boundaries": [
+          "error",
+          {
+            "allowedFiles": ["src/internal/cli/reporter.ts"]
+          }
+        ]
+      }
+    }
+  ]
+}

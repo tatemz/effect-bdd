@@ -15,29 +15,27 @@ pnpm add effect-bdd effect@4.0.0-beta.78
 ## Quick Start
 
 ```ts
-import { Bdd } from "effect-bdd"
-import { Effect, Schema } from "effect"
+import { Bdd } from "effect-bdd";
+import { Effect, Schema } from "effect";
 
-const expected = Bdd.capture("expected", Schema.FiniteFromString)
+const expected = Bdd.capture("expected", Schema.FiniteFromString);
 
-const givenNoCounter = Bdd.given`no counter exists`(() => Effect.void)
-const whenCounterIsCreated = Bdd.when`the counter is created`(() => Effect.succeed(0))
+const givenNoCounter = Bdd.given`no counter exists`(() => Effect.void);
+const whenCounterIsCreated = Bdd.when`the counter is created`(() => Effect.succeed(0));
 const thenCounterValueIs = Bdd.then`the counter value is ${expected}`(
   ({ expected }: { readonly expected: number }, state: number) =>
     state === expected
       ? Effect.succeed(state)
-      : Effect.fail(`expected ${expected}, got ${state}` as const)
-)
+      : Effect.fail(`expected ${expected}, got ${state}` as const),
+);
 
 const creatingACounter = Bdd.scenario("Creating a counter").pipe(
   givenNoCounter,
   whenCounterIsCreated,
-  thenCounterValueIs
-)
+  thenCounterValueIs,
+);
 
-const counter = Bdd.feature("Counter").pipe(
-  creatingACounter
-)
+const counter = Bdd.feature("Counter").pipe(creatingACounter);
 
 const program = Bdd.run(
   counter,
@@ -48,8 +46,8 @@ Feature: Counter
     Given no counter exists
     When the counter is created
     Then the counter value is 0
-`
-).pipe(Effect.provide(Bdd.layerCucumber))
+`,
+).pipe(Effect.provide(Bdd.layerCucumber));
 ```
 
 ## The Model
@@ -142,17 +140,17 @@ The scenario chain must mirror the compiled feature-file steps exactly.
 Captures are named values inside a tagged-template step expression. The source text is a string; the capture's `Schema` decodes it before the step implementation runs.
 
 ```ts
-import { Bdd } from "effect-bdd"
-import { Effect, Schema } from "effect"
+import { Bdd } from "effect-bdd";
+import { Effect, Schema } from "effect";
 
-const expected = Bdd.capture("expected", Schema.FiniteFromString)
+const expected = Bdd.capture("expected", Schema.FiniteFromString);
 
 const thenTotalIs = Bdd.then`the cart total is ${expected}`(
   ({ expected }: { readonly expected: number }, state: { readonly total: number }) =>
     state.total === expected
       ? Effect.succeed(state)
-      : Effect.fail(`expected ${expected}, got ${state.total}` as const)
-)
+      : Effect.fail(`expected ${expected}, got ${state.total}` as const),
+);
 ```
 
 Prefer strict schemas. `Schema.FiniteFromString` rejects `"abc"`, `""`, and `"Infinity"` as `MatchError`s.
@@ -164,35 +162,36 @@ Note: for now, examples annotate captured handler parameters explicitly. This ke
 Use `Bdd.table(schema)` for Gherkin DataTables. The first row is headers; each later row is decoded by the row schema.
 
 ```ts
-import { Bdd } from "effect-bdd"
-import { Effect, Schema } from "effect"
+import { Bdd } from "effect-bdd";
+import { Effect, Schema } from "effect";
 
 const Item = Schema.Struct({
   sku: Schema.String,
-  qty: Schema.FiniteFromString
-})
+  qty: Schema.FiniteFromString,
+});
 
 const whenItemsAreAdded = Bdd.when`the following items are added:`(
   Bdd.table(Item),
-  (items: ReadonlyArray<typeof Item.Type>, state: ReadonlyArray<typeof Item.Type>) => Effect.succeed([...state, ...items])
-)
+  (items: ReadonlyArray<typeof Item.Type>, state: ReadonlyArray<typeof Item.Type>) =>
+    Effect.succeed([...state, ...items]),
+);
 ```
 
 Use `Bdd.docString(schema)` for larger step arguments, including JSON payloads.
 
 ```ts
-import { Bdd } from "effect-bdd"
-import { Effect, Option, Schema } from "effect"
+import { Bdd } from "effect-bdd";
+import { Effect, Option, Schema } from "effect";
 
 const Payload = Schema.Struct({
   sku: Schema.String,
-  qty: Schema.Number
-})
+  qty: Schema.Number,
+});
 
 const whenRequestBodyIs = Bdd.when`the request body is:`(
   Bdd.docString(Schema.fromJsonString(Payload)),
-  (payload: typeof Payload.Type) => Effect.succeed(Option.some(payload))
-)
+  (payload: typeof Payload.Type) => Effect.succeed(Option.some(payload)),
+);
 ```
 
 Schema decode failures are preserved on `MatchError.cause`.
@@ -202,25 +201,28 @@ Schema decode failures are preserved on `MatchError.cause`.
 Step implementations return normal `Effect` values, so they can require services in `R` and fail with typed errors in `E`.
 
 ```ts
-import { Bdd } from "effect-bdd"
-import { Context, Effect, Schema } from "effect"
+import { Bdd } from "effect-bdd";
+import { Context, Effect, Schema } from "effect";
 
-class TaxRate extends Context.Service<TaxRate, {
-  readonly rate: number
-}>()("TaxRate") {}
+class TaxRate extends Context.Service<
+  TaxRate,
+  {
+    readonly rate: number;
+  }
+>()("TaxRate") {}
 
-const expected = Bdd.capture("expected", Schema.FiniteFromString)
+const expected = Bdd.capture("expected", Schema.FiniteFromString);
 
 const thenTaxedTotalIs = Bdd.then`the taxed total is ${expected}`(
   ({ expected }: { readonly expected: number }, subtotal: number) =>
-    Effect.gen(function*() {
-      const taxRate = yield* TaxRate
-      const actual = Math.round(subtotal * (1 + taxRate.rate))
+    Effect.gen(function* () {
+      const taxRate = yield* TaxRate;
+      const actual = Math.round(subtotal * (1 + taxRate.rate));
       return actual === expected
         ? subtotal
-        : yield* Effect.fail(`expected ${expected}, got ${actual}` as const)
-    })
-)
+        : yield* Effect.fail(`expected ${expected}, got ${actual}` as const);
+    }),
+);
 ```
 
 ## CLI

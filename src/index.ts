@@ -1,7 +1,7 @@
 /**
  * @since 0.1.0
  */
-import { Bdd as bdd } from "./Bdd.ts"
+import { Bdd as bdd } from "./Bdd.ts";
 import type {
   Capture as Capture_,
   DataTable as DataTable_,
@@ -13,8 +13,8 @@ import type {
   RunError as RunError_,
   Scenario as Scenario_,
   Step as Step_,
-  TableArg as TableArg_
-} from "./Bdd.ts"
+  TableArg as TableArg_,
+} from "./Bdd.ts";
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -22,7 +22,7 @@ import type {
  * @category re-exports
  * @since 0.1.0
  */
-export const Bdd = bdd
+export const Bdd = bdd;
 
 /**
  * Type helpers for the {@link Bdd} value namespace.
@@ -36,7 +36,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.1.0
    */
-  export type Feature<E = never, R = never> = Feature_<E, R>
+  export type Feature<E = never, R = never> = Feature_<E, R>;
 
   /**
    * A named scenario chain.
@@ -44,7 +44,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.3.0
    */
-  export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R>
+  export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R>;
 
   /**
    * A standalone step definition.
@@ -52,13 +52,13 @@ export declare namespace Bdd {
    * @category models
    * @since 0.3.0
    */
-  export type Step<Kind extends "Step" | "Given" | "When" | "Then", In, Out, E = never, R = never> = Step_<
-    Kind,
+  export type Step<
+    Kind extends "Step" | "Given" | "When" | "Then",
     In,
     Out,
-    E,
-    R
-  >
+    E = never,
+    R = never,
+  > = Step_<Kind, In, Out, E, R>;
 
   /**
    * Result returned after all scenarios pass.
@@ -66,7 +66,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.1.0
    */
-  export type Report = Report_
+  export type Report = Report_;
 
   /**
    * Error type returned by `Bdd.run`.
@@ -74,7 +74,7 @@ export declare namespace Bdd {
    * @category errors
    * @since 0.1.0
    */
-  export type RunError = RunError_
+  export type RunError = RunError_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -82,7 +82,7 @@ export declare namespace Bdd {
    * @category services
    * @since 0.1.0
    */
-  export type GherkinCompiler = GherkinCompiler_
+  export type GherkinCompiler = GherkinCompiler_;
 
   /**
    * A named capture decoded from step text with a Schema.
@@ -90,7 +90,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.1.0
    */
-  export type Capture<Name extends string, A> = Capture_<Name, A>
+  export type Capture<Name extends string, A> = Capture_<Name, A>;
 
   /**
    * A decoded DataTable argument.
@@ -98,7 +98,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.1.0
    */
-  export type TableArg<A> = TableArg_<A>
+  export type TableArg<A> = TableArg_<A>;
 
   /**
    * A decoded DocString argument.
@@ -106,7 +106,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.1.0
    */
-  export type DocStringArg<A> = DocStringArg_<A>
+  export type DocStringArg<A> = DocStringArg_<A>;
 
   /**
    * The cell structure of a Gherkin DataTable supplied to a TableArg decoder.
@@ -114,7 +114,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.2.0
    */
-  export type DataTable = DataTable_
+  export type DataTable = DataTable_;
 
   /**
    * The content of a Gherkin DocString supplied to a DocStringArg decoder.
@@ -122,7 +122,7 @@ export declare namespace Bdd {
    * @category models
    * @since 0.2.0
    */
-  export type DocString = DocString_
+  export type DocString = DocString_;
 }
 
 /**
@@ -131,7 +131,7 @@ export declare namespace Bdd {
  * @category re-exports
  * @since 0.1.0
  */
-export type Capture<Name extends string, A> = Capture_<Name, A>
+export type Capture<Name extends string, A> = Capture_<Name, A>;
 
 /**
  * A decoded DocString argument.
@@ -139,7 +139,7 @@ export type Capture<Name extends string, A> = Capture_<Name, A>
  * @category re-exports
  * @since 0.1.0
  */
-export type DocStringArg<A> = DocStringArg_<A>
+export type DocStringArg<A> = DocStringArg_<A>;
 
 /**
  * A local immutable feature definition used to interpret scenarios from Gherkin source.
@@ -147,7 +147,7 @@ export type DocStringArg<A> = DocStringArg_<A>
  * @category re-exports
  * @since 0.1.0
  */
-export type Feature<E = never, R = never> = Feature_<E, R>
+export type Feature<E = never, R = never> = Feature_<E, R>;
 
 /**
  * A named scenario chain.
@@ -155,7 +155,7 @@ export type Feature<E = never, R = never> = Feature_<E, R>
  * @category re-exports
  * @since 0.3.0
  */
-export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R>
+export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R>;
 
 /**
  * A standalone step definition.
@@ -163,13 +163,13 @@ export type Scenario<State = void, E = never, R = never> = Scenario_<State, E, R
  * @category re-exports
  * @since 0.3.0
  */
-export type Step<Kind extends "Step" | "Given" | "When" | "Then", In, Out, E = never, R = never> = Step_<
-  Kind,
+export type Step<
+  Kind extends "Step" | "Given" | "When" | "Then",
   In,
   Out,
-  E,
-  R
->
+  E = never,
+  R = never,
+> = Step_<Kind, In, Out, E, R>;
 
 /**
  * Result returned after all scenarios pass.
@@ -177,7 +177,7 @@ export type Step<Kind extends "Step" | "Given" | "When" | "Then", In, Out, E = n
  * @category re-exports
  * @since 0.1.0
  */
-export type Report = Report_
+export type Report = Report_;
 
 /**
  * Error type returned by `Bdd.run`.
@@ -185,7 +185,7 @@ export type Report = Report_
  * @category re-exports
  * @since 0.1.0
  */
-export type RunError = RunError_
+export type RunError = RunError_;
 
 /**
  * Service used to compile Gherkin source into executable scenarios.
@@ -193,7 +193,7 @@ export type RunError = RunError_
  * @category re-exports
  * @since 0.1.0
  */
-export type GherkinCompiler = GherkinCompiler_
+export type GherkinCompiler = GherkinCompiler_;
 
 /**
  * A decoded DataTable argument.
@@ -201,7 +201,7 @@ export type GherkinCompiler = GherkinCompiler_
  * @category re-exports
  * @since 0.1.0
  */
-export type TableArg<A> = TableArg_<A>
+export type TableArg<A> = TableArg_<A>;
 
 /**
  * The cell structure of a Gherkin DataTable supplied to a TableArg decoder.
@@ -209,7 +209,7 @@ export type TableArg<A> = TableArg_<A>
  * @category re-exports
  * @since 0.2.0
  */
-export type DataTable = DataTable_
+export type DataTable = DataTable_;
 
 /**
  * The content of a Gherkin DocString supplied to a DocStringArg decoder.
@@ -217,4 +217,4 @@ export type DataTable = DataTable_
  * @category re-exports
  * @since 0.2.0
  */
-export type DocString = DocString_
+export type DocString = DocString_;

@@ -1,7 +1,7 @@
 /**
  * @since 0.1.0
  */
-import * as Schema from "effect/Schema"
+import * as Schema from "effect/Schema";
 
 /**
  * A syntax or structure error found while parsing Gherkin source.
@@ -29,7 +29,7 @@ import * as Schema from "effect/Schema"
 export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseError", {
   message: Schema.String,
   line: Schema.Number,
-  column: Schema.Number
+  column: Schema.Number,
 }) {}
 
 /**
@@ -65,7 +65,7 @@ export class MatchError extends Schema.TaggedErrorClass<MatchError>()("MatchErro
   step: Schema.String,
   line: Schema.Number,
   candidates: Schema.Array(Schema.String),
-  cause: Schema.optional(Schema.Unknown)
+  cause: Schema.optional(Schema.Unknown),
 }) {}
 
 /**
@@ -99,5 +99,5 @@ export class StepError extends Schema.TaggedErrorClass<StepError>()("StepError",
   scenario: Schema.String,
   step: Schema.String,
   line: Schema.Number,
-  cause: Schema.Unknown
+  cause: Schema.Unknown,
 }) {}
