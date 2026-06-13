@@ -1,6 +1,6 @@
 {
   "name": "effect-bdd",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "An Effect-native API for testing Gherkin feature files",
   "keywords": [
     "algebraic-data-types",

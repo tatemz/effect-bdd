@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
   "ignoreDependencies": [
     // Babel resolves this plugin from the CLI flag in the `babel` package script.
-    "babel-plugin-annotate-pure-calls"
+    "babel-plugin-annotate-pure-calls",
   ],
   "workspaces": {
     ".": {
@@ -12,24 +12,19 @@
         // Tstyche discovers these through `tstyche.json`.
         "typetest/**/*.tst.ts",
         // Oxlint's JS plugin test harness discovers these directly.
-        "oxlint-rules/**/*.test.mjs"
+        "oxlint-rules/**/*.test.mjs",
       ],
       "project": [
         "src/**/*.ts",
         "test/**/*.ts",
         "typetest/**/*.tst.ts",
         "scripts/**/*.mjs",
-        "oxlint-rules/**/*.mjs"
-      ]
+        "oxlint-rules/**/*.mjs",
+      ],
     },
     "examples": {
-      "entry": [
-        "counter.ts",
-        "counter.steps.ts"
-      ],
-      "project": [
-        "*.ts"
-      ]
-    }
-  }
+      "entry": ["counter.ts", "counter.steps.ts"],
+      "project": ["*.ts"],
+    },
+  },
 }
