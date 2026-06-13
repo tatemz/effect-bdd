@@ -12,6 +12,25 @@ describe("public API", () => {
       assert.strictEqual(scenario.title, "Stubbed increment");
       assert.strictEqual(feature.title, "Counter");
     });
+
+    it("freezes model values after construction", () => {
+      const step = Bdd.when`increment`(() => Effect.succeed(1));
+      const scenario = Bdd.scenario("Stubbed increment").pipe(step);
+      const feature = Bdd.feature("Counter").pipe(scenario);
+
+      assert.strictEqual(Object.isFrozen(step), true);
+      assert.strictEqual(Object.isFrozen(scenario), true);
+      assert.strictEqual(Object.isFrozen(feature), true);
+      assert.throws(() => {
+        (feature as { title: string }).title = "Mutated";
+      }, TypeError);
+      assert.throws(() => {
+        (scenario as { title: string }).title = "Mutated";
+      }, TypeError);
+      assert.throws(() => {
+        (step as { timeout?: unknown }).timeout = Duration.seconds(1);
+      }, TypeError);
+    });
   });
 
   describe("custom GherkinCompiler layer", () => {
@@ -107,6 +126,16 @@ describe("public API", () => {
       assert.strictEqual(step.kind, "When");
       assert.deepStrictEqual(step.timeout, Duration.seconds(1));
     });
+
+    it("exposes a data-first step timeout helper", () => {
+      const step = Bdd.withTimeout(
+        Bdd.when`increment`(() => Effect.succeed(1)),
+        Duration.seconds(1),
+      );
+
+      assert.strictEqual(step.kind, "When");
+      assert.deepStrictEqual(step.timeout, Duration.seconds(1));
+    });
   });
 
   describe("effect-bdd/Errors subpath", () => {
@@ -141,6 +170,17 @@ describe("public API", () => {
     it("matches the error types surfaced by Bdd.run", () => {
       const error: Bdd.RunError = new ParseError({ message: "boom", line: 1, column: 1 });
       assert.strictEqual(error._tag, "ParseError");
+    });
+
+    it("exposes StepTimeoutError through the Bdd namespace", () => {
+      const timeout = new Bdd.StepTimeoutError({
+        message: "Timed out after 1s",
+        timeout: Duration.seconds(1),
+      });
+
+      assert.strictEqual(Bdd.StepTimeoutError, StepTimeoutError);
+      assert.strictEqual(Bdd.isStepTimeoutError(timeout), true);
+      assert.strictEqual(Bdd.isStepTimeoutError(new Error("boom")), false);
     });
   });
 });

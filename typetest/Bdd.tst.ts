@@ -41,6 +41,8 @@ describe("Bdd", () => {
     const feature = Bdd.feature("Counter");
 
     expect(feature).type.toBeAssignableTo<Bdd.Feature>();
+    expect(feature.title).type.toBe<string>();
+    expect<Bdd.Feature>().type.not.toBeAssignableTo<{ readonly name: string }>();
     expect<{
       readonly title: string;
       readonly scenarios: ReadonlyArray<never>;
@@ -114,6 +116,17 @@ describe("Bdd", () => {
     expect(Bdd.run(feature, "Feature: Counter", { stepTimeout: Duration.seconds(1) })).type.toBe<
       Effect.Effect<Bdd.Report, Bdd.RunError, Inventory | Bdd.GherkinCompiler>
     >();
+    expect(Bdd.run).type.not.toBeCallableWith(feature, "Feature: Counter", {
+      stepTimeout: "1 second",
+    });
+    expect<Bdd.Report["scenarios"][number]>().type.toBe<{
+      readonly title: string;
+      readonly steps: number;
+      readonly tags: ReadonlyArray<string>;
+    }>();
+    expect<Bdd.Report["scenarios"][number]>().type.not.toBeAssignableTo<{
+      readonly name: string;
+    }>();
   });
 
   test("withTimeout preserves step type information", () => {
@@ -125,8 +138,13 @@ describe("Bdd", () => {
       (state: number) => Effect.succeed(String(state)) as Effect.Effect<string, "boom", Inventory>,
     );
     const timed = step.pipe(Bdd.withTimeout(Duration.seconds(1)));
+    const timedDataFirst = Bdd.withTimeout(step, Duration.seconds(1));
 
     expect(timed).type.toBe<Bdd.Step<"When", number, string, "boom", Inventory, {}, undefined>>();
+    expect(timedDataFirst).type.toBe<
+      Bdd.Step<"When", number, string, "boom", Inventory, {}, undefined>
+    >();
+    expect(Bdd.withTimeout).type.not.toBeCallableWith(step, "1 second");
   });
 
   test("docstrings and data tables infer decoded argument types", () => {

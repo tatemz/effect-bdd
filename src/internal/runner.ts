@@ -49,7 +49,7 @@ interface AnyStep<R = unknown> {
   readonly kind: "Step" | ConcreteStepKind;
   readonly expression: Expression<unknown>;
   readonly argument?: StepArg<unknown>;
-  readonly timeout?: Duration.Input;
+  readonly timeout?: Duration.Duration;
   readonly run: (
     captures: unknown,
     argument: unknown,
@@ -76,7 +76,7 @@ interface Report {
 
 /** @internal */
 export interface RunOptions {
-  readonly stepTimeout?: Duration.Input;
+  readonly stepTimeout?: Duration.Duration;
 }
 
 /** @internal */
@@ -368,11 +368,10 @@ const runStep: <E, R>(
         }),
     ),
   );
-  const timeoutInput = stepDefinition.timeout ?? options.stepTimeout;
-  if (timeoutInput === undefined) {
+  const timeout = stepDefinition.timeout ?? options.stepTimeout;
+  if (timeout === undefined) {
     return yield* stepEffect;
   }
-  const timeout = Duration.fromInputUnsafe(timeoutInput);
   return yield* Fn.pipe(
     stepEffect,
     Effect.timeoutOrElse({
@@ -498,25 +497,25 @@ const validateFeatureDefinition = <E, R>(
       });
 
 /** @internal */
-export const firstDuplicateName = (names: ReadonlyArray<string>): Option.Option<string> =>
+export const firstDuplicateTitle = (titles: ReadonlyArray<string>): Option.Option<string> =>
   Fn.pipe(
-    names,
-    Arr.findFirst((name, index) => Arr.contains(name)(Arr.take(names, index))),
+    titles,
+    Arr.findFirst((title, index) => Arr.contains(title)(Arr.take(titles, index))),
   );
 
 const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefinition<E, R>) =>
   Fn.pipe(
     Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
-    firstDuplicateName,
+    firstDuplicateTitle,
     Option.match({
       onNone: () => Effect.void,
-      onSome: (name) =>
+      onSome: (title) =>
         matchErrorEffect({
-          message: `Duplicate scenario chain name: ${name}`,
-          scenario: name,
-          step: name,
+          message: `Duplicate scenario chain title: ${title}`,
+          scenario: title,
+          step: title,
           line: 1,
-          candidates: [name],
+          candidates: [title],
         }),
     }),
   );

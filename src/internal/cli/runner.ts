@@ -114,7 +114,7 @@ const buildScenarioTasks: (
     if (duplicateScenario !== undefined) {
       return yield* Effect.fail(
         new DiscoveryError({
-          message: `Duplicate scenario chain name in "${definition.title}": ${duplicateScenario}`,
+          message: `Duplicate scenario chain title in "${definition.title}": ${duplicateScenario}`,
         }),
       );
     }
@@ -275,7 +275,7 @@ const filterTasks = (
     Effect.map((tagPredicate) => {
       const filtered = Arr.filter(
         tasks,
-        (task) => tagPredicate(task.core.tags) && matchesNameFilter(options.filters.names, task),
+        (task) => tagPredicate(task.core.tags) && matchesTitleFilter(options.filters.titles, task),
       );
       return filtered;
     }),
@@ -286,7 +286,7 @@ const filterTasks = (
     ),
   );
 
-const matchesNameFilter = (patterns: ReadonlyArray<string>, task: ScenarioTask): boolean =>
+const matchesTitleFilter = (patterns: ReadonlyArray<string>, task: ScenarioTask): boolean =>
   patterns.length === 0 ||
   Arr.some(patterns, (pattern) =>
     Fn.pipe(`${task.core.featureTitle} / ${task.core.scenarioTitle}`, Str.includes(pattern)),
@@ -342,7 +342,7 @@ const unusedFeatureDefinitions = (
 const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): string | undefined =>
   Fn.pipe(
     Arr.map(definition.scenarios, (scenario) => scenario.title),
-    CoreRunner.firstDuplicateName,
+    CoreRunner.firstDuplicateTitle,
     Option.getOrUndefined,
   );
 

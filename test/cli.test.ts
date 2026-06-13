@@ -230,6 +230,7 @@ export const timeouts = Bdd.feature("Timeouts").pipe(
 
         assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
         assert.match(text, /StepError: Step timed out after .*: the step hangs/);
+        assert.match(text, /Cause: StepTimeoutError: Timed out after .* \(timeout: .*\)/);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -249,6 +250,7 @@ Feature: Missing source
 `),
         });
         const textReport = fixture.path("unmatched-feature.txt");
+        const jsonReport = fixture.path("unmatched-feature.json");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -258,8 +260,12 @@ Feature: Missing source
             fixture.path("*.mjs"),
             "--reporter",
             "text",
+            "--reporter",
+            "json",
             "--output-file.text",
             textReport,
+            "--output-file.json",
+            jsonReport,
           ]).pipe(Effect.provide(NodeServices.layer)),
         );
 
@@ -267,12 +273,18 @@ Feature: Missing source
 
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
+        const json = yield* fs.readFileString(jsonReport);
 
         assert.match(text, /Unmatched source:/);
         assert.match(text, /Feature: Missing source/);
         assert.match(text, /Scenario: Cannot run/);
         assert.match(text, /Unused definitions:/);
         assert.match(text, /Feature definition exported but no feature file matched: Counter/);
+        assert.match(json, /"featureTitle": "Missing source"/);
+        assert.match(json, /"scenarioTitle": "Cannot run"/);
+        assert.match(json, /"featureTitle": "Counter"/);
+        assert.strictEqual(/"featureName"/.test(json), false);
+        assert.strictEqual(/"scenarioName"/.test(json), false);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -435,7 +447,7 @@ Feature: Counter
           "text",
           "--output-file.text",
           textReport,
-          "--name",
+          "--title",
           "Starts",
           "--verbose",
         ]).pipe(Effect.provide(NodeServices.layer));

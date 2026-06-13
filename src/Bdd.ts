@@ -2,8 +2,9 @@
  * @since 0.1.0
  */
 import * as Arr from "effect/Array";
-import type * as Duration from "effect/Duration";
+import * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
+import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
 import type { Pipeable } from "effect/Pipeable";
@@ -173,7 +174,7 @@ export interface Step<
   readonly kind: Kind;
   readonly expression: Expression<Captures>;
   readonly argument?: StepArg<Argument>;
-  readonly timeout?: Duration.Input;
+  readonly timeout?: Duration.Duration;
   readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
 }
 
@@ -186,7 +187,7 @@ export interface Step<
 export type AnyStep = Step<StepKind, any, any, any, any, any, any>;
 
 /**
- * A named scenario chain. The type parameter tracks the current state after
+ * A titled scenario chain. The type parameter tracks the current state after
  * the last appended step.
  *
  * @category models
@@ -258,6 +259,7 @@ type DocStringArgType<A> = DocStringArg<A>;
 type DataTableType = DataTable;
 type DocStringType = DocString;
 type RunOptionsType = RunOptions;
+type StepTimeoutErrorType = StepTimeoutError;
 
 /**
  * Options that control `Bdd.run` execution policy.
@@ -266,7 +268,7 @@ type RunOptionsType = RunOptions;
  * @since 0.4.0
  */
 export interface RunOptions {
-  readonly stepTimeout?: Duration.Input;
+  readonly stepTimeout?: Duration.Duration;
 }
 
 /**
@@ -312,7 +314,7 @@ const docString_ = <S extends Schema.Decoder<unknown, never>>(
  * @category constructors
  * @since 0.1.0
  */
-const feature_ = (name: string): Feature => makeFeature(name, []);
+const feature_ = (title: string): Feature => makeFeature(title, []);
 
 /**
  * Creates a scenario chain.
@@ -320,7 +322,7 @@ const feature_ = (name: string): Feature => makeFeature(name, []);
  * @category constructors
  * @since 0.3.0
  */
-const scenario_ = (name: string): Scenario<void> => makeScenario(name, []);
+const scenario_ = (title: string): Scenario<void> => makeScenario(title, []);
 
 /**
  * Tagged-template step factory that is keyword agnostic.
@@ -370,10 +372,23 @@ const then_: StepTag<"Then"> = makeStepTag("Then");
  * @category combinators
  * @since 0.4.0
  */
-const withTimeout_ =
-  (timeout: Duration.Input) =>
+export interface WithTimeout {
+  (
+    timeout: Duration.Duration,
+  ): <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+    self: Step<Kind, In, Out, E, R, Captures, Argument>,
+  ) => Step<Kind, In, Out, E, R, Captures, Argument>;
   <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     self: Step<Kind, In, Out, E, R, Captures, Argument>,
+    timeout: Duration.Duration,
+  ): Step<Kind, In, Out, E, R, Captures, Argument>;
+}
+
+const withTimeout_: WithTimeout = Fn.dual(
+  2,
+  <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+    self: Step<Kind, In, Out, E, R, Captures, Argument>,
+    timeout: Duration.Duration,
   ): Step<Kind, In, Out, E, R, Captures, Argument> =>
     makeStep({
       kind: self.kind,
@@ -381,7 +396,8 @@ const withTimeout_ =
       ...(self.argument === undefined ? {} : { argument: self.argument }),
       timeout,
       run: self.run,
-    });
+    }),
+);
 
 /**
  * Runs Gherkin source against a feature definition.
@@ -394,6 +410,14 @@ const run_ = <E, R>(
   source: string,
   options: RunOptions = {},
 ): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source, options);
+
+/**
+ * Checks whether a value is a {@link StepTimeoutError}.
+ *
+ * @category guards
+ * @since 0.4.0
+ */
+const isStepTimeoutError_ = (u: unknown): u is StepTimeoutError => u instanceof StepTimeoutError;
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -409,6 +433,7 @@ export const Bdd = {
   GherkinCompiler,
   layerCucumber,
   isFeature,
+  isStepTimeoutError: isStepTimeoutError_,
   capture: capture_,
   table: table_,
   docString: docString_,
@@ -438,7 +463,7 @@ export declare namespace Bdd {
   export type Feature<E = never, R = never> = FeatureType<E, R>;
 
   /**
-   * A named scenario chain.
+   * A titled scenario chain.
    *
    * @category models
    * @since 0.3.0
@@ -484,6 +509,14 @@ export declare namespace Bdd {
    * @since 0.4.0
    */
   export type RunOptions = RunOptionsType;
+
+  /**
+   * Structured cause used when a matched step exceeds its configured timeout.
+   *
+   * @category errors
+   * @since 0.4.0
+   */
+  export type StepTimeoutError = StepTimeoutErrorType;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -619,7 +652,7 @@ const makeFeature = <E, R>(
   };
   feature.title = title;
   feature.scenarios = scenarios;
-  return feature;
+  return Object.freeze(feature);
 };
 
 const makeScenario = <State, E, R>(
@@ -638,14 +671,14 @@ const makeScenario = <State, E, R>(
   };
   self.title = title;
   self.steps = steps;
-  return self;
+  return Object.freeze(self);
 };
 
 interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
   readonly kind: Kind;
   readonly expression: Expression<Captures>;
   readonly argument?: StepArg<Argument>;
-  readonly timeout?: Duration.Input;
+  readonly timeout?: Duration.Duration;
   readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
 }
 
@@ -667,7 +700,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     kind: Kind;
     expression: Expression<Captures>;
     argument?: StepArg<Argument>;
-    timeout?: Duration.Input;
+    timeout?: Duration.Duration;
     run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
   };
   self.kind = options.kind;
@@ -679,7 +712,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     self.timeout = options.timeout;
   }
   self.run = options.run;
-  return self;
+  return Object.freeze(self);
 };
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {

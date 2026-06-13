@@ -64,7 +64,16 @@ A feature is made of explicit scenario chains:
 
 Feature and scenario definitions expose their Gherkin labels as `title`.
 
-The runner parses the feature source, compiles it with Cucumber, pairs each source scenario with the `Bdd.scenario(...)` chain of the same name, verifies every step in order, then runs the chain.
+The runner parses the feature source, compiles it with Cucumber, pairs each source scenario with the `Bdd.scenario(...)` chain of the same title, verifies every step in order, then runs the chain.
+
+## Upgrading to 0.4.0
+
+Version 0.4.0 makes BDD-owned labels consistently use `title`:
+
+- BDD label properties are now `feature.title` and `scenario.title`; do not use JavaScript `Function.name` as a scenario label.
+- `Bdd.Report.scenarios[number].name` is now `Bdd.Report.scenarios[number].title`.
+- The CLI title filter is now `--title`; `--name` was removed. The short alias remains `-n`.
+- JSON diagnostics now use `featureTitle` / `scenarioTitle` instead of `featureName` / `scenarioName`.
 
 ## Step Timeouts
 
@@ -272,7 +281,7 @@ Important flags:
 - `--reporter`, `-r`: repeatable; `text`, `html`, `json`, or `junit`.
 - `--output-file.<reporter>`: write a reporter to a file.
 - `--tags`: Cucumber-style tag expression with `and`, `or`, `not`, and parentheses.
-- `--name`: run scenarios whose `Feature / Scenario` title contains the text.
+- `--title`, `-n`: run scenarios whose `Feature / Scenario` title contains the text.
 - `--parallel`: run scenarios concurrently.
 - `--fail-fast`: stop after the first failed scenario.
 - `--step-timeout`: maximum duration for each step, using Effect Duration input such as `"500 millis"` or `"5 seconds"`.
@@ -326,7 +335,8 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
-- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`, `Bdd.StepTimeoutError`
+- guards: `Bdd.isFeature`, `Bdd.isStepTimeoutError`
+- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`, `Bdd.StepTimeoutError`
 
 The error classes are also importable from `effect-bdd/Errors`.
 

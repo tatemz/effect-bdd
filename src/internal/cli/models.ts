@@ -80,7 +80,7 @@ export interface CliRunResult {
 /** @internal */
 interface CliFilters {
   readonly tags: ReadonlyArray<string>;
-  readonly names: ReadonlyArray<string>;
+  readonly titles: ReadonlyArray<string>;
   readonly failFast: boolean;
 }
 
@@ -98,7 +98,7 @@ export interface CliOptions {
   readonly verbose: boolean;
   readonly filters: CliFilters;
   readonly parallel: number;
-  readonly stepTimeout?: Duration.Input;
+  readonly stepTimeout?: Duration.Duration;
 }
 
 /** @internal */

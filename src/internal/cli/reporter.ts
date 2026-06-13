@@ -1,5 +1,6 @@
 import * as Arr from "effect/Array";
 import * as Console from "effect/Console";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
@@ -7,6 +8,7 @@ import * as Inspectable from "effect/Inspectable";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Str from "effect/String";
+import { StepTimeoutError } from "../../Errors.ts";
 import { ReporterError } from "./errors.ts";
 import type { CliDiagnostic, CliRunResult, ReporterName, ScenarioResult } from "./models.ts";
 
@@ -352,9 +354,11 @@ const renderError = (error: {
 const renderCause = (cause: unknown): string | undefined =>
   cause === undefined
     ? undefined
-    : Predicate.isError(cause)
-      ? cause.message
-      : Inspectable.toStringUnknown(cause, 0);
+    : cause instanceof StepTimeoutError
+      ? `${cause._tag}: ${cause.message} (timeout: ${Duration.format(cause.timeout)})`
+      : Predicate.isError(cause)
+        ? cause.message
+        : Inspectable.toStringUnknown(cause, 0);
 
 const escapeHtml = (text: string): string =>
   Fn.pipe(
