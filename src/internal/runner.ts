@@ -1,5 +1,4 @@
 import type { Pickle, PickleStep } from "@cucumber/messages";
-import { PickleStepType } from "@cucumber/messages";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
@@ -24,7 +23,7 @@ export interface DocStringInput {
 }
 
 /** @internal */
-export type ConcreteStepKind = "Given" | "When" | "Then";
+type ConcreteStepKind = "Given" | "When" | "Then";
 
 type RunError = ParseError | MatchError | StepError;
 
@@ -204,7 +203,7 @@ const duplicateSourceScenario = (
   );
 
 /** @internal */
-export const buildScenarioTasks = <E, R>(
+const buildScenarioTasks = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
 ): Effect.Effect<ReadonlyArray<ScenarioTask<E, R>>, MatchError> =>
@@ -483,15 +482,15 @@ const scenarioDefinitionMap = <E, R>(
   new Map(Arr.map(featureDefinition.scenarios, (scenario) => [scenario.name, scenario] as const));
 
 /** @internal */
-export const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {
+const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {
   switch (step.type) {
-    case PickleStepType.CONTEXT: {
+    case "Context": {
       return Option.some("Given");
     }
-    case PickleStepType.ACTION: {
+    case "Action": {
       return Option.some("When");
     }
-    case PickleStepType.OUTCOME: {
+    case "Outcome": {
       return Option.some("Then");
     }
     default: {

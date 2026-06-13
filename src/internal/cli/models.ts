@@ -14,7 +14,7 @@ export interface ScenarioTask {
 }
 
 /** @internal */
-export type ScenarioOutcome =
+type ScenarioOutcome =
   | {
       readonly _tag: "Passed";
       readonly steps: number;
@@ -77,7 +77,7 @@ export interface CliRunResult {
 }
 
 /** @internal */
-export interface CliFilters {
+interface CliFilters {
   readonly tags: ReadonlyArray<string>;
   readonly names: ReadonlyArray<string>;
   readonly failFast: boolean;

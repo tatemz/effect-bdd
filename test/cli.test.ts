@@ -6,23 +6,14 @@ import * as Command from "effect/unstable/cli/Command";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { cli } from "../src/main.ts";
 
 const execFilePromise = promisify(execFile);
 
 const runCli = (args: ReadonlyArray<string>) =>
   Effect.gen(function* () {
-    const module = yield* loadMain;
-    return yield* Command.runWith(module.cli, { version: "0.0.0" })(args);
+    return yield* Command.runWith(cli, { version: "0.0.0" })(args);
   });
-
-const loadMain: Effect.Effect<{
-  readonly cli: Command.Command<string, any, any, any, any>;
-}> = Effect.promise(
-  () =>
-    import(["../src", "main.ts"].join("/")) as Promise<{
-      readonly cli: Command.Command<string, any, any, any, any>;
-    }>,
-);
 
 describe("cli", () => {
   it.effect("runs through the Node bin entrypoint", () =>

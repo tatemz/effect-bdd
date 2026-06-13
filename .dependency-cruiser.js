@@ -25,6 +25,29 @@ const config = {
       to: { dependencyTypes: ["npm-dev"], dependencyTypesNot: ["type-only"] },
     },
     {
+      name: "not-to-unresolvable",
+      severity: "error",
+      comment: "Don't import local modules that cannot be resolved; broken paths break the build.",
+      from: {},
+      to: { couldNotResolve: true, path: "^(?:\\.|/|src/|test/|scripts/|examples/|oxlint-rules/)" },
+    },
+    {
+      name: "not-to-undeclared",
+      severity: "error",
+      comment:
+        "Every runtime import must be a declared dependency (incl. peer), not a hoisted accident.",
+      from: { path: "^src/" },
+      to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"] },
+    },
+    {
+      name: "cucumber-only-in-adapter",
+      severity: "error",
+      comment:
+        "@cucumber/* is a swappable infrastructure detail; only the Cucumber adapter may depend on it at runtime. Core depends on the GherkinCompiler port instead.",
+      from: { path: "^src/", pathNot: "^src/internal/cucumberCompiler\\.ts$" },
+      to: { path: "node_modules/@cucumber/", dependencyTypesNot: ["type-only"] },
+    },
+    {
       name: "core-does-not-import-cli",
       severity: "error",
       comment:
@@ -50,6 +73,22 @@ const config = {
       from: { path: "^(?:test|typetest|oxlint-rules)/" },
       to: { path: "^dist/" },
     },
+    {
+      name: "no-orphans",
+      severity: "warn",
+      comment: "Orphan modules are usually dead code or a missing wiring; delete or import them.",
+      from: {
+        orphan: true,
+        path: "^src/",
+        pathNot: [
+          "\\.d\\.ts$",
+          "^src/(?:bin|index)\\.ts$",
+          "(^|/)(?:tsconfig|vitest\\.config|tstyche)",
+          "(^|/)\\.[^/]+\\.(js|cjs|mjs)$",
+        ],
+      },
+      to: {},
+    },
   ],
   options: {
     combinedDependencies: true,
@@ -57,7 +96,7 @@ const config = {
       path: "node_modules",
     },
     exclude: {
-      path: "(^|/)(?:coverage|dist|node_modules|\\.examples)(/|$)",
+      path: "(^|/)(?:coverage|dist|node_modules|\\.examples|\\.effect-bdd-[^/]+)(/|$)",
     },
     tsConfig: {
       fileName: "tsconfig.json",

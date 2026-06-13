@@ -152,7 +152,7 @@ export const findScenario = (pickle: Pickle, index: SourceIndex) =>
   );
 
 /** @internal */
-export const findStep = (
+const findStep = (
   pickleStep: { readonly astNodeIds: ReadonlyArray<string> },
   index: SourceIndex,
 ): CucumberStep | undefined =>
