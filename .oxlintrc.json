@@ -15,6 +15,13 @@
   "rules": {
     "no-shadow": "off",
     "no-underscore-dangle": "off",
+    "complexity": [
+      "error",
+      {
+        "max": 15,
+        "variant": "classic"
+      }
+    ],
     "unicorn/no-array-sort": "off",
     "effect-bdd/no-inline-nested-effect-gen": "error",
     "effect-bdd/no-process-env": "error",

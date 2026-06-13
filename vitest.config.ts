@@ -5,7 +5,7 @@ const config: ViteUserConfig = {
     target: "es2022",
   },
   test: {
-    include: ["test/**/*.test.ts"],
+    include: ["test/**/*.test.ts", "oxlint-rules/**/*.test.mjs"],
     exclude: ["**/node_modules/**", "**/dist/**"],
     fakeTimers: {
       toFake: undefined,
