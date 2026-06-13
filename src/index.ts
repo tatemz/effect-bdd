@@ -11,6 +11,7 @@ import type {
   GherkinCompiler as GherkinCompiler_,
   Report as Report_,
   RunError as RunError_,
+  RunOptions as RunOptions_,
   Scenario as Scenario_,
   Step as Step_,
   TableArg as TableArg_,
@@ -58,7 +59,9 @@ export declare namespace Bdd {
     Out,
     E = never,
     R = never,
-  > = Step_<Kind, In, Out, E, R>;
+    Captures = unknown,
+    Argument = undefined,
+  > = Step_<Kind, In, Out, E, R, Captures, Argument>;
 
   /**
    * Result returned after all scenarios pass.
@@ -75,6 +78,14 @@ export declare namespace Bdd {
    * @since 0.1.0
    */
   export type RunError = RunError_;
+
+  /**
+   * Options that control `Bdd.run` execution policy.
+   *
+   * @category models
+   * @since 0.4.0
+   */
+  export type RunOptions = RunOptions_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -169,7 +180,9 @@ export type Step<
   Out,
   E = never,
   R = never,
-> = Step_<Kind, In, Out, E, R>;
+  Captures = unknown,
+  Argument = undefined,
+> = Step_<Kind, In, Out, E, R, Captures, Argument>;
 
 /**
  * Result returned after all scenarios pass.
@@ -186,6 +199,14 @@ export type Report = Report_;
  * @since 0.1.0
  */
 export type RunError = RunError_;
+
+/**
+ * Options that control `Bdd.run` execution policy.
+ *
+ * @category re-exports
+ * @since 0.4.0
+ */
+export type RunOptions = RunOptions_;
 
 /**
  * Service used to compile Gherkin source into executable scenarios.

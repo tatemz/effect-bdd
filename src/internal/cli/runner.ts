@@ -222,9 +222,9 @@ const buildScenarioTask = (
   };
 };
 
-const runScenario = Effect.fnUntraced(function* (task: ScenarioTask) {
+const runScenario = Effect.fnUntraced(function* (options: CliOptions, task: ScenarioTask) {
   const startedAt = yield* Clock.currentTimeMillis;
-  const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core));
+  const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core, runOptions(options)));
   const finishedAt = yield* Clock.currentTimeMillis;
   return {
     task,
@@ -241,10 +241,13 @@ const runScenarios = (
   tasks: ReadonlyArray<ScenarioTask>,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   options.filters.failFast
-    ? runScenariosFailFast(tasks)
-    : Effect.forEach(tasks, runScenario, { concurrency: options.parallel });
+    ? runScenariosFailFast(options, tasks)
+    : Effect.forEach(tasks, (task) => runScenario(options, task), {
+        concurrency: options.parallel,
+      });
 
 const runScenariosFailFast = (
+  options: CliOptions,
   tasks: ReadonlyArray<ScenarioTask>,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   Fn.pipe(
@@ -252,13 +255,16 @@ const runScenariosFailFast = (
     Arr.matchLeft({
       onEmpty: () => Effect.succeed<ReadonlyArray<ScenarioResult>>([]),
       onNonEmpty: (task, rest) =>
-        Effect.flatMap(runScenario(task), (result) =>
+        Effect.flatMap(runScenario(options, task), (result) =>
           result.outcome._tag === "Failed"
             ? Effect.succeed([result])
-            : Effect.map(runScenariosFailFast(rest), Arr.prepend(result)),
+            : Effect.map(runScenariosFailFast(options, rest), Arr.prepend(result)),
         ),
     }),
   );
+
+const runOptions = (options: CliOptions): CoreRunner.RunOptions =>
+  options.stepTimeout === undefined ? {} : { stepTimeout: options.stepTimeout };
 
 const filterTasks = (
   options: CliOptions,

@@ -1,7 +1,9 @@
 import { Bdd } from "effect-bdd";
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Option, Schema } from "effect";
+import { Cause, Duration, Effect, Fiber, Option, Schema } from "effect";
 import * as Arr from "effect/Array";
+import * as Fn from "effect/Function";
+import { TestClock } from "effect/testing";
 import { assertMatchError, runBdd } from "./helpers.ts";
 
 type Cart = {
@@ -333,6 +335,80 @@ Feature: Shopping cart
         assert.strictEqual(error._tag, "StepError");
         assert.strictEqual(error.cause, "wrong total");
       }
+    });
+  });
+
+  it.effect("fails with StepError when a step exceeds the run timeout", () => {
+    const feature = Bdd.feature("Timeouts").pipe(
+      Bdd.scenario("Slow step").pipe(
+        Bdd.when`the step hangs`(() => Effect.sleep(Duration.millis(50))),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const fiber = yield* Fn.pipe(
+        runBdd(
+          feature,
+          `
+Feature: Timeouts
+
+  Scenario: Slow step
+    When the step hangs
+`,
+          { stepTimeout: Duration.millis(1) },
+        ),
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust(Duration.millis(1));
+      const result = yield* Effect.exit(Fiber.join(fiber));
+
+      assert.strictEqual(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        const error = Option.getOrThrow(Cause.findErrorOption(result.cause)) as Bdd.RunError;
+        assert.strictEqual(error._tag, "StepError");
+        assert.match(error.message, /Step timed out after .*: the step hangs/);
+        assert.deepStrictEqual((error.cause as { readonly _tag: string })._tag, "StepTimeout");
+      }
+    });
+  });
+
+  it.effect("allows a step timeout override to replace the run timeout", () => {
+    const feature = Bdd.feature("Timeouts").pipe(
+      Bdd.scenario("Slow allowed step").pipe(
+        Bdd.when`the step is slow but allowed`(() =>
+          Effect.as(Effect.sleep(Duration.millis(5)), "ok"),
+        ).pipe(Bdd.withTimeout(Duration.millis(100))),
+        Bdd.then`the result is ok`((state: string) =>
+          Effect.sync(() => {
+            assert.strictEqual(state, "ok");
+            return state;
+          }),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const fiber = yield* Fn.pipe(
+        runBdd(
+          feature,
+          `
+Feature: Timeouts
+
+  Scenario: Slow allowed step
+    When the step is slow but allowed
+    Then the result is ok
+`,
+          { stepTimeout: Duration.millis(1) },
+        ),
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust(Duration.millis(100));
+      const report = yield* Fiber.join(fiber);
+
+      assert.deepStrictEqual(report, {
+        feature: "Timeouts",
+        scenarios: [{ name: "Slow allowed step", steps: 2, tags: [] }],
+      });
     });
   });
 

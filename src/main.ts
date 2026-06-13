@@ -1,5 +1,6 @@
 /** @internal */
 import * as Effect from "effect/Effect";
+import * as Duration from "effect/Duration";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as CliError from "effect/unstable/cli/CliError";
@@ -61,6 +62,17 @@ const parallel = Flag.integer("parallel").pipe(
   Flag.withDefault(1),
 );
 
+const stepTimeout = Flag.string("step-timeout").pipe(
+  Flag.withDescription(
+    'Maximum duration for each step, using Effect Duration input such as "500 millis" or "5 seconds".',
+  ),
+  Flag.mapTryCatch(
+    (value) => Duration.fromInputUnsafe(value as Duration.Input),
+    () => 'Expected --step-timeout to be an Effect duration, such as "500 millis" or "5 seconds"',
+  ),
+  Flag.optional,
+);
+
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withAlias("v"),
   Flag.withDescription("Print every scenario result instead of only failures and diagnostics."),
@@ -96,6 +108,7 @@ export const cli = Command.make(
     outputFileJson,
     outputFileJunit,
     parallel,
+    stepTimeout,
     verbose,
     tags,
     name,
@@ -110,6 +123,7 @@ export const cli = Command.make(
     outputFileJson,
     outputFileJunit,
     parallel,
+    stepTimeout,
     verbose,
     tags,
     name,
@@ -132,6 +146,7 @@ export const cli = Command.make(
         failFast,
       },
       parallel,
+      ...(Option.isSome(stepTimeout) ? { stepTimeout: stepTimeout.value } : {}),
     };
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
       verbose,

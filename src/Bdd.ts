@@ -2,6 +2,7 @@
  * @since 0.1.0
  */
 import * as Arr from "effect/Array";
+import type * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
@@ -166,12 +167,13 @@ export interface Step<
   R = never,
   Captures = unknown,
   Argument = undefined,
-> {
+> extends Pipeable {
   <State extends In, E0, R0>(self: Scenario<State, E0, R0>): Scenario<Out, E | E0, R | R0>;
   readonly [StepTypeId]: typeof StepTypeId;
   readonly kind: Kind;
   readonly expression: Expression<Captures>;
   readonly argument?: StepArg<Argument>;
+  readonly timeout?: Duration.Input;
   readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
 }
 
@@ -255,6 +257,17 @@ type TableArgType<A> = TableArg<A>;
 type DocStringArgType<A> = DocStringArg<A>;
 type DataTableType = DataTable;
 type DocStringType = DocString;
+type RunOptionsType = RunOptions;
+
+/**
+ * Options that control `Bdd.run` execution policy.
+ *
+ * @category models
+ * @since 0.4.0
+ */
+export interface RunOptions {
+  readonly stepTimeout?: Duration.Input;
+}
 
 /**
  * Creates a named capture decoded from step text.
@@ -342,6 +355,29 @@ const when_: StepTag<"When"> = makeStepTag("When");
 const then_: StepTag<"Then"> = makeStepTag("Then");
 
 /**
+ * Overrides the run-level step timeout for a single step definition.
+ *
+ * @example
+ * ```ts
+ * import { Bdd } from "effect-bdd"
+ * import { Duration, Effect } from "effect"
+ *
+ * const eventuallyConsistent = Bdd.then`the projection catches up`(() =>
+ *   Effect.void
+ * ).pipe(Bdd.withTimeout(Duration.seconds(30)))
+ * ```
+ *
+ * @category combinators
+ * @since 0.4.0
+ */
+const withTimeout_ =
+  (timeout: Duration.Input) =>
+  <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+    self: Step<Kind, In, Out, E, R, Captures, Argument>,
+  ): Step<Kind, In, Out, E, R, Captures, Argument> =>
+    copyStep(self, timeout);
+
+/**
  * Runs Gherkin source against a feature definition.
  *
  * @category execution
@@ -350,7 +386,8 @@ const then_: StepTag<"Then"> = makeStepTag("Then");
 const run_ = <E, R>(
   self: Feature<E, R>,
   source: string,
-): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source);
+  options: RunOptions = {},
+): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source, options);
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -375,6 +412,7 @@ export const Bdd = {
   when: when_,
   // oxlint-disable-next-line unicorn/no-thenable
   then: then_,
+  withTimeout: withTimeout_,
   run: run_,
 };
 
@@ -431,6 +469,14 @@ export declare namespace Bdd {
    * @since 0.1.0
    */
   export type RunError = RunErrorType;
+
+  /**
+   * Options that control `Bdd.run` execution policy.
+   *
+   * @category models
+   * @since 0.4.0
+   */
+  export type RunOptions = RunOptionsType;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -569,6 +615,36 @@ const makeScenario = <State, E, R>(
   return appendScenario;
 };
 
+const copyStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+  source: Step<Kind, In, Out, E, R, Captures, Argument>,
+  timeout: Duration.Input,
+): Step<Kind, In, Out, E, R, Captures, Argument> => {
+  const step = ((self: Scenario<In, unknown, unknown>) =>
+    makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
+    Kind,
+    In,
+    Out,
+    E,
+    R,
+    Captures,
+    Argument
+  >;
+  Object.defineProperties(step, {
+    [StepTypeId]: { value: StepTypeId },
+    kind: { value: source.kind },
+    expression: { value: source.expression },
+    ...(source.argument === undefined ? {} : { argument: { value: source.argument } }),
+    timeout: { value: timeout },
+    run: { value: source.run },
+    pipe: {
+      value() {
+        return PipeableRuntime.pipeArguments(this, arguments);
+      },
+    },
+  });
+  return step;
+};
+
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
   return ((strings: TemplateStringsArray, ...captures: ReadonlyArray<Capture<string, unknown>>) =>
     makeStepFactory(
@@ -616,6 +692,11 @@ const makeStepFactory = <Kind extends StepKind, Captures>(
               state,
             ),
           ),
+      },
+      pipe: {
+        value() {
+          return PipeableRuntime.pipeArguments(this, arguments);
+        },
       },
     });
     return step;

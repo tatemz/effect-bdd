@@ -1,5 +1,5 @@
 import { Bdd } from "effect-bdd";
-import { Effect, Schema } from "effect";
+import { Duration, Effect, Schema } from "effect";
 import { describe, expect, test } from "tstyche";
 
 describe("Bdd", () => {
@@ -110,6 +110,22 @@ describe("Bdd", () => {
     expect(Bdd.run(feature, "Feature: Counter")).type.toBe<
       Effect.Effect<Bdd.Report, Bdd.RunError, Inventory | Bdd.GherkinCompiler>
     >();
+    expect(Bdd.run(feature, "Feature: Counter", { stepTimeout: Duration.seconds(1) })).type.toBe<
+      Effect.Effect<Bdd.Report, Bdd.RunError, Inventory | Bdd.GherkinCompiler>
+    >();
+  });
+
+  test("withTimeout preserves step type information", () => {
+    interface Inventory {
+      readonly _: unique symbol;
+    }
+
+    const step = Bdd.when`needs inventory`(
+      (state: number) => Effect.succeed(String(state)) as Effect.Effect<string, "boom", Inventory>,
+    );
+    const timed = step.pipe(Bdd.withTimeout(Duration.seconds(1)));
+
+    expect(timed).type.toBe<Bdd.Step<"When", number, string, "boom", Inventory, {}, undefined>>();
   });
 
   test("docstrings and data tables infer decoded argument types", () => {

@@ -64,6 +64,35 @@ A feature is made of explicit scenario chains:
 
 The runner parses the feature source, compiles it with Cucumber, pairs each source scenario with the `Bdd.scenario(...)` chain of the same name, verifies every step in order, then runs the chain.
 
+## Step Timeouts
+
+Steps are unbounded by default. Configure a run-level timeout when a stuck promise, socket, browser, or polling loop should fail the scenario instead of hanging the run:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Duration, Effect } from "effect";
+
+declare const counter: Bdd.Feature;
+declare const source: string;
+
+const program = Bdd.run(counter, source, {
+  stepTimeout: Duration.seconds(5),
+}).pipe(Effect.provide(Bdd.layerCucumber));
+```
+
+Override the run-level timeout for a single slow step with `Bdd.withTimeout`:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Duration, Effect } from "effect";
+
+const thenProjectionCatchesUp = Bdd.then`the projection catches up`(() => Effect.void).pipe(
+  Bdd.withTimeout(Duration.seconds(30)),
+);
+```
+
+Timeouts are represented as `StepError` failures with the scenario, step text, source line, and configured duration. Effect timeouts interrupt fibers, but synchronous infinite loops or non-interruptible native work can still block the process.
+
 ## Recommended `steps.ts` Shape
 
 Keep step modules boring:
@@ -244,6 +273,7 @@ Important flags:
 - `--name`: run scenarios whose `Feature / Scenario` name contains the text.
 - `--parallel`: run scenarios concurrently.
 - `--fail-fast`: stop after the first failed scenario.
+- `--step-timeout`: maximum duration for each step, using Effect Duration input such as `"500 millis"` or `"5 seconds"`.
 - `--verbose`: show passing scenarios in text output.
 
 Node requires an explicit TypeScript loader for `.ts` step modules:
@@ -283,7 +313,7 @@ Scenario Outlines are expanded before execution. Every Examples row runs the sam
 
 - `ParseError`: invalid Gherkin.
 - `MatchError`: feature/scenario/step verification or argument decoding failed.
-- `StepError`: a matched step implementation failed.
+- `StepError`: a matched step implementation failed or exceeded its configured timeout.
 
 ## Public API
 
@@ -291,6 +321,7 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 
 - constructors: `Bdd.capture`, `Bdd.table`, `Bdd.docString`, `Bdd.feature`, `Bdd.scenario`
 - steps: `Bdd.given`, `Bdd.when`, `Bdd.then`, `Bdd.step`
+- step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
 - models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`

@@ -1,6 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
 import { Cause, Effect, Exit, FileSystem, Option, Path } from "effect";
+import { TestClock } from "effect/testing";
 import * as CliError from "effect/unstable/cli/CliError";
 import * as Command from "effect/unstable/cli/Command";
 import { execFile } from "node:child_process";
@@ -178,6 +179,57 @@ Feature: Counter
         assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
         assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Fails/);
         assert.match(text, /Cause: expected 1, got 0/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("fails a scenario when a step exceeds --step-timeout", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Timeouts
+
+  Scenario: Hangs
+    When the step hangs
+`,
+          steps: `
+import { Bdd } from "effect-bdd"
+import { Effect } from "effect"
+
+export const timeouts = Bdd.feature("Timeouts").pipe(
+  Bdd.scenario("Hangs").pipe(
+    Bdd.when\`the step hangs\`(() => Effect.sleep("50 millis"))
+  )
+)
+`,
+        });
+        const textReport = fixture.path("timeout.txt");
+
+        const exit = yield* Effect.exit(
+          TestClock.withLive(
+            runCli([
+              "--features",
+              fixture.path("*.feature"),
+              "--steps",
+              fixture.path("*.mjs"),
+              "--reporter",
+              "text",
+              "--output-file.text",
+              textReport,
+              "--step-timeout",
+              "1 millis",
+            ]).pipe(Effect.provide(NodeServices.layer)),
+          ),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
+
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /StepError: Step timed out after .*: the step hangs/);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );

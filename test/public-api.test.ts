@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { Bdd } from "effect-bdd";
 import { MatchError, ParseError, StepError } from "effect-bdd/Errors";
 
@@ -86,6 +86,17 @@ describe("public API", () => {
         });
       }),
     );
+  });
+
+  describe("step timeout metadata", () => {
+    it("exposes a pipeable step timeout helper", () => {
+      const step = Bdd.when`increment`(() => Effect.succeed(1)).pipe(
+        Bdd.withTimeout(Duration.seconds(1)),
+      );
+
+      assert.strictEqual(step.kind, "When");
+      assert.deepStrictEqual(step.timeout, Duration.seconds(1));
+    });
   });
 
   describe("effect-bdd/Errors subpath", () => {

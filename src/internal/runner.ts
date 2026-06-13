@@ -1,5 +1,6 @@
 import type { Pickle, PickleStep } from "@cucumber/messages";
 import * as Arr from "effect/Array";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
@@ -48,6 +49,7 @@ interface AnyStep<R = unknown> {
   readonly kind: "Step" | ConcreteStepKind;
   readonly expression: Expression<unknown>;
   readonly argument?: StepArg<unknown>;
+  readonly timeout?: Duration.Input;
   readonly run: (
     captures: unknown,
     argument: unknown,
@@ -70,6 +72,11 @@ interface FeatureDefinition<E, R> {
 interface Report {
   readonly feature: string;
   readonly scenarios: ReadonlyArray<ScenarioReport>;
+}
+
+/** @internal */
+export interface RunOptions {
+  readonly stepTimeout?: Duration.Input;
 }
 
 /** @internal */
@@ -121,13 +128,14 @@ export const decodeDocString = <S extends Schema.Decoder<unknown, never>>(schema
 export const run = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   source: string,
+  options: RunOptions = {},
 ): Effect.Effect<Report, RunError, R | Parser.GherkinCompiler> =>
   Fn.pipe(
     Parser.parse(source),
     Effect.flatMap((feature) =>
       Fn.pipe(
         buildScenarioTasks(featureDefinition, feature),
-        Effect.flatMap((tasks) => Effect.forEach(tasks, runScenarioTask)),
+        Effect.flatMap((tasks) => Effect.forEach(tasks, (task) => runScenarioTask(task, options))),
         Effect.map(
           (scenarios): Report => ({
             feature: feature.name,
@@ -281,9 +289,10 @@ const buildScenarioTasks = <E, R>(
 /** @internal */
 export const runScenarioTask = <E, R>(
   task: ScenarioTask<E, R>,
+  options: RunOptions = {},
 ): Effect.Effect<ScenarioReport, RunError, R> =>
   Fn.pipe(
-    runSteps(task),
+    runSteps(task, options),
     Effect.as({
       name: task.scenarioName,
       steps: task.pickle.steps.length,
@@ -291,29 +300,36 @@ export const runScenarioTask = <E, R>(
     }),
   );
 
-const runSteps: <E, R>(task: ScenarioTask<E, R>) => Effect.Effect<unknown, RunError, R> =
-  Effect.fnUntraced(function* <E, R>(task: ScenarioTask<E, R>) {
-    const steps = task.pickle.steps;
-    const definitions = task.scenarioDefinition.steps;
-    if (steps.length !== definitions.length) {
-      return yield* matchErrorEffect({
-        message: `Scenario "${task.sourceScenarioName}" has ${steps.length} source step(s), but its chain has ${definitions.length} step(s)`,
-        scenario: task.sourceScenarioName,
-        step: task.sourceScenarioName,
-        line: task.scenarioLine,
-        candidates: Arr.map(definitions, (step) => step.expression.source),
-      });
-    }
+const runSteps: <E, R>(
+  task: ScenarioTask<E, R>,
+  options: RunOptions,
+) => Effect.Effect<unknown, RunError, R> = Effect.fnUntraced(function* <E, R>(
+  task: ScenarioTask<E, R>,
+  options: RunOptions,
+) {
+  const steps = task.pickle.steps;
+  const definitions = task.scenarioDefinition.steps;
+  if (steps.length !== definitions.length) {
+    return yield* matchErrorEffect({
+      message: `Scenario "${task.sourceScenarioName}" has ${steps.length} source step(s), but its chain has ${definitions.length} step(s)`,
+      scenario: task.sourceScenarioName,
+      step: task.sourceScenarioName,
+      line: task.scenarioLine,
+      candidates: Arr.map(definitions, (step) => step.expression.source),
+    });
+  }
 
-    return yield* Fn.pipe(
-      Arr.zip(definitions, steps),
-      Arr.reduce(
-        Effect.succeed<unknown>(undefined) as Effect.Effect<unknown, RunError, R>,
-        (state, [definition, step], index) =>
-          Effect.flatMap(state, (previous) => runStep(task, definition, step, index, previous)),
-      ),
-    );
-  });
+  return yield* Fn.pipe(
+    Arr.zip(definitions, steps),
+    Arr.reduce(
+      Effect.succeed<unknown>(undefined) as Effect.Effect<unknown, RunError, R>,
+      (state, [definition, step], index) =>
+        Effect.flatMap(state, (previous) =>
+          runStep(task, definition, step, index, previous, options),
+        ),
+    ),
+  );
+});
 
 const runStep: <E, R>(
   task: ScenarioTask<E, R>,
@@ -321,12 +337,14 @@ const runStep: <E, R>(
   step: PickleStep,
   index: number,
   state: unknown,
+  options: RunOptions,
 ) => Effect.Effect<unknown, RunError, R> = Effect.fnUntraced(function* <E, R>(
   task: ScenarioTask<E, R>,
   stepDefinition: AnyStep<R>,
   step: PickleStep,
   index: number,
   state: unknown,
+  options: RunOptions,
 ) {
   const kind = yield* stepKind(step, task.source);
   const captures = yield* verifyStep(task, stepDefinition, step, kind, index);
@@ -336,7 +354,8 @@ const runStep: <E, R>(
     step,
     task.source,
   );
-  return yield* Fn.pipe(
+  const line = Parser.stepLine(step, task.source);
+  const stepEffect = Fn.pipe(
     stepDefinition.run(captures, argument, state),
     Effect.mapError(
       (cause) =>
@@ -344,12 +363,37 @@ const runStep: <E, R>(
           message: `Step failed: ${step.text}`,
           scenario: task.sourceScenarioName,
           step: step.text,
-          line: Parser.stepLine(step, task.source),
+          line,
           cause,
         }),
     ),
   );
+  const timeout = stepDefinition.timeout ?? options.stepTimeout;
+  return yield* timeout === undefined
+    ? stepEffect
+    : Fn.pipe(
+        stepEffect,
+        Effect.timeoutOrElse({
+          duration: timeout,
+          orElse: () =>
+            Effect.fail(
+              new StepError({
+                message: `Step timed out after ${formatDuration(timeout)}: ${step.text}`,
+                scenario: task.sourceScenarioName,
+                step: step.text,
+                line,
+                cause: {
+                  _tag: "StepTimeout",
+                  timeout: Duration.fromInputUnsafe(timeout),
+                },
+              }),
+            ),
+        }),
+      );
 });
+
+const formatDuration = (duration: Duration.Input): string =>
+  Duration.format(Duration.fromInputUnsafe(duration));
 
 const verifyStep = (
   task: ScenarioTask<unknown, unknown>,

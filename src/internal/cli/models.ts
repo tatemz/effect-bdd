@@ -1,4 +1,5 @@
 import type * as Bdd from "../../Bdd.ts";
+import type * as Duration from "effect/Duration";
 import type * as CoreRunner from "../runner.ts";
 
 /** @internal */
@@ -97,6 +98,7 @@ export interface CliOptions {
   readonly verbose: boolean;
   readonly filters: CliFilters;
   readonly parallel: number;
+  readonly stepTimeout?: Duration.Input;
 }
 
 /** @internal */
