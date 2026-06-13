@@ -1,5 +1,7 @@
 /** @internal */
 import * as Effect from "effect/Effect";
+import * as Duration from "effect/Duration";
+import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as CliError from "effect/unstable/cli/CliError";
@@ -61,6 +63,31 @@ const parallel = Flag.integer("parallel").pipe(
   Flag.withDefault(1),
 );
 
+const stepTimeout = Flag.string("step-timeout").pipe(
+  Flag.withDescription(
+    'Maximum duration for each step, using Effect Duration input such as "500 millis" or "5 seconds".',
+  ),
+  Flag.mapTryCatch(
+    (value) => parseStepTimeout(value),
+    () =>
+      'Expected --step-timeout to be a positive finite Effect duration, such as "500 millis" or "5 seconds"',
+  ),
+  Flag.optional,
+);
+
+function parseStepTimeout(value: string): Duration.Duration {
+  return Fn.pipe(
+    Duration.fromInput(value as Duration.Input),
+    Option.filter((duration) => Duration.isPositive(duration) && Duration.isFinite(duration)),
+    Option.getOrThrowWith(
+      () =>
+        new Error(
+          'Expected --step-timeout to be a positive finite Effect duration, such as "500 millis" or "5 seconds"',
+        ),
+    ),
+  );
+}
+
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withAlias("v"),
   Flag.withDescription("Print every scenario result instead of only failures and diagnostics."),
@@ -72,10 +99,10 @@ const tags = Flag.string("tags").pipe(
   Flag.between(0, Infinity),
 );
 
-const name = Flag.string("name").pipe(
+const title = Flag.string("title").pipe(
   Flag.withAlias("n"),
   Flag.withDescription(
-    "Run scenarios whose feature/scenario name contains this text. Can be supplied multiple times.",
+    "Run scenarios whose feature/scenario title contains this text. Can be supplied multiple times.",
   ),
   Flag.between(0, Infinity),
 );
@@ -96,9 +123,10 @@ export const cli = Command.make(
     outputFileJson,
     outputFileJunit,
     parallel,
+    stepTimeout,
     verbose,
     tags,
-    name,
+    title,
     failFast,
   },
   Effect.fnUntraced(function* ({
@@ -110,9 +138,10 @@ export const cli = Command.make(
     outputFileJson,
     outputFileJunit,
     parallel,
+    stepTimeout,
     verbose,
     tags,
-    name,
+    title,
     failFast,
   }) {
     const options: CliOptions = {
@@ -128,10 +157,11 @@ export const cli = Command.make(
       verbose,
       filters: {
         tags,
-        names: name,
+        titles: title,
         failFast,
       },
       parallel,
+      ...(Option.isSome(stepTimeout) ? { stepTimeout: stepTimeout.value } : {}),
     };
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
       verbose,

@@ -1,6 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
 import { Cause, Effect, Exit, FileSystem, Option, Path } from "effect";
+import { TestClock } from "effect/testing";
 import * as CliError from "effect/unstable/cli/CliError";
 import * as Command from "effect/unstable/cli/Command";
 import { execFile } from "node:child_process";
@@ -182,6 +183,58 @@ Feature: Counter
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("fails a scenario when a step exceeds --step-timeout", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Timeouts
+
+  Scenario: Hangs
+    When the step hangs
+`,
+          steps: `
+import { Bdd } from "effect-bdd"
+import { Effect } from "effect"
+
+export const timeouts = Bdd.feature("Timeouts").pipe(
+  Bdd.scenario("Hangs").pipe(
+    Bdd.when\`the step hangs\`(() => Effect.sleep("50 millis"))
+  )
+)
+`,
+        });
+        const textReport = fixture.path("timeout.txt");
+
+        const exit = yield* Effect.exit(
+          TestClock.withLive(
+            runCli([
+              "--features",
+              fixture.path("*.feature"),
+              "--steps",
+              fixture.path("*.mjs"),
+              "--reporter",
+              "text",
+              "--output-file.text",
+              textReport,
+              "--step-timeout",
+              "1 millis",
+            ]).pipe(Effect.provide(NodeServices.layer)),
+          ),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
+
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /StepError: Step timed out after .*: the step hangs/);
+        assert.match(text, /Cause: StepTimeoutError: Timed out after .* \(timeout: .*\)/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("reports unmatched feature files and unused feature definitions", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -197,6 +250,7 @@ Feature: Missing source
 `),
         });
         const textReport = fixture.path("unmatched-feature.txt");
+        const jsonReport = fixture.path("unmatched-feature.json");
 
         const exit = yield* Effect.exit(
           runCli([
@@ -206,8 +260,12 @@ Feature: Missing source
             fixture.path("*.mjs"),
             "--reporter",
             "text",
+            "--reporter",
+            "json",
             "--output-file.text",
             textReport,
+            "--output-file.json",
+            jsonReport,
           ]).pipe(Effect.provide(NodeServices.layer)),
         );
 
@@ -215,12 +273,18 @@ Feature: Missing source
 
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
+        const json = yield* fs.readFileString(jsonReport);
 
         assert.match(text, /Unmatched source:/);
         assert.match(text, /Feature: Missing source/);
         assert.match(text, /Scenario: Cannot run/);
         assert.match(text, /Unused definitions:/);
         assert.match(text, /Feature definition exported but no feature file matched: Counter/);
+        assert.match(json, /"featureTitle": "Missing source"/);
+        assert.match(json, /"scenarioTitle": "Cannot run"/);
+        assert.match(json, /"featureTitle": "Counter"/);
+        assert.strictEqual(/"featureName"/.test(json), false);
+        assert.strictEqual(/"scenarioName"/.test(json), false);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -383,7 +447,7 @@ Feature: Counter
           "text",
           "--output-file.text",
           textReport,
-          "--name",
+          "--title",
           "Starts",
           "--verbose",
         ]).pipe(Effect.provide(NodeServices.layer));

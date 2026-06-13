@@ -74,7 +74,8 @@ export class MatchError extends Schema.TaggedErrorClass<MatchError>()("MatchErro
  * **Details**
  *
  * The `cause` field preserves the original failure from the Effect returned by
- * the step implementation.
+ * the step implementation. When the runner interrupts a step because it exceeded
+ * its configured timeout, `cause` is a {@link StepTimeoutError}.
  *
  * @example
  * ```ts
@@ -101,3 +102,36 @@ export class StepError extends Schema.TaggedErrorClass<StepError>()("StepError",
   line: Schema.Number,
   cause: Schema.Unknown,
 }) {}
+
+/**
+ * A structured cause used when a matched step exceeds its configured timeout.
+ *
+ * **Details**
+ *
+ * `StepTimeoutError` is reported as the `cause` of a {@link StepError}. The
+ * outer `StepError` carries the scenario, step text, and source line; this
+ * nested error carries the timeout-specific details.
+ *
+ * @example
+ * ```ts
+ * import { Duration } from "effect"
+ * import { StepTimeoutError } from "effect-bdd/Errors"
+ *
+ * const error = new StepTimeoutError({
+ *   message: "Timed out after 5s",
+ *   timeout: Duration.seconds(5)
+ * })
+ *
+ * console.log(error._tag) // "StepTimeoutError"
+ * ```
+ *
+ * @category errors
+ * @since 0.4.0
+ */
+export class StepTimeoutError extends Schema.TaggedErrorClass<StepTimeoutError>()(
+  "StepTimeoutError",
+  {
+    message: Schema.String,
+    timeout: Schema.Duration,
+  },
+) {}

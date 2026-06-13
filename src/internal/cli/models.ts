@@ -1,4 +1,5 @@
 import type * as Bdd from "../../Bdd.ts";
+import type * as Duration from "effect/Duration";
 import type * as CoreRunner from "../runner.ts";
 
 /** @internal */
@@ -45,27 +46,27 @@ export type CliDiagnostic =
   | {
       readonly _tag: "UnmatchedFeature";
       readonly featurePath: string;
-      readonly featureName: string;
+      readonly featureTitle: string;
       readonly line: number;
       readonly message: string;
     }
   | {
       readonly _tag: "UnmatchedScenario";
       readonly featurePath: string;
-      readonly featureName: string;
-      readonly scenarioName: string;
+      readonly featureTitle: string;
+      readonly scenarioTitle: string;
       readonly scenarioLine: number;
       readonly message: string;
     }
   | {
       readonly _tag: "UnusedFeatureDefinition";
-      readonly featureName: string;
+      readonly featureTitle: string;
       readonly message: string;
     }
   | {
       readonly _tag: "UnusedScenarioDefinition";
-      readonly featureName: string;
-      readonly scenarioName: string;
+      readonly featureTitle: string;
+      readonly scenarioTitle: string;
       readonly message: string;
     };
 
@@ -79,7 +80,7 @@ export interface CliRunResult {
 /** @internal */
 interface CliFilters {
   readonly tags: ReadonlyArray<string>;
-  readonly names: ReadonlyArray<string>;
+  readonly titles: ReadonlyArray<string>;
   readonly failFast: boolean;
 }
 
@@ -97,6 +98,7 @@ export interface CliOptions {
   readonly verbose: boolean;
   readonly filters: CliFilters;
   readonly parallel: number;
+  readonly stepTimeout?: Duration.Duration;
 }
 
 /** @internal */

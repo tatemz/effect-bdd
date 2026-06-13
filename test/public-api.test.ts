@@ -1,9 +1,38 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { Bdd } from "effect-bdd";
-import { MatchError, ParseError, StepError } from "effect-bdd/Errors";
+import { MatchError, ParseError, StepError, StepTimeoutError } from "effect-bdd/Errors";
 
 describe("public API", () => {
+  describe("model titles", () => {
+    it("exposes feature and scenario titles as domain labels", () => {
+      const scenario = Bdd.scenario("Stubbed increment");
+      const feature = Bdd.feature("Counter").pipe(scenario);
+
+      assert.strictEqual(scenario.title, "Stubbed increment");
+      assert.strictEqual(feature.title, "Counter");
+    });
+
+    it("freezes model values after construction", () => {
+      const step = Bdd.when`increment`(() => Effect.succeed(1));
+      const scenario = Bdd.scenario("Stubbed increment").pipe(step);
+      const feature = Bdd.feature("Counter").pipe(scenario);
+
+      assert.strictEqual(Object.isFrozen(step), true);
+      assert.strictEqual(Object.isFrozen(scenario), true);
+      assert.strictEqual(Object.isFrozen(feature), true);
+      assert.throws(() => {
+        (feature as { title: string }).title = "Mutated";
+      }, TypeError);
+      assert.throws(() => {
+        (scenario as { title: string }).title = "Mutated";
+      }, TypeError);
+      assert.throws(() => {
+        (step as { timeout?: unknown }).timeout = Duration.seconds(1);
+      }, TypeError);
+    });
+  });
+
   describe("custom GherkinCompiler layer", () => {
     // A compiled feature equivalent to:
     //   Feature: Counter
@@ -82,10 +111,31 @@ describe("public API", () => {
 
         assert.deepStrictEqual(report, {
           feature: "Counter",
-          scenarios: [{ name: "Stubbed increment", steps: 1, tags: [] }],
+          scenarios: [{ title: "Stubbed increment", steps: 1, tags: [] }],
         });
       }),
     );
+  });
+
+  describe("step timeout metadata", () => {
+    it("exposes a pipeable step timeout helper", () => {
+      const step = Bdd.when`increment`(() => Effect.succeed(1)).pipe(
+        Bdd.withTimeout(Duration.seconds(1)),
+      );
+
+      assert.strictEqual(step.kind, "When");
+      assert.deepStrictEqual(step.timeout, Duration.seconds(1));
+    });
+
+    it("exposes a data-first step timeout helper", () => {
+      const step = Bdd.withTimeout(
+        Bdd.when`increment`(() => Effect.succeed(1)),
+        Duration.seconds(1),
+      );
+
+      assert.strictEqual(step.kind, "When");
+      assert.deepStrictEqual(step.timeout, Duration.seconds(1));
+    });
   });
 
   describe("effect-bdd/Errors subpath", () => {
@@ -105,16 +155,32 @@ describe("public API", () => {
         line: 4,
         cause: "expected 1, got 0",
       });
+      const timeout = new StepTimeoutError({
+        message: "Timed out after 1s",
+        timeout: Duration.seconds(1),
+      });
 
       assert.strictEqual(parse._tag, "ParseError");
       assert.strictEqual(match._tag, "MatchError");
       assert.strictEqual(step._tag, "StepError");
+      assert.strictEqual(timeout._tag, "StepTimeoutError");
       assert.instanceOf(parse, Error);
     });
 
     it("matches the error types surfaced by Bdd.run", () => {
       const error: Bdd.RunError = new ParseError({ message: "boom", line: 1, column: 1 });
       assert.strictEqual(error._tag, "ParseError");
+    });
+
+    it("exposes StepTimeoutError through the Bdd namespace", () => {
+      const timeout = new Bdd.StepTimeoutError({
+        message: "Timed out after 1s",
+        timeout: Duration.seconds(1),
+      });
+
+      assert.strictEqual(Bdd.StepTimeoutError, StepTimeoutError);
+      assert.strictEqual(Bdd.isStepTimeoutError(timeout), true);
+      assert.strictEqual(Bdd.isStepTimeoutError(new Error("boom")), false);
     });
   });
 });

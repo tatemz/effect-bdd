@@ -11,10 +11,14 @@ import type {
   GherkinCompiler as GherkinCompiler_,
   Report as Report_,
   RunError as RunError_,
+  RunOptions as RunOptions_,
   Scenario as Scenario_,
   Step as Step_,
   TableArg as TableArg_,
 } from "./Bdd.ts";
+import type { StepTimeoutError as StepTimeoutError_ } from "./Errors.ts";
+
+export { MatchError, ParseError, StepError, StepTimeoutError } from "./Errors.ts";
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -39,7 +43,7 @@ export declare namespace Bdd {
   export type Feature<E = never, R = never> = Feature_<E, R>;
 
   /**
-   * A named scenario chain.
+   * A titled scenario chain.
    *
    * @category models
    * @since 0.3.0
@@ -58,7 +62,9 @@ export declare namespace Bdd {
     Out,
     E = never,
     R = never,
-  > = Step_<Kind, In, Out, E, R>;
+    Captures = unknown,
+    Argument = undefined,
+  > = Step_<Kind, In, Out, E, R, Captures, Argument>;
 
   /**
    * Result returned after all scenarios pass.
@@ -75,6 +81,22 @@ export declare namespace Bdd {
    * @since 0.1.0
    */
   export type RunError = RunError_;
+
+  /**
+   * Options that control `Bdd.run` execution policy.
+   *
+   * @category models
+   * @since 0.4.0
+   */
+  export type RunOptions = RunOptions_;
+
+  /**
+   * Structured cause used when a matched step exceeds its configured timeout.
+   *
+   * @category errors
+   * @since 0.4.0
+   */
+  export type StepTimeoutError = StepTimeoutError_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -150,7 +172,7 @@ export type DocStringArg<A> = DocStringArg_<A>;
 export type Feature<E = never, R = never> = Feature_<E, R>;
 
 /**
- * A named scenario chain.
+ * A titled scenario chain.
  *
  * @category re-exports
  * @since 0.3.0
@@ -169,7 +191,9 @@ export type Step<
   Out,
   E = never,
   R = never,
-> = Step_<Kind, In, Out, E, R>;
+  Captures = unknown,
+  Argument = undefined,
+> = Step_<Kind, In, Out, E, R, Captures, Argument>;
 
 /**
  * Result returned after all scenarios pass.
@@ -186,6 +210,14 @@ export type Report = Report_;
  * @since 0.1.0
  */
 export type RunError = RunError_;
+
+/**
+ * Options that control `Bdd.run` execution policy.
+ *
+ * @category re-exports
+ * @since 0.4.0
+ */
+export type RunOptions = RunOptions_;
 
 /**
  * Service used to compile Gherkin source into executable scenarios.

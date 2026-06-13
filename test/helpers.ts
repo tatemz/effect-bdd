@@ -2,8 +2,11 @@ import { Bdd } from "effect-bdd";
 import { assert } from "@effect/vitest";
 import { Cause, Effect, Option } from "effect";
 
-export const runBdd = <E, R>(feature: Bdd.Feature<E, R>, source: string) =>
-  Bdd.run(feature, source).pipe(Effect.provide(Bdd.layerCucumber));
+export const runBdd = <E, R>(
+  feature: Bdd.Feature<E, R>,
+  source: string,
+  options?: Bdd.RunOptions,
+) => Bdd.run(feature, source, options).pipe(Effect.provide(Bdd.layerCucumber));
 
 export const runError = <A, R>(
   effect: Effect.Effect<A, Bdd.RunError, R>,

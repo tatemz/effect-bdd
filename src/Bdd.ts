@@ -2,14 +2,16 @@
  * @since 0.1.0
  */
 import * as Arr from "effect/Array";
+import * as Duration from "effect/Duration";
 import type * as Effect from "effect/Effect";
+import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
 import type { Pipeable } from "effect/Pipeable";
 import * as PipeableRuntime from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
-import { MatchError, ParseError, StepError } from "./Errors.ts";
+import { MatchError, ParseError, StepError, StepTimeoutError } from "./Errors.ts";
 import * as cucumberCompiler from "./internal/cucumberCompiler.ts";
 import * as expression from "./internal/expression.ts";
 import * as parser from "./internal/parser.ts";
@@ -166,12 +168,13 @@ export interface Step<
   R = never,
   Captures = unknown,
   Argument = undefined,
-> {
+> extends Pipeable {
   <State extends In, E0, R0>(self: Scenario<State, E0, R0>): Scenario<Out, E | E0, R | R0>;
   readonly [StepTypeId]: typeof StepTypeId;
   readonly kind: Kind;
   readonly expression: Expression<Captures>;
   readonly argument?: StepArg<Argument>;
+  readonly timeout?: Duration.Duration;
   readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
 }
 
@@ -184,7 +187,7 @@ export interface Step<
 export type AnyStep = Step<StepKind, any, any, any, any, any, any>;
 
 /**
- * A named scenario chain. The type parameter tracks the current state after
+ * A titled scenario chain. The type parameter tracks the current state after
  * the last appended step.
  *
  * @category models
@@ -194,7 +197,7 @@ export interface Scenario<State = void, E = never, R = never> extends Pipeable {
   <E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0>;
   readonly [ScenarioTypeId]: typeof ScenarioTypeId;
   readonly _State?: (_: State) => State;
-  readonly name: string;
+  readonly title: string;
   readonly steps: ReadonlyArray<AnyStep>;
 }
 
@@ -208,7 +211,7 @@ export interface Feature<E = never, R = never> extends Pipeable {
   readonly [FeatureTypeId]: typeof FeatureTypeId;
   readonly _E?: E;
   readonly _R?: R;
-  readonly name: string;
+  readonly title: string;
   readonly scenarios: ReadonlyArray<Scenario<any, any, any>>;
 }
 
@@ -230,7 +233,7 @@ export const isFeature = (u: unknown): u is Feature<unknown, unknown> =>
 export interface Report {
   readonly feature: string;
   readonly scenarios: ReadonlyArray<{
-    readonly name: string;
+    readonly title: string;
     readonly steps: number;
     readonly tags: ReadonlyArray<string>;
   }>;
@@ -255,6 +258,18 @@ type TableArgType<A> = TableArg<A>;
 type DocStringArgType<A> = DocStringArg<A>;
 type DataTableType = DataTable;
 type DocStringType = DocString;
+type RunOptionsType = RunOptions;
+type StepTimeoutErrorType = StepTimeoutError;
+
+/**
+ * Options that control `Bdd.run` execution policy.
+ *
+ * @category models
+ * @since 0.4.0
+ */
+export interface RunOptions {
+  readonly stepTimeout?: Duration.Duration;
+}
 
 /**
  * Creates a named capture decoded from step text.
@@ -299,7 +314,7 @@ const docString_ = <S extends Schema.Decoder<unknown, never>>(
  * @category constructors
  * @since 0.1.0
  */
-const feature_ = (name: string): Feature => makeFeature(name, []);
+const feature_ = (title: string): Feature => makeFeature(title, []);
 
 /**
  * Creates a scenario chain.
@@ -307,7 +322,7 @@ const feature_ = (name: string): Feature => makeFeature(name, []);
  * @category constructors
  * @since 0.3.0
  */
-const scenario_ = (name: string): Scenario<void> => makeScenario(name, []);
+const scenario_ = (title: string): Scenario<void> => makeScenario(title, []);
 
 /**
  * Tagged-template step factory that is keyword agnostic.
@@ -342,6 +357,49 @@ const when_: StepTag<"When"> = makeStepTag("When");
 const then_: StepTag<"Then"> = makeStepTag("Then");
 
 /**
+ * Overrides the run-level step timeout for a single step definition.
+ *
+ * @example
+ * ```ts
+ * import { Bdd } from "effect-bdd"
+ * import { Duration, Effect } from "effect"
+ *
+ * const eventuallyConsistent = Bdd.then`the projection catches up`(() =>
+ *   Effect.void
+ * ).pipe(Bdd.withTimeout(Duration.seconds(30)))
+ * ```
+ *
+ * @category combinators
+ * @since 0.4.0
+ */
+export interface WithTimeout {
+  (
+    timeout: Duration.Duration,
+  ): <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+    self: Step<Kind, In, Out, E, R, Captures, Argument>,
+  ) => Step<Kind, In, Out, E, R, Captures, Argument>;
+  <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+    self: Step<Kind, In, Out, E, R, Captures, Argument>,
+    timeout: Duration.Duration,
+  ): Step<Kind, In, Out, E, R, Captures, Argument>;
+}
+
+const withTimeout_: WithTimeout = Fn.dual(
+  2,
+  <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+    self: Step<Kind, In, Out, E, R, Captures, Argument>,
+    timeout: Duration.Duration,
+  ): Step<Kind, In, Out, E, R, Captures, Argument> =>
+    makeStep({
+      kind: self.kind,
+      expression: self.expression,
+      ...(self.argument === undefined ? {} : { argument: self.argument }),
+      timeout,
+      run: self.run,
+    }),
+);
+
+/**
  * Runs Gherkin source against a feature definition.
  *
  * @category execution
@@ -350,7 +408,16 @@ const then_: StepTag<"Then"> = makeStepTag("Then");
 const run_ = <E, R>(
   self: Feature<E, R>,
   source: string,
-): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source);
+  options: RunOptions = {},
+): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source, options);
+
+/**
+ * Checks whether a value is a {@link StepTimeoutError}.
+ *
+ * @category guards
+ * @since 0.4.0
+ */
+const isStepTimeoutError_ = (u: unknown): u is StepTimeoutError => u instanceof StepTimeoutError;
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -362,9 +429,11 @@ export const Bdd = {
   ParseError,
   MatchError,
   StepError,
+  StepTimeoutError,
   GherkinCompiler,
   layerCucumber,
   isFeature,
+  isStepTimeoutError: isStepTimeoutError_,
   capture: capture_,
   table: table_,
   docString: docString_,
@@ -375,6 +444,7 @@ export const Bdd = {
   when: when_,
   // oxlint-disable-next-line unicorn/no-thenable
   then: then_,
+  withTimeout: withTimeout_,
   run: run_,
 };
 
@@ -393,7 +463,7 @@ export declare namespace Bdd {
   export type Feature<E = never, R = never> = FeatureType<E, R>;
 
   /**
-   * A named scenario chain.
+   * A titled scenario chain.
    *
    * @category models
    * @since 0.3.0
@@ -431,6 +501,22 @@ export declare namespace Bdd {
    * @since 0.1.0
    */
   export type RunError = RunErrorType;
+
+  /**
+   * Options that control `Bdd.run` execution policy.
+   *
+   * @category models
+   * @since 0.4.0
+   */
+  export type RunOptions = RunOptionsType;
+
+  /**
+   * Structured cause used when a matched step exceeds its configured timeout.
+   *
+   * @category errors
+   * @since 0.4.0
+   */
+  export type StepTimeoutError = StepTimeoutErrorType;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -535,38 +621,98 @@ interface CapturedStepFactory<Captures, Kind extends StepKind> {
   ): Step<Kind, In, Out, E, R, Captures, Arg>;
 }
 
-const makeFeature = <E, R>(
-  name: string,
-  scenarios: ReadonlyArray<Scenario<any, any, any>>,
-): Feature<E, R> => ({
+const FeatureProto = {
   [FeatureTypeId]: FeatureTypeId,
-  name,
-  scenarios,
   pipe() {
     return PipeableRuntime.pipeArguments(this, arguments);
   },
-});
+};
+
+const ScenarioProto = {
+  [ScenarioTypeId]: ScenarioTypeId,
+  pipe() {
+    return PipeableRuntime.pipeArguments(this, arguments);
+  },
+};
+
+const StepProto = {
+  [StepTypeId]: StepTypeId,
+  pipe() {
+    return PipeableRuntime.pipeArguments(this, arguments);
+  },
+};
+
+const makeFeature = <E, R>(
+  title: string,
+  scenarios: ReadonlyArray<Scenario<any, any, any>>,
+): Feature<E, R> => {
+  const feature = Object.create(FeatureProto) as Feature<E, R> & {
+    title: string;
+    scenarios: ReadonlyArray<Scenario<any, any, any>>;
+  };
+  feature.title = title;
+  feature.scenarios = scenarios;
+  return Object.freeze(feature);
+};
 
 const makeScenario = <State, E, R>(
-  name: string,
+  title: string,
   steps: ReadonlyArray<AnyStep>,
 ): Scenario<State, E, R> => {
   const appendScenario = ((self: Feature<unknown, unknown>) =>
-    makeFeature(self.name, [
+    makeFeature(self.title, [
       ...self.scenarios,
       appendScenario as Scenario<State, E, R>,
     ])) as Scenario<State, E, R>;
-  Object.defineProperties(appendScenario, {
-    [ScenarioTypeId]: { value: ScenarioTypeId },
-    name: { value: name },
-    steps: { value: steps },
-    pipe: {
-      value() {
-        return PipeableRuntime.pipeArguments(this, arguments);
-      },
-    },
-  });
-  return appendScenario;
+  Object.setPrototypeOf(appendScenario, ScenarioProto);
+  const self = appendScenario as Scenario<State, E, R> & {
+    title: string;
+    steps: ReadonlyArray<AnyStep>;
+  };
+  self.title = title;
+  self.steps = steps;
+  return Object.freeze(self);
+};
+
+interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
+  readonly kind: Kind;
+  readonly expression: Expression<Captures>;
+  readonly argument?: StepArg<Argument>;
+  readonly timeout?: Duration.Duration;
+  readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
+}
+
+const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+  options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
+): Step<Kind, In, Out, E, R, Captures, Argument> => {
+  const step = ((self: Scenario<In, unknown, unknown>) =>
+    makeScenario(self.title, [...self.steps, step as AnyStep])) as Step<
+    Kind,
+    In,
+    Out,
+    E,
+    R,
+    Captures,
+    Argument
+  >;
+  Object.setPrototypeOf(step, StepProto);
+  const self = step as Step<Kind, In, Out, E, R, Captures, Argument> & {
+    kind: Kind;
+    expression: Expression<Captures>;
+    argument?: StepArg<Argument>;
+    timeout?: Duration.Duration;
+    run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
+  };
+  self.kind = options.kind;
+  self.expression = options.expression;
+  if (options.argument !== undefined) {
+    self.argument = options.argument;
+  }
+  if (options.timeout !== undefined) {
+    self.timeout = options.timeout;
+  }
+  self.run = options.run;
+  return Object.freeze(self);
 };
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
@@ -589,42 +735,30 @@ const makeStepFactory = <Kind extends StepKind, Captures>(
     const impl = (hasArgument ? second : first) as (
       ...args: ReadonlyArray<unknown>
     ) => Effect.Effect<unknown, unknown, unknown>;
-    const step = ((self: Scenario<unknown, unknown, unknown>) =>
-      makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
-      Kind,
-      unknown,
-      unknown,
-      unknown,
-      unknown,
-      Captures,
-      unknown
-    >;
-    Object.defineProperties(step, {
-      [StepTypeId]: { value: StepTypeId },
-      kind: { value: kind },
-      expression: { value: matcher },
-      ...(argument === undefined ? {} : { argument: { value: argument } }),
-      run: {
-        value: (captures: Captures, decodedArgument: unknown, state: unknown) =>
-          impl(
-            ...handlerArgs(
-              impl,
-              hasCaptures,
-              argument !== undefined,
-              captures,
-              decodedArgument,
-              state,
-            ),
+    return makeStep({
+      kind,
+      expression: matcher,
+      ...(argument === undefined ? {} : { argument }),
+      run: (captures: Captures, decodedArgument: unknown, state: unknown) =>
+        impl(
+          ...handlerArgs(
+            impl,
+            hasCaptures,
+            argument !== undefined,
+            captures,
+            decodedArgument,
+            state,
           ),
-      },
+        ),
     });
-    return step;
   }) as StepFactory<Captures, Kind>;
-  Object.defineProperties(factory, {
-    kind: { value: kind },
-    expression: { value: matcher },
-  });
-  return factory;
+  const self = factory as StepFactory<Captures, Kind> & {
+    kind: Kind;
+    expression: Expression<Captures>;
+  };
+  self.kind = kind;
+  self.expression = matcher;
+  return self;
 };
 
 const handlerArgs = (

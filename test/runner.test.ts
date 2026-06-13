@@ -1,7 +1,9 @@
 import { Bdd } from "effect-bdd";
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Option, Schema } from "effect";
+import { Cause, Duration, Effect, Fiber, Option, Schema } from "effect";
 import * as Arr from "effect/Array";
+import * as Fn from "effect/Function";
+import { TestClock } from "effect/testing";
 import { assertMatchError, runBdd } from "./helpers.ts";
 
 type Cart = {
@@ -62,7 +64,7 @@ Feature: Shopping cart
 
       assert.deepStrictEqual(report, {
         feature: "Shopping cart",
-        scenarios: [{ name: "Adding items computes the total", steps: 3, tags: [] }],
+        scenarios: [{ title: "Adding items computes the total", steps: 3, tags: [] }],
       });
     });
   });
@@ -168,9 +170,9 @@ Feature: Keyword wildcard
       );
 
       assert.deepStrictEqual(report.scenarios, [
-        { name: "Given wildcard", steps: 1, tags: [] },
-        { name: "When wildcard", steps: 1, tags: [] },
-        { name: "Then wildcard", steps: 1, tags: [] },
+        { title: "Given wildcard", steps: 1, tags: [] },
+        { title: "When wildcard", steps: 1, tags: [] },
+        { title: "Then wildcard", steps: 1, tags: [] },
       ]);
     });
   });
@@ -336,6 +338,84 @@ Feature: Shopping cart
     });
   });
 
+  it.effect("fails with StepError when a step exceeds the run timeout", () => {
+    const feature = Bdd.feature("Timeouts").pipe(
+      Bdd.scenario("Slow step").pipe(
+        Bdd.when`the step hangs`(() => Effect.sleep(Duration.millis(50))),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const fiber = yield* Fn.pipe(
+        runBdd(
+          feature,
+          `
+Feature: Timeouts
+
+  Scenario: Slow step
+    When the step hangs
+`,
+          { stepTimeout: Duration.millis(1) },
+        ),
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust(Duration.millis(1));
+      const result = yield* Effect.exit(Fiber.join(fiber));
+
+      assert.strictEqual(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        const error = Option.getOrThrow(Cause.findErrorOption(result.cause)) as Bdd.RunError;
+        assert.strictEqual(error._tag, "StepError");
+        assert.match(error.message, /Step timed out after .*: the step hangs/);
+        assert.strictEqual(error.cause instanceof Bdd.StepTimeoutError, true);
+        assert.deepStrictEqual(
+          (error.cause as InstanceType<typeof Bdd.StepTimeoutError>).timeout,
+          Duration.millis(1),
+        );
+      }
+    });
+  });
+
+  it.effect("allows a step timeout override to replace the run timeout", () => {
+    const feature = Bdd.feature("Timeouts").pipe(
+      Bdd.scenario("Slow allowed step").pipe(
+        Bdd.when`the step is slow but allowed`(() =>
+          Effect.as(Effect.sleep(Duration.millis(5)), "ok"),
+        ).pipe(Bdd.withTimeout(Duration.millis(100))),
+        Bdd.then`the result is ok`((state: string) =>
+          Effect.sync(() => {
+            assert.strictEqual(state, "ok");
+            return state;
+          }),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const fiber = yield* Fn.pipe(
+        runBdd(
+          feature,
+          `
+Feature: Timeouts
+
+  Scenario: Slow allowed step
+    When the step is slow but allowed
+    Then the result is ok
+`,
+          { stepTimeout: Duration.millis(1) },
+        ),
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust(Duration.millis(100));
+      const report = yield* Fiber.join(fiber);
+
+      assert.deepStrictEqual(report, {
+        feature: "Timeouts",
+        scenarios: [{ title: "Slow allowed step", steps: 2, tags: [] }],
+      });
+    });
+  });
+
   it.effect("runs feature and rule backgrounds as explicit leading chain steps", () => {
     type State = ReadonlyArray<string>;
     const featureSetup = Bdd.given`feature setup`(() => Effect.succeed(["feature"] as State));
@@ -379,7 +459,7 @@ Feature: Checkout
 
       assert.deepStrictEqual(report.scenarios, [
         {
-          name: "Uses rule background",
+          title: "Uses rule background",
           steps: 4,
           tags: ["@feature", "@rule", "@scenario"],
         },

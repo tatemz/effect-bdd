@@ -29,7 +29,7 @@ import * as TagExpression from "./tagExpression.ts";
 interface BuiltScenarios {
   readonly tasks: ReadonlyArray<ScenarioTask>;
   readonly diagnostics: ReadonlyArray<CliDiagnostic>;
-  readonly matchedFeatureNames: ReadonlyArray<string>;
+  readonly matchedFeatureTitles: ReadonlyArray<string>;
 }
 
 /** @internal */
@@ -53,7 +53,7 @@ export const run: (
   const finishedAt = yield* Clock.currentTimeMillis;
   const diagnostics: ReadonlyArray<CliDiagnostic> = Fn.pipe(
     built.diagnostics,
-    Arr.appendAll(unusedFeatureDefinitions(definitions, built.matchedFeatureNames)),
+    Arr.appendAll(unusedFeatureDefinitions(definitions, built.matchedFeatureTitles)),
   );
   return {
     results,
@@ -71,7 +71,7 @@ const buildScenarioTasks: (
     definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
   ) {
     const parsed = yield* Parser.parse(source.source, source.path);
-    const matches = Arr.filter(definitions, (definition) => definition.name === parsed.name);
+    const matches = Arr.filter(definitions, (definition) => definition.title === parsed.name);
     if (matches.length > 1) {
       return yield* Effect.fail(
         new DiscoveryError({
@@ -88,7 +88,7 @@ const buildScenarioTasks: (
             {
               _tag: "UnmatchedFeature",
               featurePath: source.path,
-              featureName: parsed.name,
+              featureTitle: parsed.name,
               line: parsed.line,
               message: `Feature file has no matching Bdd.feature export: ${parsed.name}`,
             } satisfies CliDiagnostic,
@@ -99,28 +99,28 @@ const buildScenarioTasks: (
               (pickle): CliDiagnostic => ({
                 _tag: "UnmatchedScenario",
                 featurePath: source.path,
-                featureName: parsed.name,
-                scenarioName: pickle.name,
+                featureTitle: parsed.name,
+                scenarioTitle: pickle.name,
                 scenarioLine: pickle.location?.line ?? parsed.line,
                 message: `Scenario cannot run because no feature definition matched "${parsed.name}"`,
               }),
             ),
           ),
         ),
-        matchedFeatureNames: [],
+        matchedFeatureTitles: [],
       };
     }
     const duplicateScenario = duplicateScenarioDefinition(definition);
     if (duplicateScenario !== undefined) {
       return yield* Effect.fail(
         new DiscoveryError({
-          message: `Duplicate scenario chain name in "${definition.name}": ${duplicateScenario}`,
+          message: `Duplicate scenario chain title in "${definition.title}": ${duplicateScenario}`,
         }),
       );
     }
 
     const scenarioDefinitions = new Map(
-      Arr.map(definition.scenarios, (scenario) => [scenario.name, scenario] as const),
+      Arr.map(definition.scenarios, (scenario) => [scenario.title, scenario] as const),
     );
     const built = Arr.map(parsed.pickles, (pickle, scenarioIndex) =>
       buildScenarioTask(source, parsed, definition, scenarioDefinitions, pickle, scenarioIndex),
@@ -128,19 +128,19 @@ const buildScenarioTasks: (
     const tasks = Arr.filterMap(built, (item) =>
       item._tag === "Task" ? Result.succeed(item.task) : Result.fail(undefined),
     );
-    const usedScenarioNames = Arr.map(tasks, (task) => task.core.sourceScenarioName);
+    const usedScenarioTitles = Arr.map(tasks, (task) => task.core.sourceScenarioTitle);
     const unmatched = Arr.filterMap(built, (item) =>
       item._tag === "Diagnostic" ? Result.succeed(item.diagnostic) : Result.fail(undefined),
     );
     const unused = Fn.pipe(
       definition.scenarios,
-      Arr.filter((scenario) => !Arr.contains(scenario.name)(usedScenarioNames)),
+      Arr.filter((scenario) => !Arr.contains(scenario.title)(usedScenarioTitles)),
       Arr.map(
         (scenario): CliDiagnostic => ({
           _tag: "UnusedScenarioDefinition",
-          featureName: definition.name,
-          scenarioName: scenario.name,
-          message: `Scenario chain exported but no source scenario matched: ${definition.name} / ${scenario.name}`,
+          featureTitle: definition.title,
+          scenarioTitle: scenario.title,
+          message: `Scenario chain exported but no source scenario matched: ${definition.title} / ${scenario.title}`,
         }),
       ),
     );
@@ -148,7 +148,7 @@ const buildScenarioTasks: (
     return {
       tasks,
       diagnostics: Arr.appendAll(unmatched, unused),
-      matchedFeatureNames: [definition.name],
+      matchedFeatureTitles: [definition.title],
     };
   });
 
@@ -165,7 +165,7 @@ const buildScenarioTask = (
   scenarioIndex: number,
 ): BuiltScenario => {
   const sourceScenario = Parser.findScenario(pickle, parsed.source);
-  const scenarioName = Fn.pipe(
+  const scenarioTitle = Fn.pipe(
     sourceScenario,
     Option.map(({ scenario }) => scenario.name),
     Option.getOrElse(() => pickle.name),
@@ -177,17 +177,17 @@ const buildScenarioTask = (
       Option.map(({ scenario }) => scenario.location.line),
       Option.getOrElse(() => parsed.line),
     );
-  const scenarioDefinition = scenarioDefinitions.get(scenarioName);
+  const scenarioDefinition = scenarioDefinitions.get(scenarioTitle);
   if (scenarioDefinition === undefined) {
     return {
       _tag: "Diagnostic",
       diagnostic: {
         _tag: "UnmatchedScenario",
         featurePath: source.path,
-        featureName: parsed.name,
-        scenarioName,
+        featureTitle: parsed.name,
+        scenarioTitle,
         scenarioLine,
-        message: `Scenario has no matching Bdd.scenario chain: ${scenarioName}`,
+        message: `Scenario has no matching Bdd.scenario chain: ${scenarioTitle}`,
       },
     };
   }
@@ -203,15 +203,15 @@ const buildScenarioTask = (
       core: {
         featureDefinition: definition,
         scenarioDefinition,
-        featureName: parsed.name,
-        scenarioName: pickle.name,
-        sourceScenarioName: scenarioName,
+        featureTitle: parsed.name,
+        scenarioTitle: pickle.name,
+        sourceScenarioTitle: scenarioTitle,
         scenarioIndex,
         scenarioLine,
         ...(rule === undefined
           ? {}
           : {
-              ruleName: rule.name,
+              ruleTitle: rule.name,
               ruleLine: rule.location.line,
             }),
         tags: Arr.map(pickle.tags, (tag) => tag.name),
@@ -222,9 +222,9 @@ const buildScenarioTask = (
   };
 };
 
-const runScenario = Effect.fnUntraced(function* (task: ScenarioTask) {
+const runScenario = Effect.fnUntraced(function* (options: CliOptions, task: ScenarioTask) {
   const startedAt = yield* Clock.currentTimeMillis;
-  const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core));
+  const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core, runOptions(options)));
   const finishedAt = yield* Clock.currentTimeMillis;
   return {
     task,
@@ -241,10 +241,13 @@ const runScenarios = (
   tasks: ReadonlyArray<ScenarioTask>,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   options.filters.failFast
-    ? runScenariosFailFast(tasks)
-    : Effect.forEach(tasks, runScenario, { concurrency: options.parallel });
+    ? runScenariosFailFast(options, tasks)
+    : Effect.forEach(tasks, (task) => runScenario(options, task), {
+        concurrency: options.parallel,
+      });
 
 const runScenariosFailFast = (
+  options: CliOptions,
   tasks: ReadonlyArray<ScenarioTask>,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   Fn.pipe(
@@ -252,13 +255,16 @@ const runScenariosFailFast = (
     Arr.matchLeft({
       onEmpty: () => Effect.succeed<ReadonlyArray<ScenarioResult>>([]),
       onNonEmpty: (task, rest) =>
-        Effect.flatMap(runScenario(task), (result) =>
+        Effect.flatMap(runScenario(options, task), (result) =>
           result.outcome._tag === "Failed"
             ? Effect.succeed([result])
-            : Effect.map(runScenariosFailFast(rest), Arr.prepend(result)),
+            : Effect.map(runScenariosFailFast(options, rest), Arr.prepend(result)),
         ),
     }),
   );
+
+const runOptions = (options: CliOptions): CoreRunner.RunOptions =>
+  options.stepTimeout === undefined ? {} : { stepTimeout: options.stepTimeout };
 
 const filterTasks = (
   options: CliOptions,
@@ -269,7 +275,7 @@ const filterTasks = (
     Effect.map((tagPredicate) => {
       const filtered = Arr.filter(
         tasks,
-        (task) => tagPredicate(task.core.tags) && matchesNameFilter(options.filters.names, task),
+        (task) => tagPredicate(task.core.tags) && matchesTitleFilter(options.filters.titles, task),
       );
       return filtered;
     }),
@@ -280,10 +286,10 @@ const filterTasks = (
     ),
   );
 
-const matchesNameFilter = (patterns: ReadonlyArray<string>, task: ScenarioTask): boolean =>
+const matchesTitleFilter = (patterns: ReadonlyArray<string>, task: ScenarioTask): boolean =>
   patterns.length === 0 ||
   Arr.some(patterns, (pattern) =>
-    Fn.pipe(`${task.core.featureName} / ${task.core.scenarioName}`, Str.includes(pattern)),
+    Fn.pipe(`${task.core.featureTitle} / ${task.core.scenarioTitle}`, Str.includes(pattern)),
   );
 
 const summarize = (
@@ -310,33 +316,33 @@ const combineBuiltScenarios = (built: ReadonlyArray<BuiltScenarios>): BuiltScena
     built,
     Arr.flatMap((item) => item.diagnostics),
   ),
-  matchedFeatureNames: Fn.pipe(
+  matchedFeatureTitles: Fn.pipe(
     built,
-    Arr.flatMap((item) => item.matchedFeatureNames),
+    Arr.flatMap((item) => item.matchedFeatureTitles),
     Arr.dedupe,
   ),
 });
 
 const unusedFeatureDefinitions = (
   definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
-  matchedFeatureNames: ReadonlyArray<string>,
+  matchedFeatureTitles: ReadonlyArray<string>,
 ): ReadonlyArray<CliDiagnostic> =>
   Fn.pipe(
     definitions,
-    Arr.filter((definition) => !Arr.contains(definition.name)(matchedFeatureNames)),
+    Arr.filter((definition) => !Arr.contains(definition.title)(matchedFeatureTitles)),
     Arr.map(
       (definition): CliDiagnostic => ({
         _tag: "UnusedFeatureDefinition",
-        featureName: definition.name,
-        message: `Feature definition exported but no feature file matched: ${definition.name}`,
+        featureTitle: definition.title,
+        message: `Feature definition exported but no feature file matched: ${definition.title}`,
       }),
     ),
   );
 
 const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): string | undefined =>
   Fn.pipe(
-    Arr.map(definition.scenarios, (scenario) => scenario.name),
-    CoreRunner.firstDuplicateName,
+    Arr.map(definition.scenarios, (scenario) => scenario.title),
+    CoreRunner.firstDuplicateTitle,
     Option.getOrUndefined,
   );
 
