@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Duration, Effect, Layer } from "effect";
 import { Bdd } from "effect-bdd";
-import { MatchError, ParseError, StepError } from "effect-bdd/Errors";
+import { MatchError, ParseError, StepError, StepTimeoutError } from "effect-bdd/Errors";
 
 describe("public API", () => {
   describe("custom GherkinCompiler layer", () => {
@@ -116,10 +116,15 @@ describe("public API", () => {
         line: 4,
         cause: "expected 1, got 0",
       });
+      const timeout = new StepTimeoutError({
+        message: "Timed out after 1s",
+        timeout: Duration.seconds(1),
+      });
 
       assert.strictEqual(parse._tag, "ParseError");
       assert.strictEqual(match._tag, "MatchError");
       assert.strictEqual(step._tag, "StepError");
+      assert.strictEqual(timeout._tag, "StepTimeoutError");
       assert.instanceOf(parse, Error);
     });
 

@@ -6,7 +6,7 @@ import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
-import { MatchError, ParseError, StepError } from "../Errors.ts";
+import { MatchError, ParseError, StepError, StepTimeoutError } from "../Errors.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -368,32 +368,33 @@ const runStep: <E, R>(
         }),
     ),
   );
-  const timeout = stepDefinition.timeout ?? options.stepTimeout;
-  return yield* timeout === undefined
-    ? stepEffect
-    : Fn.pipe(
-        stepEffect,
-        Effect.timeoutOrElse({
-          duration: timeout,
-          orElse: () =>
-            Effect.fail(
-              new StepError({
-                message: `Step timed out after ${formatDuration(timeout)}: ${step.text}`,
-                scenario: task.sourceScenarioName,
-                step: step.text,
-                line,
-                cause: {
-                  _tag: "StepTimeout",
-                  timeout: Duration.fromInputUnsafe(timeout),
-                },
-              }),
-            ),
-        }),
-      );
+  const timeoutInput = stepDefinition.timeout ?? options.stepTimeout;
+  if (timeoutInput === undefined) {
+    return yield* stepEffect;
+  }
+  const timeout = Duration.fromInputUnsafe(timeoutInput);
+  return yield* Fn.pipe(
+    stepEffect,
+    Effect.timeoutOrElse({
+      duration: timeout,
+      orElse: () =>
+        Effect.fail(
+          new StepError({
+            message: `Step timed out after ${formatDuration(timeout)}: ${step.text}`,
+            scenario: task.sourceScenarioName,
+            step: step.text,
+            line,
+            cause: new StepTimeoutError({
+              message: `Timed out after ${formatDuration(timeout)}`,
+              timeout,
+            }),
+          }),
+        ),
+    }),
+  );
 });
 
-const formatDuration = (duration: Duration.Input): string =>
-  Duration.format(Duration.fromInputUnsafe(duration));
+const formatDuration = (duration: Duration.Duration): string => Duration.format(duration);
 
 const verifyStep = (
   task: ScenarioTask<unknown, unknown>,

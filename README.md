@@ -91,7 +91,7 @@ const thenProjectionCatchesUp = Bdd.then`the projection catches up`(() => Effect
 );
 ```
 
-Timeouts are represented as `StepError` failures with the scenario, step text, source line, and configured duration. Effect timeouts interrupt fibers, but synchronous infinite loops or non-interruptible native work can still block the process.
+Timeouts are represented as `StepError` failures with the scenario, step text, and source line. The `StepError.cause` is a `StepTimeoutError` containing the configured `Duration`. Effect timeouts interrupt fibers, but synchronous infinite loops or non-interruptible native work can still block the process.
 
 ## Recommended `steps.ts` Shape
 
@@ -313,7 +313,7 @@ Scenario Outlines are expanded before execution. Every Examples row runs the sam
 
 - `ParseError`: invalid Gherkin.
 - `MatchError`: feature/scenario/step verification or argument decoding failed.
-- `StepError`: a matched step implementation failed or exceeded its configured timeout.
+- `StepError`: a matched step implementation failed or exceeded its configured timeout. Timed-out steps use `StepTimeoutError` as the `StepError.cause`.
 
 ## Public API
 
@@ -324,7 +324,7 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
-- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`
+- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`, `Bdd.StepTimeoutError`
 
 The error classes are also importable from `effect-bdd/Errors`.
 

@@ -10,7 +10,7 @@ import type { Pipeable } from "effect/Pipeable";
 import * as PipeableRuntime from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
-import { MatchError, ParseError, StepError } from "./Errors.ts";
+import { MatchError, ParseError, StepError, StepTimeoutError } from "./Errors.ts";
 import * as cucumberCompiler from "./internal/cucumberCompiler.ts";
 import * as expression from "./internal/expression.ts";
 import * as parser from "./internal/parser.ts";
@@ -399,6 +399,7 @@ export const Bdd = {
   ParseError,
   MatchError,
   StepError,
+  StepTimeoutError,
   GherkinCompiler,
   layerCucumber,
   isFeature,
