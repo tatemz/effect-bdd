@@ -64,7 +64,7 @@ Feature: Shopping cart
 
       assert.deepStrictEqual(report, {
         feature: "Shopping cart",
-        scenarios: [{ name: "Adding items computes the total", steps: 3, tags: [] }],
+        scenarios: [{ title: "Adding items computes the total", steps: 3, tags: [] }],
       });
     });
   });
@@ -170,9 +170,9 @@ Feature: Keyword wildcard
       );
 
       assert.deepStrictEqual(report.scenarios, [
-        { name: "Given wildcard", steps: 1, tags: [] },
-        { name: "When wildcard", steps: 1, tags: [] },
-        { name: "Then wildcard", steps: 1, tags: [] },
+        { title: "Given wildcard", steps: 1, tags: [] },
+        { title: "When wildcard", steps: 1, tags: [] },
+        { title: "Then wildcard", steps: 1, tags: [] },
       ]);
     });
   });
@@ -411,7 +411,7 @@ Feature: Timeouts
 
       assert.deepStrictEqual(report, {
         feature: "Timeouts",
-        scenarios: [{ name: "Slow allowed step", steps: 2, tags: [] }],
+        scenarios: [{ title: "Slow allowed step", steps: 2, tags: [] }],
       });
     });
   });
@@ -459,7 +459,7 @@ Feature: Checkout
 
       assert.deepStrictEqual(report.scenarios, [
         {
-          name: "Uses rule background",
+          title: "Uses rule background",
           steps: 4,
           tags: ["@feature", "@rule", "@scenario"],
         },

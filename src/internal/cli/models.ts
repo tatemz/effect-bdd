@@ -46,27 +46,27 @@ export type CliDiagnostic =
   | {
       readonly _tag: "UnmatchedFeature";
       readonly featurePath: string;
-      readonly featureName: string;
+      readonly featureTitle: string;
       readonly line: number;
       readonly message: string;
     }
   | {
       readonly _tag: "UnmatchedScenario";
       readonly featurePath: string;
-      readonly featureName: string;
-      readonly scenarioName: string;
+      readonly featureTitle: string;
+      readonly scenarioTitle: string;
       readonly scenarioLine: number;
       readonly message: string;
     }
   | {
       readonly _tag: "UnusedFeatureDefinition";
-      readonly featureName: string;
+      readonly featureTitle: string;
       readonly message: string;
     }
   | {
       readonly _tag: "UnusedScenarioDefinition";
-      readonly featureName: string;
-      readonly scenarioName: string;
+      readonly featureTitle: string;
+      readonly scenarioTitle: string;
       readonly message: string;
     };
 

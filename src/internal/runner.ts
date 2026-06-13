@@ -83,12 +83,12 @@ export interface RunOptions {
 export interface ScenarioTask<E, R> {
   readonly featureDefinition: FeatureDefinition<E, R>;
   readonly scenarioDefinition: ScenarioDefinition<R>;
-  readonly featureName: string;
-  readonly scenarioName: string;
-  readonly sourceScenarioName: string;
+  readonly featureTitle: string;
+  readonly scenarioTitle: string;
+  readonly sourceScenarioTitle: string;
   readonly scenarioIndex: number;
   readonly scenarioLine: number;
-  readonly ruleName?: string;
+  readonly ruleTitle?: string;
   readonly ruleLine?: number;
   readonly tags: ReadonlyArray<string>;
   readonly pickle: Pickle;
@@ -97,7 +97,7 @@ export interface ScenarioTask<E, R> {
 
 /** @internal */
 export interface ScenarioReport {
-  readonly name: string;
+  readonly title: string;
   readonly steps: number;
   readonly tags: ReadonlyArray<string>;
 }
@@ -150,7 +150,7 @@ export const run = <E, R>(
 interface ResolvedPickle {
   readonly pickle: Pickle;
   readonly scenarioIndex: number;
-  readonly scenarioName: string;
+  readonly scenarioTitle: string;
   readonly scenarioLine: number;
   readonly sourceScenarioId: string;
   readonly rule: ReturnType<typeof resolveRule>;
@@ -163,7 +163,7 @@ const resolvePickle =
     return {
       pickle,
       scenarioIndex,
-      scenarioName: Fn.pipe(
+      scenarioTitle: Fn.pipe(
         source,
         Option.map(({ scenario }) => scenario.name),
         Option.getOrElse(() => pickle.name),
@@ -205,7 +205,7 @@ const duplicateSourceScenario = (
     Arr.take(resolved, entry.scenarioIndex),
     Arr.some(
       (previous) =>
-        previous.scenarioName === entry.scenarioName &&
+        previous.scenarioTitle === entry.scenarioTitle &&
         previous.sourceScenarioId !== entry.sourceScenarioId,
     ),
   );
@@ -227,19 +227,19 @@ const buildScenarioTasks = <E, R>(
       (entry): Effect.Effect<ScenarioTask<E, R>, MatchError> => {
         if (duplicateSourceScenario(resolved, entry)) {
           return matchErrorEffect({
-            message: `Duplicate scenario name in Gherkin feature: ${entry.scenarioName}`,
-            scenario: entry.scenarioName,
-            step: entry.scenarioName,
+            message: `Duplicate scenario title in Gherkin feature: ${entry.scenarioTitle}`,
+            scenario: entry.scenarioTitle,
+            step: entry.scenarioTitle,
             line: entry.scenarioLine,
-            candidates: [entry.scenarioName],
+            candidates: [entry.scenarioTitle],
           });
         }
-        const scenarioDefinition = scenarioDefinitions.get(entry.scenarioName);
+        const scenarioDefinition = scenarioDefinitions.get(entry.scenarioTitle);
         if (scenarioDefinition === undefined) {
           return matchErrorEffect({
-            message: `No scenario chain matched source scenario "${entry.scenarioName}"`,
-            scenario: entry.scenarioName,
-            step: entry.scenarioName,
+            message: `No scenario chain matched source scenario "${entry.scenarioTitle}"`,
+            scenario: entry.scenarioTitle,
+            step: entry.scenarioTitle,
             line: entry.scenarioLine,
             candidates: Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
           });
@@ -247,15 +247,15 @@ const buildScenarioTasks = <E, R>(
         return Effect.succeed({
           featureDefinition,
           scenarioDefinition,
-          featureName: feature.name,
-          scenarioName: entry.pickle.name,
-          sourceScenarioName: entry.scenarioName,
+          featureTitle: feature.name,
+          scenarioTitle: entry.pickle.name,
+          sourceScenarioTitle: entry.scenarioTitle,
           scenarioIndex: entry.scenarioIndex,
           scenarioLine: entry.scenarioLine,
           ...(entry.rule === undefined
             ? {}
             : {
-                ruleName: entry.rule.name,
+                ruleTitle: entry.rule.name,
                 ruleLine: entry.rule.location.line,
               }),
           tags: Arr.map(entry.pickle.tags, (tag) => tag.name),
@@ -265,10 +265,10 @@ const buildScenarioTasks = <E, R>(
       },
     );
 
-    const usedScenarioNames = Arr.map(resolved, (entry) => entry.scenarioName);
+    const usedScenarioTitles = Arr.map(resolved, (entry) => entry.scenarioTitle);
     const unused = Arr.filter(
       featureDefinition.scenarios,
-      (scenario) => !Arr.contains(scenario.title)(usedScenarioNames),
+      (scenario) => !Arr.contains(scenario.title)(usedScenarioTitles),
     );
     return yield* Fn.pipe(
       Arr.head(unused),
@@ -280,7 +280,7 @@ const buildScenarioTasks = <E, R>(
             scenario: scenario.title,
             step: scenario.title,
             line: feature.line,
-            candidates: Arr.map(resolved, (entry) => entry.scenarioName),
+            candidates: Arr.map(resolved, (entry) => entry.scenarioTitle),
           }),
       }),
     );
@@ -294,7 +294,7 @@ export const runScenarioTask = <E, R>(
   Fn.pipe(
     runSteps(task, options),
     Effect.as({
-      name: task.scenarioName,
+      title: task.scenarioTitle,
       steps: task.pickle.steps.length,
       tags: task.tags,
     }),
@@ -311,9 +311,9 @@ const runSteps: <E, R>(
   const definitions = task.scenarioDefinition.steps;
   if (steps.length !== definitions.length) {
     return yield* matchErrorEffect({
-      message: `Scenario "${task.sourceScenarioName}" has ${steps.length} source step(s), but its chain has ${definitions.length} step(s)`,
-      scenario: task.sourceScenarioName,
-      step: task.sourceScenarioName,
+      message: `Scenario "${task.sourceScenarioTitle}" has ${steps.length} source step(s), but its chain has ${definitions.length} step(s)`,
+      scenario: task.sourceScenarioTitle,
+      step: task.sourceScenarioTitle,
       line: task.scenarioLine,
       candidates: Arr.map(definitions, (step) => step.expression.source),
     });
@@ -350,7 +350,7 @@ const runStep: <E, R>(
   const captures = yield* verifyStep(task, stepDefinition, step, kind, index);
   const argument = yield* decodeArgument(
     stepDefinition,
-    task.sourceScenarioName,
+    task.sourceScenarioTitle,
     step,
     task.source,
   );
@@ -361,7 +361,7 @@ const runStep: <E, R>(
       (cause) =>
         new StepError({
           message: `Step failed: ${step.text}`,
-          scenario: task.sourceScenarioName,
+          scenario: task.sourceScenarioTitle,
           step: step.text,
           line,
           cause,
@@ -381,7 +381,7 @@ const runStep: <E, R>(
         Effect.fail(
           new StepError({
             message: `Step timed out after ${formatDuration(timeout)}: ${step.text}`,
-            scenario: task.sourceScenarioName,
+            scenario: task.sourceScenarioTitle,
             step: step.text,
             line,
             cause: new StepTimeoutError({
@@ -407,7 +407,7 @@ const verifyStep = (
   if (!keywordMatches) {
     return failStep(
       `Step ${index + 1} keyword mismatch: source is ${kind}, chain expects ${stepDefinition.kind}`,
-      task.sourceScenarioName,
+      task.sourceScenarioTitle,
       step,
       task.source,
       [stepDefinition.expression.source],
@@ -419,7 +419,7 @@ const verifyStep = (
       onNone: () =>
         failStep(
           `Step ${index + 1} text mismatch: source says "${step.text}", chain expects "${stepDefinition.expression.source}"`,
-          task.sourceScenarioName,
+          task.sourceScenarioTitle,
           step,
           task.source,
           [stepDefinition.expression.source],

@@ -87,7 +87,7 @@ const tags = Flag.string("tags").pipe(
 const name = Flag.string("name").pipe(
   Flag.withAlias("n"),
   Flag.withDescription(
-    "Run scenarios whose feature/scenario name contains this text. Can be supplied multiple times.",
+    "Run scenarios whose feature/scenario title contains this text. Can be supplied multiple times.",
   ),
   Flag.between(0, Infinity),
 );

@@ -272,7 +272,7 @@ Important flags:
 - `--reporter`, `-r`: repeatable; `text`, `html`, `json`, or `junit`.
 - `--output-file.<reporter>`: write a reporter to a file.
 - `--tags`: Cucumber-style tag expression with `and`, `or`, `not`, and parentheses.
-- `--name`: run scenarios whose `Feature / Scenario` name contains the text.
+- `--name`: run scenarios whose `Feature / Scenario` title contains the text.
 - `--parallel`: run scenarios concurrently.
 - `--fail-fast`: stop after the first failed scenario.
 - `--step-timeout`: maximum duration for each step, using Effect Duration input such as `"500 millis"` or `"5 seconds"`.

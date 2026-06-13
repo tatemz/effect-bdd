@@ -92,7 +92,7 @@ describe("public API", () => {
 
         assert.deepStrictEqual(report, {
           feature: "Counter",
-          scenarios: [{ name: "Stubbed increment", steps: 1, tags: [] }],
+          scenarios: [{ title: "Stubbed increment", steps: 1, tags: [] }],
         });
       }),
     );

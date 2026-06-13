@@ -41,7 +41,7 @@ Feature: Shopping cart
 `,
       );
 
-      assert.deepStrictEqual(report.scenarios, [{ name: "Adding items", steps: 3, tags: [] }]);
+      assert.deepStrictEqual(report.scenarios, [{ title: "Adding items", steps: 3, tags: [] }]);
     });
   });
 
@@ -88,7 +88,7 @@ Feature: Shopping cart
       );
 
       assert.deepStrictEqual(report.scenarios, [
-        { name: "Described scenario", steps: 1, tags: [] },
+        { title: "Described scenario", steps: 1, tags: [] },
       ]);
     });
   });
@@ -135,7 +135,7 @@ Feature: Payload
         "Feature: Shopping cart\r\n\r\n  Scenario: CRLF\r\n    Given an empty cart\r\n",
       );
 
-      assert.deepStrictEqual(report.scenarios, [{ name: "CRLF", steps: 1, tags: [] }]);
+      assert.deepStrictEqual(report.scenarios, [{ title: "CRLF", steps: 1, tags: [] }]);
     });
   });
 
@@ -191,8 +191,8 @@ Feature: Shopping cart
       );
 
       assert.deepStrictEqual(report.scenarios, [
-        { name: "Adding 2 items", steps: 2, tags: [] },
-        { name: "Adding 3 items", steps: 2, tags: [] },
+        { title: "Adding 2 items", steps: 2, tags: [] },
+        { title: "Adding 3 items", steps: 2, tags: [] },
       ]);
     }),
   );
@@ -220,7 +220,7 @@ Feature: Shopping cart
 
       assert.deepStrictEqual(report.scenarios, [
         {
-          name: "Rule scenario",
+          title: "Rule scenario",
           steps: 1,
           tags: ["@feature", "@rule", "@scenario"],
         },

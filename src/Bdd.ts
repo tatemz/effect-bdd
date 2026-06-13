@@ -232,7 +232,7 @@ export const isFeature = (u: unknown): u is Feature<unknown, unknown> =>
 export interface Report {
   readonly feature: string;
   readonly scenarios: ReadonlyArray<{
-    readonly name: string;
+    readonly title: string;
     readonly steps: number;
     readonly tags: ReadonlyArray<string>;
   }>;

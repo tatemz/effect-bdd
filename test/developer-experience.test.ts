@@ -209,18 +209,18 @@ describe("developer experience", () => {
         feature: "Shopping cart",
         scenarios: [
           {
-            name: "Capture based item with a service-backed assertion",
+            title: "Capture based item with a service-backed assertion",
             steps: 4,
             tags: ["@checkout"],
           },
           {
-            name: "DataTable plus And / But keyword inheritance",
+            title: "DataTable plus And / But keyword inheritance",
             steps: 5,
             tags: ["@checkout", "@happy-path"],
           },
-          { name: "DocString JSON payload", steps: 3, tags: ["@checkout", "@json"] },
+          { title: "DocString JSON payload", steps: 3, tags: ["@checkout", "@json"] },
           {
-            name: "Bdd.step can match any concrete keyword",
+            title: "Bdd.step can match any concrete keyword",
             steps: 3,
             tags: ["@checkout", "@keyword-agnostic"],
           },

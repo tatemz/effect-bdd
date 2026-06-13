@@ -210,7 +210,7 @@ const renderScenarioHtml = (result: ScenarioResult): string => {
   return `        <tr>
           <td class="${status}">${status}</td>
           <td>${escapeHtml(`${result.task.featurePath}:${result.task.core.scenarioLine}`)}</td>
-          <td>${escapeHtml(result.task.core.featureName)}</td>
+          <td>${escapeHtml(result.task.core.featureTitle)}</td>
           <td>${escapeHtml(renderScenarioName(result))}</td>
           <td>${escapeHtml(Fn.pipe(result.task.core.tags, Arr.join(", ")))}</td>
           <td>${result.durationMillis}ms</td>
@@ -250,10 +250,10 @@ const renderDiagnosticsText = (
 const renderDiagnosticText = (diagnostic: CliDiagnostic): string => {
   switch (diagnostic._tag) {
     case "UnmatchedFeature": {
-      return `  ${diagnostic.featurePath}:${diagnostic.line}\n    Feature: ${diagnostic.featureName}\n    Reason: ${diagnostic.message}`;
+      return `  ${diagnostic.featurePath}:${diagnostic.line}\n    Feature: ${diagnostic.featureTitle}\n    Reason: ${diagnostic.message}`;
     }
     case "UnmatchedScenario": {
-      return `  ${diagnostic.featurePath}:${diagnostic.scenarioLine}\n    Scenario: ${diagnostic.scenarioName}\n    Reason: ${diagnostic.message}`;
+      return `  ${diagnostic.featurePath}:${diagnostic.scenarioLine}\n    Scenario: ${diagnostic.scenarioTitle}\n    Reason: ${diagnostic.message}`;
     }
     case "UnusedFeatureDefinition": {
       return `  ${diagnostic.message}`;
@@ -273,15 +273,15 @@ const renderJson = (result: CliRunResult): string =>
           path: scenario.task.featurePath,
           line: scenario.task.core.scenarioLine,
         },
-        feature: scenario.task.core.featureName,
+        feature: scenario.task.core.featureTitle,
         rule:
-          scenario.task.core.ruleName === undefined
+          scenario.task.core.ruleTitle === undefined
             ? undefined
             : {
-                name: scenario.task.core.ruleName,
+                name: scenario.task.core.ruleTitle,
                 line: scenario.task.core.ruleLine,
               },
-        scenario: scenario.task.core.scenarioName,
+        scenario: scenario.task.core.scenarioTitle,
         tags: scenario.task.core.tags,
         durationMillis: scenario.durationMillis,
         outcome:
@@ -322,7 +322,7 @@ const renderJunitScenario = (result: ScenarioResult): string => {
     <failure message="${escapeXml(renderError(result.outcome.error))}">${escapeXml(
       renderError(result.outcome.error),
     )}</failure>`;
-  return `  <testcase classname="${escapeXml(result.task.core.featureName)}" name="${escapeXml(name)}" file="${escapeXml(
+  return `  <testcase classname="${escapeXml(result.task.core.featureTitle)}" name="${escapeXml(name)}" file="${escapeXml(
     result.task.featurePath,
   )}" line="${result.task.core.scenarioLine}" time="${result.durationMillis / 1000}">${failure}
   </testcase>`;
@@ -334,9 +334,9 @@ const renderJunitDiagnostic = (diagnostic: CliDiagnostic): string =>
   </testcase>`;
 
 const renderScenarioName = (result: ScenarioResult): string =>
-  result.task.core.ruleName === undefined
-    ? `${result.task.core.featureName} / ${result.task.core.scenarioName}`
-    : `${result.task.core.featureName} / ${result.task.core.ruleName} / ${result.task.core.scenarioName}`;
+  result.task.core.ruleTitle === undefined
+    ? `${result.task.core.featureTitle} / ${result.task.core.scenarioTitle}`
+    : `${result.task.core.featureTitle} / ${result.task.core.ruleTitle} / ${result.task.core.scenarioTitle}`;
 
 const renderError = (error: {
   readonly _tag: string;
