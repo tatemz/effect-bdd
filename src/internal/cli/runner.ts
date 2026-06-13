@@ -239,14 +239,14 @@ const runScenario = Effect.fnUntraced(function* (task: ScenarioTask) {
 const runScenarios = (
   options: CliOptions,
   tasks: ReadonlyArray<ScenarioTask>,
-): Effect.Effect<ReadonlyArray<ScenarioResult>, never, never> =>
+): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   options.filters.failFast
     ? runScenariosFailFast(tasks)
     : Effect.forEach(tasks, runScenario, { concurrency: options.parallel });
 
 const runScenariosFailFast = (
   tasks: ReadonlyArray<ScenarioTask>,
-): Effect.Effect<ReadonlyArray<ScenarioResult>, never, never> =>
+): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   Fn.pipe(
     tasks,
     Arr.matchLeft({

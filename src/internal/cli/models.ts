@@ -10,7 +10,7 @@ export interface FeatureSource {
 /** @internal */
 export interface ScenarioTask {
   readonly featurePath: string;
-  readonly core: CoreRunner.ScenarioTask<unknown, never>;
+  readonly core: CoreRunner.ScenarioTask<unknown, any>;
 }
 
 /** @internal */

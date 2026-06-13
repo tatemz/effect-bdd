@@ -6,7 +6,6 @@ import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
-import type * as Bdd from "../Bdd.ts";
 import { MatchError, ParseError, StepError } from "../Errors.ts";
 import * as Parser from "./parser.ts";
 
@@ -27,10 +26,57 @@ export interface DocStringInput {
 /** @internal */
 export type ConcreteStepKind = "Given" | "When" | "Then";
 
+type RunError = ParseError | MatchError | StepError;
+
+interface Expression<A> {
+  readonly source: string;
+  readonly match: (text: string) => Option.Option<A>;
+}
+
+interface TableArg<A> {
+  readonly _tag: "TableArg";
+  readonly decode: (table: DataTableInput) => Effect.Effect<A, unknown>;
+}
+
+interface DocStringArg<A> {
+  readonly _tag: "DocStringArg";
+  readonly decode: (docString: DocStringInput) => Effect.Effect<A, unknown>;
+}
+
+type StepArg<A> = TableArg<A> | DocStringArg<A>;
+
+interface AnyStep<R = unknown> {
+  readonly kind: "Step" | ConcreteStepKind;
+  readonly expression: Expression<unknown>;
+  readonly argument?: StepArg<unknown>;
+  readonly run: (
+    captures: unknown,
+    argument: unknown,
+    state: unknown,
+  ) => Effect.Effect<unknown, unknown, R>;
+}
+
+interface ScenarioDefinition<R = unknown> {
+  readonly name: string;
+  readonly steps: ReadonlyArray<AnyStep<R>>;
+}
+
+interface FeatureDefinition<E, R> {
+  readonly name: string;
+  readonly scenarios: ReadonlyArray<ScenarioDefinition<R>>;
+  readonly _E?: E;
+  readonly _R?: R;
+}
+
+interface Report {
+  readonly feature: string;
+  readonly scenarios: ReadonlyArray<ScenarioReport>;
+}
+
 /** @internal */
 export interface ScenarioTask<E, R> {
-  readonly featureDefinition: Bdd.Feature<E, R>;
-  readonly scenarioDefinition: Bdd.Scenario<any, any, any>;
+  readonly featureDefinition: FeatureDefinition<E, R>;
+  readonly scenarioDefinition: ScenarioDefinition<R>;
   readonly featureName: string;
   readonly scenarioName: string;
   readonly sourceScenarioName: string;
@@ -44,7 +90,11 @@ export interface ScenarioTask<E, R> {
 }
 
 /** @internal */
-export type ScenarioReport = Bdd.Report["scenarios"][number];
+export interface ScenarioReport {
+  readonly name: string;
+  readonly steps: number;
+  readonly tags: ReadonlyArray<string>;
+}
 
 /** @internal */
 export const decodeTable = <S extends Schema.Decoder<unknown, never>>(row: S) => {
@@ -70,9 +120,9 @@ export const decodeDocString = <S extends Schema.Decoder<unknown, never>>(schema
 
 /** @internal */
 export const run = <E, R>(
-  featureDefinition: Bdd.Feature<E, R>,
+  featureDefinition: FeatureDefinition<E, R>,
   source: string,
-): Effect.Effect<Bdd.Report, Bdd.RunError, R | Parser.GherkinCompiler> =>
+): Effect.Effect<Report, RunError, R | Parser.GherkinCompiler> =>
   Fn.pipe(
     Parser.parse(source),
     Effect.flatMap((feature) =>
@@ -80,7 +130,7 @@ export const run = <E, R>(
         buildScenarioTasks(featureDefinition, feature),
         Effect.flatMap((tasks) => Effect.forEach(tasks, runScenarioTask)),
         Effect.map(
-          (scenarios): Bdd.Report => ({
+          (scenarios): Report => ({
             feature: feature.name,
             scenarios,
           }),
@@ -155,7 +205,7 @@ const duplicateSourceScenario = (
 
 /** @internal */
 export const buildScenarioTasks = <E, R>(
-  featureDefinition: Bdd.Feature<E, R>,
+  featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
 ): Effect.Effect<ReadonlyArray<ScenarioTask<E, R>>, MatchError> =>
   Effect.gen(function* () {
@@ -232,7 +282,7 @@ export const buildScenarioTasks = <E, R>(
 /** @internal */
 export const runScenarioTask = <E, R>(
   task: ScenarioTask<E, R>,
-): Effect.Effect<ScenarioReport, Bdd.RunError, R> =>
+): Effect.Effect<ScenarioReport, RunError, R> =>
   Fn.pipe(
     runSteps(task),
     Effect.as({
@@ -242,7 +292,7 @@ export const runScenarioTask = <E, R>(
     }),
   );
 
-const runSteps: <E, R>(task: ScenarioTask<E, R>) => Effect.Effect<unknown, Bdd.RunError, R> =
+const runSteps: <E, R>(task: ScenarioTask<E, R>) => Effect.Effect<unknown, RunError, R> =
   Effect.fnUntraced(function* <E, R>(task: ScenarioTask<E, R>) {
     const steps = task.pickle.steps;
     const definitions = task.scenarioDefinition.steps;
@@ -259,7 +309,7 @@ const runSteps: <E, R>(task: ScenarioTask<E, R>) => Effect.Effect<unknown, Bdd.R
     return yield* Fn.pipe(
       Arr.zip(definitions, steps),
       Arr.reduce(
-        Effect.succeed<unknown>(undefined) as Effect.Effect<unknown, Bdd.RunError, R>,
+        Effect.succeed<unknown>(undefined) as Effect.Effect<unknown, RunError, R>,
         (state, [definition, step], index) =>
           Effect.flatMap(state, (previous) => runStep(task, definition, step, index, previous)),
       ),
@@ -268,13 +318,13 @@ const runSteps: <E, R>(task: ScenarioTask<E, R>) => Effect.Effect<unknown, Bdd.R
 
 const runStep: <E, R>(
   task: ScenarioTask<E, R>,
-  stepDefinition: Bdd.AnyStep,
+  stepDefinition: AnyStep<R>,
   step: PickleStep,
   index: number,
   state: unknown,
-) => Effect.Effect<unknown, Bdd.RunError, R> = Effect.fnUntraced(function* <E, R>(
+) => Effect.Effect<unknown, RunError, R> = Effect.fnUntraced(function* <E, R>(
   task: ScenarioTask<E, R>,
-  stepDefinition: Bdd.AnyStep,
+  stepDefinition: AnyStep<R>,
   step: PickleStep,
   index: number,
   state: unknown,
@@ -304,7 +354,7 @@ const runStep: <E, R>(
 
 const verifyStep = (
   task: ScenarioTask<unknown, unknown>,
-  stepDefinition: Bdd.AnyStep,
+  stepDefinition: AnyStep,
   step: PickleStep,
   kind: ConcreteStepKind,
   index: number,
@@ -336,7 +386,7 @@ const verifyStep = (
 };
 
 const decodeArgument = (
-  stepDefinition: Bdd.AnyStep,
+  stepDefinition: AnyStep,
   scenario: string,
   step: PickleStep,
   source: Parser.SourceIndex,
@@ -390,7 +440,7 @@ const decodeArgument = (
 };
 
 const validateFeatureDefinition = <E, R>(
-  featureDefinition: Bdd.Feature<E, R>,
+  featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
 ): Effect.Effect<void, MatchError> =>
   featureDefinition.name === feature.name
@@ -410,7 +460,7 @@ export const firstDuplicateName = (names: ReadonlyArray<string>): Option.Option<
     Arr.findFirst((name, index) => Arr.contains(name)(Arr.take(names, index))),
   );
 
-const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: Bdd.Feature<E, R>) =>
+const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefinition<E, R>) =>
   Fn.pipe(
     Arr.map(featureDefinition.scenarios, (scenario) => scenario.name),
     firstDuplicateName,
@@ -428,8 +478,8 @@ const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: Bdd.Feature<
   );
 
 const scenarioDefinitionMap = <E, R>(
-  featureDefinition: Bdd.Feature<E, R>,
-): ReadonlyMap<string, Bdd.Scenario<any, any, any>> =>
+  featureDefinition: FeatureDefinition<E, R>,
+): ReadonlyMap<string, ScenarioDefinition<R>> =>
   new Map(Arr.map(featureDefinition.scenarios, (scenario) => [scenario.name, scenario] as const));
 
 /** @internal */
