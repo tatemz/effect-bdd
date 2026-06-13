@@ -58,12 +58,12 @@ interface AnyStep<R = unknown> {
 }
 
 interface ScenarioDefinition<R = unknown> {
-  readonly name: string;
+  readonly title: string;
   readonly steps: ReadonlyArray<AnyStep<R>>;
 }
 
 interface FeatureDefinition<E, R> {
-  readonly name: string;
+  readonly title: string;
   readonly scenarios: ReadonlyArray<ScenarioDefinition<R>>;
   readonly _E?: E;
   readonly _R?: R;
@@ -241,7 +241,7 @@ const buildScenarioTasks = <E, R>(
             scenario: entry.scenarioName,
             step: entry.scenarioName,
             line: entry.scenarioLine,
-            candidates: Arr.map(featureDefinition.scenarios, (scenario) => scenario.name),
+            candidates: Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
           });
         }
         return Effect.succeed({
@@ -268,7 +268,7 @@ const buildScenarioTasks = <E, R>(
     const usedScenarioNames = Arr.map(resolved, (entry) => entry.scenarioName);
     const unused = Arr.filter(
       featureDefinition.scenarios,
-      (scenario) => !Arr.contains(scenario.name)(usedScenarioNames),
+      (scenario) => !Arr.contains(scenario.title)(usedScenarioNames),
     );
     return yield* Fn.pipe(
       Arr.head(unused),
@@ -276,9 +276,9 @@ const buildScenarioTasks = <E, R>(
         onNone: () => Effect.succeed(tasks),
         onSome: (scenario) =>
           matchErrorEffect({
-            message: `Scenario chain has no matching source scenario: ${scenario.name}`,
-            scenario: scenario.name,
-            step: scenario.name,
+            message: `Scenario chain has no matching source scenario: ${scenario.title}`,
+            scenario: scenario.title,
+            step: scenario.title,
             line: feature.line,
             candidates: Arr.map(resolved, (entry) => entry.scenarioName),
           }),
@@ -487,14 +487,14 @@ const validateFeatureDefinition = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
 ): Effect.Effect<void, MatchError> =>
-  featureDefinition.name === feature.name
+  featureDefinition.title === feature.name
     ? Effect.void
     : matchErrorEffect({
-        message: `Feature definition "${featureDefinition.name}" does not match Gherkin feature "${feature.name}"`,
+        message: `Feature definition "${featureDefinition.title}" does not match Gherkin feature "${feature.name}"`,
         scenario: "",
         step: feature.name,
         line: feature.line,
-        candidates: [featureDefinition.name],
+        candidates: [featureDefinition.title],
       });
 
 /** @internal */
@@ -506,7 +506,7 @@ export const firstDuplicateName = (names: ReadonlyArray<string>): Option.Option<
 
 const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefinition<E, R>) =>
   Fn.pipe(
-    Arr.map(featureDefinition.scenarios, (scenario) => scenario.name),
+    Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
     firstDuplicateName,
     Option.match({
       onNone: () => Effect.void,
@@ -524,7 +524,7 @@ const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefin
 const scenarioDefinitionMap = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
 ): ReadonlyMap<string, ScenarioDefinition<R>> =>
-  new Map(Arr.map(featureDefinition.scenarios, (scenario) => [scenario.name, scenario] as const));
+  new Map(Arr.map(featureDefinition.scenarios, (scenario) => [scenario.title, scenario] as const));
 
 /** @internal */
 const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {

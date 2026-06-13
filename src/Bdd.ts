@@ -196,7 +196,7 @@ export interface Scenario<State = void, E = never, R = never> extends Pipeable {
   <E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0>;
   readonly [ScenarioTypeId]: typeof ScenarioTypeId;
   readonly _State?: (_: State) => State;
-  readonly name: string;
+  readonly title: string;
   readonly steps: ReadonlyArray<AnyStep>;
 }
 
@@ -210,7 +210,7 @@ export interface Feature<E = never, R = never> extends Pipeable {
   readonly [FeatureTypeId]: typeof FeatureTypeId;
   readonly _E?: E;
   readonly _R?: R;
-  readonly name: string;
+  readonly title: string;
   readonly scenarios: ReadonlyArray<Scenario<any, any, any>>;
 }
 
@@ -610,31 +610,35 @@ const StepProto = {
 };
 
 const makeFeature = <E, R>(
-  name: string,
+  title: string,
   scenarios: ReadonlyArray<Scenario<any, any, any>>,
 ): Feature<E, R> => {
   const feature = Object.create(FeatureProto) as Feature<E, R> & {
-    name: string;
+    title: string;
     scenarios: ReadonlyArray<Scenario<any, any, any>>;
   };
-  feature.name = name;
+  feature.title = title;
   feature.scenarios = scenarios;
   return feature;
 };
 
 const makeScenario = <State, E, R>(
-  name: string,
+  title: string,
   steps: ReadonlyArray<AnyStep>,
 ): Scenario<State, E, R> => {
   const appendScenario = ((self: Feature<unknown, unknown>) =>
-    makeFeature(self.name, [
+    makeFeature(self.title, [
       ...self.scenarios,
       appendScenario as Scenario<State, E, R>,
     ])) as Scenario<State, E, R>;
   Object.setPrototypeOf(appendScenario, ScenarioProto);
-  Object.defineProperty(appendScenario, "name", { value: name });
-  (appendScenario as Scenario<State, E, R> & { steps: ReadonlyArray<AnyStep> }).steps = steps;
-  return appendScenario;
+  const self = appendScenario as Scenario<State, E, R> & {
+    title: string;
+    steps: ReadonlyArray<AnyStep>;
+  };
+  self.title = title;
+  self.steps = steps;
+  return self;
 };
 
 interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
@@ -649,7 +653,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
 ): Step<Kind, In, Out, E, R, Captures, Argument> => {
   const step = ((self: Scenario<In, unknown, unknown>) =>
-    makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
+    makeScenario(self.title, [...self.steps, step as AnyStep])) as Step<
     Kind,
     In,
     Out,

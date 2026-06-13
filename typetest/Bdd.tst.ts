@@ -42,7 +42,7 @@ describe("Bdd", () => {
 
     expect(feature).type.toBeAssignableTo<Bdd.Feature>();
     expect<{
-      readonly name: string;
+      readonly title: string;
       readonly scenarios: ReadonlyArray<never>;
     }>().type.not.toBeAssignableTo<Bdd.Feature>();
   });
@@ -58,6 +58,7 @@ describe("Bdd", () => {
     const scenario = Bdd.scenario("Creating a counter").pipe(givenNoCounter, whenCreated, thenZero);
 
     expect(scenario).type.toBe<Bdd.Scenario<{ readonly value: number }, never, never>>();
+    expect(scenario.title).type.toBe<string>();
   });
 
   test("scenario pipe rejects incompatible step state", () => {

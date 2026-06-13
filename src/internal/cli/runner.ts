@@ -71,7 +71,7 @@ const buildScenarioTasks: (
     definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
   ) {
     const parsed = yield* Parser.parse(source.source, source.path);
-    const matches = Arr.filter(definitions, (definition) => definition.name === parsed.name);
+    const matches = Arr.filter(definitions, (definition) => definition.title === parsed.name);
     if (matches.length > 1) {
       return yield* Effect.fail(
         new DiscoveryError({
@@ -114,13 +114,13 @@ const buildScenarioTasks: (
     if (duplicateScenario !== undefined) {
       return yield* Effect.fail(
         new DiscoveryError({
-          message: `Duplicate scenario chain name in "${definition.name}": ${duplicateScenario}`,
+          message: `Duplicate scenario chain name in "${definition.title}": ${duplicateScenario}`,
         }),
       );
     }
 
     const scenarioDefinitions = new Map(
-      Arr.map(definition.scenarios, (scenario) => [scenario.name, scenario] as const),
+      Arr.map(definition.scenarios, (scenario) => [scenario.title, scenario] as const),
     );
     const built = Arr.map(parsed.pickles, (pickle, scenarioIndex) =>
       buildScenarioTask(source, parsed, definition, scenarioDefinitions, pickle, scenarioIndex),
@@ -134,13 +134,13 @@ const buildScenarioTasks: (
     );
     const unused = Fn.pipe(
       definition.scenarios,
-      Arr.filter((scenario) => !Arr.contains(scenario.name)(usedScenarioNames)),
+      Arr.filter((scenario) => !Arr.contains(scenario.title)(usedScenarioNames)),
       Arr.map(
         (scenario): CliDiagnostic => ({
           _tag: "UnusedScenarioDefinition",
-          featureName: definition.name,
-          scenarioName: scenario.name,
-          message: `Scenario chain exported but no source scenario matched: ${definition.name} / ${scenario.name}`,
+          featureName: definition.title,
+          scenarioName: scenario.title,
+          message: `Scenario chain exported but no source scenario matched: ${definition.title} / ${scenario.title}`,
         }),
       ),
     );
@@ -148,7 +148,7 @@ const buildScenarioTasks: (
     return {
       tasks,
       diagnostics: Arr.appendAll(unmatched, unused),
-      matchedFeatureNames: [definition.name],
+      matchedFeatureNames: [definition.title],
     };
   });
 
@@ -329,19 +329,19 @@ const unusedFeatureDefinitions = (
 ): ReadonlyArray<CliDiagnostic> =>
   Fn.pipe(
     definitions,
-    Arr.filter((definition) => !Arr.contains(definition.name)(matchedFeatureNames)),
+    Arr.filter((definition) => !Arr.contains(definition.title)(matchedFeatureNames)),
     Arr.map(
       (definition): CliDiagnostic => ({
         _tag: "UnusedFeatureDefinition",
-        featureName: definition.name,
-        message: `Feature definition exported but no feature file matched: ${definition.name}`,
+        featureName: definition.title,
+        message: `Feature definition exported but no feature file matched: ${definition.title}`,
       }),
     ),
   );
 
 const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): string | undefined =>
   Fn.pipe(
-    Arr.map(definition.scenarios, (scenario) => scenario.name),
+    Arr.map(definition.scenarios, (scenario) => scenario.title),
     CoreRunner.firstDuplicateName,
     Option.getOrUndefined,
   );

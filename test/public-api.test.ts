@@ -4,6 +4,16 @@ import { Bdd } from "effect-bdd";
 import { MatchError, ParseError, StepError, StepTimeoutError } from "effect-bdd/Errors";
 
 describe("public API", () => {
+  describe("model titles", () => {
+    it("exposes feature and scenario titles as domain labels", () => {
+      const scenario = Bdd.scenario("Stubbed increment");
+      const feature = Bdd.feature("Counter").pipe(scenario);
+
+      assert.strictEqual(scenario.title, "Stubbed increment");
+      assert.strictEqual(feature.title, "Counter");
+    });
+  });
+
   describe("custom GherkinCompiler layer", () => {
     // A compiled feature equivalent to:
     //   Feature: Counter

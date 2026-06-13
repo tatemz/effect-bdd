@@ -54,13 +54,15 @@ Feature: Counter
 
 A feature is made of explicit scenario chains:
 
-- `Bdd.feature(name)` creates a feature definition.
-- `Bdd.scenario(name)` creates a pipeable scenario chain.
+- `Bdd.feature(title)` creates a feature definition.
+- `Bdd.scenario(title)` creates a pipeable scenario chain.
 - `Bdd.given`, `Bdd.when`, `Bdd.then`, and `Bdd.step` create reusable step values.
 - Steps pipe into scenarios; scenarios pipe into features.
 - Each step returns an `Effect` containing the next state.
 - State may evolve across a scenario: `void -> Draft -> Result -> Asserted`.
 - There is no feature-level `initial` state. The first step sets up the first useful state.
+
+Feature and scenario definitions expose their Gherkin labels as `title`.
 
 The runner parses the feature source, compiles it with Cucumber, pairs each source scenario with the `Bdd.scenario(...)` chain of the same name, verifies every step in order, then runs the chain.
 
