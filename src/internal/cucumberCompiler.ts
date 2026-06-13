@@ -3,7 +3,7 @@ import { IdGenerator } from "@cucumber/messages";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { isError } from "effect/Predicate";
+import * as Predicate from "effect/Predicate";
 import { ParseError } from "../Errors.ts";
 import { GherkinCompiler, type ParsedSource } from "./parser.ts";
 
@@ -29,7 +29,7 @@ const compileWithCucumber = (source: string, uri: string): ParsedSource => {
 const parseErrorFromCause = (cause: unknown): ParseError => {
   const location = causeLocation(cause);
   return new ParseError({
-    message: isError(cause) ? cause.message : String(cause),
+    message: Predicate.isError(cause) ? cause.message : String(cause),
     line: location?.line ?? 1,
     column: location?.column ?? 1,
   });

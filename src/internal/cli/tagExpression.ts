@@ -1,6 +1,6 @@
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Str from "effect/String";
 import { DiscoveryError } from "./errors.ts";
@@ -135,7 +135,7 @@ const parsePrimary = (tokens: ReadonlyArray<string>, index: number): ParseResult
         }
       : undefined;
   }
-  return pipe(token, Str.startsWith("@"))
+  return Fn.pipe(token, Str.startsWith("@"))
     ? {
         expression: {
           _tag: "Tag",
@@ -164,13 +164,13 @@ const evaluate = (expression: Expression, tags: ReadonlyArray<string>): boolean 
 };
 
 const tokenize = (expression: string): ReadonlyArray<string> | undefined => {
-  const matches = pipe(
+  const matches = Fn.pipe(
     expression,
     Str.match(/\(|\)|\b(?:and|or|not)\b|@[A-Za-z0-9][A-Za-z0-9_-]*/g),
     Option.getOrElse((): ReadonlyArray<string> => []),
   );
-  const normalized = pipe(expression, Str.replace(/\s+/g, ""));
-  const matched = pipe(matches, Arr.join(""));
+  const normalized = Fn.pipe(expression, Str.replace(/\s+/g, ""));
+  const matched = Fn.pipe(matches, Arr.join(""));
   return normalized === matched ? matches : undefined;
 };
 

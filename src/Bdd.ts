@@ -5,8 +5,9 @@ import * as Arr from "effect/Array";
 import type * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
-import { type Pipeable, pipeArguments } from "effect/Pipeable";
-import { hasProperty } from "effect/Predicate";
+import type { Pipeable } from "effect/Pipeable";
+import * as PipeableRuntime from "effect/Pipeable";
+import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
 import { MatchError, ParseError, StepError } from "./Errors.ts";
 import * as cucumberCompiler from "./internal/cucumberCompiler.ts";
@@ -218,7 +219,7 @@ export interface Feature<E = never, R = never> extends Pipeable {
  * @since 0.2.0
  */
 export const isFeature = (u: unknown): u is Feature<unknown, unknown> =>
-  hasProperty(u, FeatureTypeId);
+  Predicate.hasProperty(u, FeatureTypeId);
 
 /**
  * Result returned after all scenarios pass.
@@ -542,7 +543,7 @@ const makeFeature = <E, R>(
   name,
   scenarios,
   pipe() {
-    return pipeArguments(this, arguments);
+    return PipeableRuntime.pipeArguments(this, arguments);
   },
 });
 
@@ -561,7 +562,7 @@ const makeScenario = <State, E, R>(
     steps: { value: steps },
     pipe: {
       value() {
-        return pipeArguments(this, arguments);
+        return PipeableRuntime.pipeArguments(this, arguments);
       },
     },
   });

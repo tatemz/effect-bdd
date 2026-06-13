@@ -10,7 +10,7 @@ import type {
 import * as Arr from "effect/Array";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
@@ -70,7 +70,7 @@ export const parse = (
   uri = "<inline>",
 ): Effect.Effect<CompiledFeature, ParseError, GherkinCompiler> =>
   Effect.flatMap(GherkinCompiler, (compiler) =>
-    pipe(compiler.compile(source, uri), Effect.flatMap(toFeature)),
+    Fn.pipe(compiler.compile(source, uri), Effect.flatMap(toFeature)),
   );
 
 const toFeature: (parsed: ParsedSource) => Effect.Effect<CompiledFeature, ParseError> =
@@ -102,15 +102,15 @@ interface ScenarioEntry {
 }
 
 const indexDocument = (document: GherkinDocument): SourceIndex => {
-  const entries = pipe(document.feature?.children ?? [], Arr.flatMap(indexFeatureChild));
+  const entries = Fn.pipe(document.feature?.children ?? [], Arr.flatMap(indexFeatureChild));
   return {
     steps: new Map(
-      pipe(
+      Fn.pipe(
         entries,
         Arr.flatMap(({ steps }) => steps),
       ),
     ),
-    scenarios: new Map(pipe(entries, Arr.filterMap(scenarioEntry))),
+    scenarios: new Map(Fn.pipe(entries, Arr.filterMap(scenarioEntry))),
   };
 };
 
@@ -128,7 +128,7 @@ const indexScenarioChild = (
   child: CucumberFeatureChild | CucumberRuleChild,
   rule: CucumberRule | undefined,
 ): ChildIndex => ({
-  steps: pipe(
+  steps: Fn.pipe(
     [...(child.background?.steps ?? []), ...(child.scenario?.steps ?? [])],
     Arr.map((step) => [step.id, step] as const),
   ),
@@ -144,7 +144,7 @@ const scenarioEntry = (
 
 /** @internal */
 export const findScenario = (pickle: Pickle, index: SourceIndex) =>
-  pipe(
+  Fn.pipe(
     pickle.astNodeIds,
     Option.liftPredicate((ids): ids is ReadonlyArray<string> => ids.length > 0),
     Option.flatMap(() => Arr.findFirst(pickle.astNodeIds, (id) => index.scenarios.has(id))),
@@ -156,7 +156,7 @@ export const findStep = (
   pickleStep: { readonly astNodeIds: ReadonlyArray<string> },
   index: SourceIndex,
 ): CucumberStep | undefined =>
-  pipe(
+  Fn.pipe(
     pickleStep.astNodeIds,
     Arr.findFirst((id) => index.steps.has(id)),
     Option.flatMap((id) => Option.fromNullishOr(index.steps.get(id))),

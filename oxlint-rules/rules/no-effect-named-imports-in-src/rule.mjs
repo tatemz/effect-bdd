@@ -3,7 +3,12 @@ import { createRule, report } from "../shared/rule.mjs";
 
 export const noEffectNamedImportsInSrcRuleName = "no-effect-named-imports-in-src";
 
-const effectPackagePattern = /^(?:effect|@effect\/[a-z-]+)$/;
+const effectPackagePattern = /^(?:effect(?:\/[^"']+)?|@effect\/[^"']+)$/;
+
+const isAllowedSpecifier = (importDeclaration, specifier) =>
+  specifier.type === "ImportNamespaceSpecifier" ||
+  (specifier.type === "ImportSpecifier" &&
+    (importDeclaration.importKind === "type" || specifier.importKind === "type"));
 
 export const noEffectNamedImportsInSrc = createRule({
   description: "Require namespace imports for Effect packages.",
@@ -18,7 +23,7 @@ export const noEffectNamedImportsInSrc = createRule({
         if (typeof source !== "string" || !effectPackagePattern.test(source)) {
           return;
         }
-        if (node.specifiers.some((specifier) => specifier.type !== "ImportNamespaceSpecifier")) {
+        if (node.specifiers.some((specifier) => !isAllowedSpecifier(node, specifier))) {
           report(context, node, "effectImport");
         }
       },

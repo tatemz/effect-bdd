@@ -1,7 +1,7 @@
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import type * as Path from "effect/Path";
 import * as Record_ from "effect/Record";
 import { isFeature } from "../../Bdd.ts";
@@ -26,7 +26,7 @@ export const loadFeatureSources: (
     "No feature files matched --features",
   );
   return yield* Effect.forEach(paths, (path) =>
-    pipe(
+    Fn.pipe(
       fs.readFileString(path),
       Effect.map((source): FeatureSource => ({ path, source })),
       Effect.mapError(
@@ -55,7 +55,7 @@ export const loadFeatureDefinitions: (
     "No step definition modules matched --steps",
   );
   const definitions = yield* Effect.forEach(paths, (path) =>
-    pipe(loader.load(path), Effect.map(extractFeatureDefinitions)),
+    Fn.pipe(loader.load(path), Effect.map(extractFeatureDefinitions)),
   );
   return yield* nonEmptyDefinitions(Arr.flatten(definitions));
 });
@@ -80,7 +80,7 @@ const nonEmptyDefinitions = (
 const extractFeatureDefinitions = (
   module: Record<string, unknown>,
 ): ReadonlyArray<Bdd.Feature<unknown, never>> =>
-  pipe(
+  Fn.pipe(
     Record_.values(module),
     Arr.filter((value): value is Bdd.Feature<unknown, never> => isFeature(value)),
   );

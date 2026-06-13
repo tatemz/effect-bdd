@@ -2,10 +2,10 @@ import * as Arr from "effect/Array";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Inspectable from "effect/Inspectable";
 import * as Path from "effect/Path";
-import { isError } from "effect/Predicate";
+import * as Predicate from "effect/Predicate";
 import * as Str from "effect/String";
 import { ReporterError } from "./errors.ts";
 import type { CliDiagnostic, CliRunResult, ReporterName, ScenarioResult } from "./models.ts";
@@ -67,7 +67,7 @@ export const emitAll: (
         concurrency: "unbounded",
       },
     );
-    const failures = pipe(
+    const failures = Fn.pipe(
       exits,
       Arr.filter((exit) => exit._tag === "Failure"),
       Arr.map((exit) => exit.cause),
@@ -148,13 +148,13 @@ const renderText = (result: CliRunResult, verbose: boolean): string => {
   ];
   const scenarioLines = verbose
     ? Arr.map(result.results, renderScenarioText)
-    : pipe(
+    : Fn.pipe(
         result.results,
         Arr.filter((scenario) => scenario.outcome._tag === "Failed"),
         Arr.map(renderScenarioText),
       );
   const diagnosticLines = renderDiagnosticsText(result.diagnostics);
-  return pipe(
+  return Fn.pipe(
     summary,
     Arr.appendAll(scenarioLines),
     Arr.appendAll(diagnosticLines),
@@ -195,11 +195,11 @@ const renderHtml = (result: CliRunResult): string =>
         <tr><th>Status</th><th>Source</th><th>Feature</th><th>Scenario</th><th>Tags</th><th>Duration</th><th>Error</th></tr>
       </thead>
       <tbody>
-${pipe(result.results, Arr.map(renderScenarioHtml), Arr.join("\n"))}
+${Fn.pipe(result.results, Arr.map(renderScenarioHtml), Arr.join("\n"))}
       </tbody>
     </table>
     <h2>Diagnostics</h2>
-    <pre>${escapeHtml(pipe(renderDiagnosticsText(result.diagnostics), Arr.join("\n")))}</pre>
+    <pre>${escapeHtml(Fn.pipe(renderDiagnosticsText(result.diagnostics), Arr.join("\n")))}</pre>
   </body>
 </html>
 `;
@@ -212,7 +212,7 @@ const renderScenarioHtml = (result: ScenarioResult): string => {
           <td>${escapeHtml(`${result.task.featurePath}:${result.task.core.scenarioLine}`)}</td>
           <td>${escapeHtml(result.task.core.featureName)}</td>
           <td>${escapeHtml(renderScenarioName(result))}</td>
-          <td>${escapeHtml(pipe(result.task.core.tags, Arr.join(", ")))}</td>
+          <td>${escapeHtml(Fn.pipe(result.task.core.tags, Arr.join(", ")))}</td>
           <td>${result.durationMillis}ms</td>
           <td>${escapeHtml(error)}</td>
         </tr>`;
@@ -224,14 +224,14 @@ const renderDiagnosticsText = (
   if (diagnostics.length === 0) {
     return [];
   }
-  const unmatched = pipe(
+  const unmatched = Fn.pipe(
     diagnostics,
     Arr.filter(
       (diagnostic) =>
         diagnostic._tag === "UnmatchedFeature" || diagnostic._tag === "UnmatchedScenario",
     ),
   );
-  const unused = pipe(
+  const unused = Fn.pipe(
     diagnostics,
     Arr.filter(
       (diagnostic) =>
@@ -239,7 +239,7 @@ const renderDiagnosticsText = (
         diagnostic._tag === "UnusedScenarioDefinition",
     ),
   );
-  return pipe(
+  return Fn.pipe(
     unmatched.length === 0 ? [] : ["", "Unmatched source:"],
     Arr.appendAll(Arr.map(unmatched, renderDiagnosticText)),
     Arr.appendAll(unused.length === 0 ? [] : ["", "Unused definitions:"]),
@@ -307,8 +307,8 @@ const renderJunit = (result: CliRunResult): string => {
 <testsuite name="effect-bdd" tests="${result.summary.total + diagnostics}" failures="${
     result.summary.failed + diagnostics
   }" time="${result.summary.durationMillis / 1000}">
-${pipe(result.results, Arr.map(renderJunitScenario), Arr.join("\n"))}
-${pipe(result.diagnostics, Arr.map(renderJunitDiagnostic), Arr.join("\n"))}
+${Fn.pipe(result.results, Arr.map(renderJunitScenario), Arr.join("\n"))}
+${Fn.pipe(result.diagnostics, Arr.map(renderJunitDiagnostic), Arr.join("\n"))}
 </testsuite>
 `;
 };
@@ -352,12 +352,12 @@ const renderError = (error: {
 const renderCause = (cause: unknown): string | undefined =>
   cause === undefined
     ? undefined
-    : isError(cause)
+    : Predicate.isError(cause)
       ? cause.message
       : Inspectable.toStringUnknown(cause, 0);
 
 const escapeHtml = (text: string): string =>
-  pipe(
+  Fn.pipe(
     text,
     Str.replaceAll("&", "&amp;"),
     Str.replaceAll("<", "&lt;"),

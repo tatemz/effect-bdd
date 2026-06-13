@@ -65,7 +65,7 @@ export class MatchError extends Schema.TaggedErrorClass<MatchError>()("MatchErro
   step: Schema.String,
   line: Schema.Number,
   candidates: Schema.Array(Schema.String),
-  cause: Schema.optional(Schema.Unknown),
+  cause: Schema.optionalKey(Schema.Unknown),
 }) {}
 
 /**

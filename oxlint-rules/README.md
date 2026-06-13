@@ -15,3 +15,10 @@ Layout:
 
 Boundary exceptions are explicit rule options. For example, the JSON reporter is
 allowed to call `JSON.stringify` because it is the serialization boundary.
+
+The rules bias toward typed Effect boundaries:
+
+- Promise boundaries use `Effect.tryPromise({ try, catch })`.
+- Schema boundaries use Effect-returning codecs.
+- Source modules return Effects instead of running them.
+- Expected failures stay typed instead of becoming defects.

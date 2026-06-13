@@ -2,7 +2,7 @@ import * as Arr from "effect/Array";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Order from "effect/Order";
@@ -38,7 +38,7 @@ export class GlobResolver extends Context.Service<
             const matches = yield* Effect.forEach(patterns, (pattern) =>
               resolvePattern(fs, path, pattern),
             );
-            return pipe(matches, Arr.flatten, Arr.dedupe, Arr.sort(Order.String));
+            return Fn.pipe(matches, Arr.flatten, Arr.dedupe, Arr.sort(Order.String));
           }),
         });
       }),
@@ -50,11 +50,11 @@ const resolvePattern = (
   path: Path.Path,
   pattern: string,
 ): Effect.Effect<ReadonlyArray<string>, DiscoveryError> => {
-  const segments = pipe(
+  const segments = Fn.pipe(
     Str.split(path.resolve(pattern), "/"),
     Arr.filter((segment) => segment.length > 0),
   );
-  return pipe(
+  return Fn.pipe(
     Arr.findFirstIndex(segments, hasWildcard),
     Option.match({
       onNone: () => fileOrEmpty(fs, `/${Arr.join(segments, "/")}`),
@@ -77,7 +77,7 @@ const matchWildcards = Effect.fnUntraced(function* (
   segments: ReadonlyArray<string>,
 ) {
   const matcher = compileMatcher(segments);
-  const entries = yield* pipe(
+  const entries = yield* Fn.pipe(
     fs.readDirectory(base, { recursive: true }),
     Effect.orElseSucceed((): Array<string> => []),
   );
@@ -87,11 +87,11 @@ const matchWildcards = Effect.fnUntraced(function* (
 });
 
 const hasWildcard = (segment: string): boolean =>
-  pipe(segment, Str.includes("*")) || pipe(segment, Str.includes("?"));
+  Fn.pipe(segment, Str.includes("*")) || Fn.pipe(segment, Str.includes("?"));
 
 const compileMatcher = (segments: ReadonlyArray<string>): RegExp =>
   new RegExp(
-    `^${pipe(
+    `^${Fn.pipe(
       segments,
       Arr.map((segment, index) => {
         const last = index === segments.length - 1;
@@ -106,7 +106,7 @@ const compileMatcher = (segments: ReadonlyArray<string>): RegExp =>
   );
 
 const segmentToRegExp = (segment: string): string =>
-  pipe(
+  Fn.pipe(
     segment,
     Str.replace(/[.+^${}()|[\]\\]/g, "\\$&"),
     Str.replace(/\*/g, "[^/]*"),

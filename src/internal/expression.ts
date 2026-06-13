@@ -1,5 +1,5 @@
 import * as Arr from "effect/Array";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
@@ -40,7 +40,7 @@ export const makeMatcher = <A>(
   strings: TemplateStringsArray,
   captures: ReadonlyArray<Capture<string, unknown>>,
 ): Matcher<A> => {
-  const state = pipe(
+  const state = Fn.pipe(
     strings,
     Arr.reduce(initialMatcherState, (state, literal, index) =>
       appendTemplatePart(state, literal, captures[index]),
@@ -96,7 +96,7 @@ const decodeCaptures = (
   if (index >= names.length) {
     return Option.some(out);
   }
-  return pipe(
+  return Fn.pipe(
     decoders[index](match[index + 1]),
     Option.flatMap((value) =>
       decodeCaptures(names, decoders, match, index + 1, Record.set(out, names[index], value)),

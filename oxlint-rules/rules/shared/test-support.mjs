@@ -5,6 +5,14 @@ export const bindRuleTesterToVitest = ({ describe, it }) => {
   RuleTester.it = it;
 };
 
-export const createRuleTester = () => new RuleTester();
+export const createRuleTester = () =>
+  new RuleTester({
+    languageOptions: {
+      sourceType: "module",
+      parserOptions: {
+        lang: "ts",
+      },
+    },
+  });
 
 export const error = (messageId) => [{ messageId }];

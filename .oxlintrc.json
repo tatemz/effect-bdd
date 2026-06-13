@@ -31,13 +31,19 @@
     {
       "files": ["src/**"],
       "rules": {
+        "effect-bdd/no-async-await-in-src": "error",
+        "effect-bdd/no-effect-defect-apis-in-src": "error",
+        "effect-bdd/no-effect-runners-in-src": "error",
         "effect-bdd/no-for-loops-in-src": "error",
         "effect-bdd/no-native-array-methods-in-src": "error",
         "effect-bdd/no-native-string-methods-in-src": "error",
         "effect-bdd/no-native-object-methods-in-src": "error",
         "effect-bdd/no-effect-named-imports-in-src": "error",
+        "effect-bdd/no-schema-optional": "error",
+        "effect-bdd/no-sync-schema-boundaries": "error",
         "effect-bdd/no-throw-statements": "error",
-        "effect-bdd/no-try-catch": "error"
+        "effect-bdd/no-try-catch": "error",
+        "effect-bdd/no-untyped-try-promise": "error"
       }
     },
     {

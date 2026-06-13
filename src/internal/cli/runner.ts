@@ -2,7 +2,7 @@ import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 import * as Result from "effect/Result";
@@ -43,7 +43,7 @@ export const run: (
   const startedAt = yield* Clock.currentTimeMillis;
   const sources = yield* loadFeatureSources(options.features);
   const definitions = yield* loadFeatureDefinitions(options.steps);
-  const built = yield* pipe(
+  const built = yield* Fn.pipe(
     sources,
     Effect.forEach((source) => buildScenarioTasks(source, definitions)),
     Effect.map(combineBuiltScenarios),
@@ -51,7 +51,7 @@ export const run: (
   const filteredTasks = yield* filterTasks(options, built.tasks);
   const results = yield* runScenarios(options, filteredTasks);
   const finishedAt = yield* Clock.currentTimeMillis;
-  const diagnostics: ReadonlyArray<CliDiagnostic> = pipe(
+  const diagnostics: ReadonlyArray<CliDiagnostic> = Fn.pipe(
     built.diagnostics,
     Arr.appendAll(unusedFeatureDefinitions(definitions, built.matchedFeatureNames)),
   );
@@ -83,7 +83,7 @@ const buildScenarioTasks: (
     if (definition === undefined) {
       return {
         tasks: [],
-        diagnostics: pipe(
+        diagnostics: Fn.pipe(
           [
             {
               _tag: "UnmatchedFeature",
@@ -132,7 +132,7 @@ const buildScenarioTasks: (
     const unmatched = Arr.filterMap(built, (item) =>
       item._tag === "Diagnostic" ? Result.succeed(item.diagnostic) : Result.fail(undefined),
     );
-    const unused = pipe(
+    const unused = Fn.pipe(
       definition.scenarios,
       Arr.filter((scenario) => !Arr.contains(scenario.name)(usedScenarioNames)),
       Arr.map(
@@ -165,14 +165,14 @@ const buildScenarioTask = (
   scenarioIndex: number,
 ): BuiltScenario => {
   const sourceScenario = Parser.findScenario(pickle, parsed.source);
-  const scenarioName = pipe(
+  const scenarioName = Fn.pipe(
     sourceScenario,
     Option.map(({ scenario }) => scenario.name),
     Option.getOrElse(() => pickle.name),
   );
   const scenarioLine =
     pickle.location?.line ??
-    pipe(
+    Fn.pipe(
       sourceScenario,
       Option.map(({ scenario }) => scenario.location.line),
       Option.getOrElse(() => parsed.line),
@@ -191,7 +191,7 @@ const buildScenarioTask = (
       },
     };
   }
-  const rule = pipe(
+  const rule = Fn.pipe(
     sourceScenario,
     Option.map(({ rule }) => rule),
     Option.getOrUndefined,
@@ -247,7 +247,7 @@ const runScenarios = (
 const runScenariosFailFast = (
   tasks: ReadonlyArray<ScenarioTask>,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, never> =>
-  pipe(
+  Fn.pipe(
     tasks,
     Arr.matchLeft({
       onEmpty: () => Effect.succeed<ReadonlyArray<ScenarioResult>>([]),
@@ -264,7 +264,7 @@ const filterTasks = (
   options: CliOptions,
   tasks: ReadonlyArray<ScenarioTask>,
 ): Effect.Effect<ReadonlyArray<ScenarioTask>, DiscoveryError> =>
-  pipe(
+  Fn.pipe(
     TagExpression.compileAll(options.filters.tags),
     Effect.map((tagPredicate) => {
       const filtered = Arr.filter(
@@ -283,7 +283,7 @@ const filterTasks = (
 const matchesNameFilter = (patterns: ReadonlyArray<string>, task: ScenarioTask): boolean =>
   patterns.length === 0 ||
   Arr.some(patterns, (pattern) =>
-    pipe(`${task.core.featureName} / ${task.core.scenarioName}`, Str.includes(pattern)),
+    Fn.pipe(`${task.core.featureName} / ${task.core.scenarioName}`, Str.includes(pattern)),
   );
 
 const summarize = (
@@ -302,15 +302,15 @@ const summarize = (
 };
 
 const combineBuiltScenarios = (built: ReadonlyArray<BuiltScenarios>): BuiltScenarios => ({
-  tasks: pipe(
+  tasks: Fn.pipe(
     built,
     Arr.flatMap((item) => item.tasks),
   ),
-  diagnostics: pipe(
+  diagnostics: Fn.pipe(
     built,
     Arr.flatMap((item) => item.diagnostics),
   ),
-  matchedFeatureNames: pipe(
+  matchedFeatureNames: Fn.pipe(
     built,
     Arr.flatMap((item) => item.matchedFeatureNames),
     Arr.dedupe,
@@ -321,7 +321,7 @@ const unusedFeatureDefinitions = (
   definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
   matchedFeatureNames: ReadonlyArray<string>,
 ): ReadonlyArray<CliDiagnostic> =>
-  pipe(
+  Fn.pipe(
     definitions,
     Arr.filter((definition) => !Arr.contains(definition.name)(matchedFeatureNames)),
     Arr.map(
@@ -334,7 +334,7 @@ const unusedFeatureDefinitions = (
   );
 
 const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): string | undefined =>
-  pipe(
+  Fn.pipe(
     Arr.map(definition.scenarios, (scenario) => scenario.name),
     CoreRunner.firstDuplicateName,
     Option.getOrUndefined,

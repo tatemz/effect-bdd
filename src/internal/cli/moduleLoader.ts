@@ -1,9 +1,9 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import { pipe } from "effect/Function";
-import { isError } from "effect/Predicate";
+import * as Predicate from "effect/Predicate";
 import * as Str from "effect/String";
 import { pathToFileURL } from "node:url";
 import { ModuleLoadError } from "./errors.ts";
@@ -32,9 +32,9 @@ export class ModuleLoader extends Context.Service<
 }
 
 const moduleLoadError = (path: string, cause: unknown): ModuleLoadError => {
-  const reason = isError(cause) ? cause.message : String(cause);
+  const reason = Predicate.isError(cause) ? cause.message : String(cause);
   const isTsLoaderFailure =
-    pipe(reason, Str.includes("Unknown file extension")) && pipe(reason, Str.includes(".ts"));
+    Fn.pipe(reason, Str.includes("Unknown file extension")) && Fn.pipe(reason, Str.includes(".ts"));
   return new ModuleLoadError({
     path,
     message: isTsLoaderFailure

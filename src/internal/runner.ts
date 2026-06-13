@@ -2,7 +2,7 @@ import type { Pickle, PickleStep } from "@cucumber/messages";
 import { PickleStepType } from "@cucumber/messages";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
-import { pipe } from "effect/Function";
+import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
@@ -50,7 +50,7 @@ export type ScenarioReport = Bdd.Report["scenarios"][number];
 export const decodeTable = <S extends Schema.Decoder<unknown, never>>(row: S) => {
   const decode = Schema.decodeUnknownEffect(row);
   return (table: DataTableInput): Effect.Effect<ReadonlyArray<S["Type"]>, unknown> =>
-    pipe(
+    Fn.pipe(
       table.rows,
       Arr.map((row) => Arr.map(row.cells, (cell) => cell.value)),
       Arr.matchLeft({
@@ -73,10 +73,10 @@ export const run = <E, R>(
   featureDefinition: Bdd.Feature<E, R>,
   source: string,
 ): Effect.Effect<Bdd.Report, Bdd.RunError, R | Parser.GherkinCompiler> =>
-  pipe(
+  Fn.pipe(
     Parser.parse(source),
     Effect.flatMap((feature) =>
-      pipe(
+      Fn.pipe(
         buildScenarioTasks(featureDefinition, feature),
         Effect.flatMap((tasks) => Effect.forEach(tasks, runScenarioTask)),
         Effect.map(
@@ -106,19 +106,19 @@ const resolvePickle =
     return {
       pickle,
       scenarioIndex,
-      scenarioName: pipe(
+      scenarioName: Fn.pipe(
         source,
         Option.map(({ scenario }) => scenario.name),
         Option.getOrElse(() => pickle.name),
       ),
       scenarioLine:
         pickle.location?.line ??
-        pipe(
+        Fn.pipe(
           source,
           Option.map(({ scenario }) => scenario.location.line),
           Option.getOrElse(() => feature.line),
         ),
-      sourceScenarioId: pipe(
+      sourceScenarioId: Fn.pipe(
         source,
         Option.map(({ scenario }) => scenario.id),
         Option.getOrElse(() => pickle.id),
@@ -134,7 +134,7 @@ const resolveRule = (
       | undefined;
   }>,
 ) =>
-  pipe(
+  Fn.pipe(
     source,
     Option.map(({ rule }) => rule),
     Option.getOrUndefined,
@@ -144,7 +144,7 @@ const duplicateSourceScenario = (
   resolved: ReadonlyArray<ResolvedPickle>,
   entry: ResolvedPickle,
 ): boolean =>
-  pipe(
+  Fn.pipe(
     Arr.take(resolved, entry.scenarioIndex),
     Arr.some(
       (previous) =>
@@ -213,7 +213,7 @@ export const buildScenarioTasks = <E, R>(
       featureDefinition.scenarios,
       (scenario) => !Arr.contains(scenario.name)(usedScenarioNames),
     );
-    return yield* pipe(
+    return yield* Fn.pipe(
       Arr.head(unused),
       Option.match({
         onNone: () => Effect.succeed(tasks),
@@ -233,7 +233,7 @@ export const buildScenarioTasks = <E, R>(
 export const runScenarioTask = <E, R>(
   task: ScenarioTask<E, R>,
 ): Effect.Effect<ScenarioReport, Bdd.RunError, R> =>
-  pipe(
+  Fn.pipe(
     runSteps(task),
     Effect.as({
       name: task.scenarioName,
@@ -256,7 +256,7 @@ const runSteps: <E, R>(task: ScenarioTask<E, R>) => Effect.Effect<unknown, Bdd.R
       });
     }
 
-    return yield* pipe(
+    return yield* Fn.pipe(
       Arr.zip(definitions, steps),
       Arr.reduce(
         Effect.succeed<unknown>(undefined) as Effect.Effect<unknown, Bdd.RunError, R>,
@@ -287,7 +287,7 @@ const runStep: <E, R>(
     step,
     task.source,
   );
-  return yield* pipe(
+  return yield* Fn.pipe(
     stepDefinition.run(captures, argument, state),
     Effect.mapError(
       (cause) =>
@@ -319,7 +319,7 @@ const verifyStep = (
       [stepDefinition.expression.source],
     );
   }
-  return pipe(
+  return Fn.pipe(
     stepDefinition.expression.match(step.text),
     Option.match({
       onNone: () =>
@@ -357,7 +357,7 @@ const decodeArgument = (
   if (stepDefinition.argument._tag === "TableArg") {
     return step.argument?.dataTable === undefined
       ? failStep(`Step "${step.text}" requires a DataTable`, scenario, step, source, candidates)
-      : pipe(
+      : Fn.pipe(
           stepDefinition.argument.decode(step.argument.dataTable),
           Effect.mapError((cause) =>
             matchError(
@@ -374,7 +374,7 @@ const decodeArgument = (
 
   return step.argument?.docString === undefined
     ? failStep(`Step "${step.text}" requires a DocString`, scenario, step, source, candidates)
-    : pipe(
+    : Fn.pipe(
         stepDefinition.argument.decode(step.argument.docString),
         Effect.mapError((cause) =>
           matchError(
@@ -405,13 +405,13 @@ const validateFeatureDefinition = <E, R>(
 
 /** @internal */
 export const firstDuplicateName = (names: ReadonlyArray<string>): Option.Option<string> =>
-  pipe(
+  Fn.pipe(
     names,
     Arr.findFirst((name, index) => Arr.contains(name)(Arr.take(names, index))),
   );
 
 const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: Bdd.Feature<E, R>) =>
-  pipe(
+  Fn.pipe(
     Arr.map(featureDefinition.scenarios, (scenario) => scenario.name),
     firstDuplicateName,
     Option.match({
@@ -454,7 +454,7 @@ const rowObject = (
   headers: ReadonlyArray<string>,
   cells: ReadonlyArray<string>,
 ): Record<string, string> =>
-  pipe(
+  Fn.pipe(
     headers,
     Arr.map((header, index) => [header, cells[index] ?? ""] as const),
     Record.fromEntries,
@@ -466,7 +466,7 @@ const stepKind = (
   step: PickleStep,
   source: Parser.SourceIndex,
 ): Effect.Effect<ConcreteStepKind, ParseError> =>
-  pipe(
+  Fn.pipe(
     concreteStepKind(step),
     Option.match({
       onNone: () =>
