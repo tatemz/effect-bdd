@@ -375,7 +375,13 @@ const withTimeout_ =
   <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     self: Step<Kind, In, Out, E, R, Captures, Argument>,
   ): Step<Kind, In, Out, E, R, Captures, Argument> =>
-    copyStep(self, timeout);
+    makeStep({
+      kind: self.kind,
+      expression: self.expression,
+      ...(self.argument === undefined ? {} : { argument: self.argument }),
+      timeout,
+      run: self.run,
+    });
 
 /**
  * Runs Gherkin source against a feature definition.
@@ -616,9 +622,16 @@ const makeScenario = <State, E, R>(
   return appendScenario;
 };
 
-const copyStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
-  source: Step<Kind, In, Out, E, R, Captures, Argument>,
-  timeout: Duration.Input,
+interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
+  readonly kind: Kind;
+  readonly expression: Expression<Captures>;
+  readonly argument?: StepArg<Argument>;
+  readonly timeout?: Duration.Input;
+  readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
+}
+
+const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+  options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
 ): Step<Kind, In, Out, E, R, Captures, Argument> => {
   const step = ((self: Scenario<In, unknown, unknown>) =>
     makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
@@ -632,11 +645,11 @@ const copyStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   >;
   Object.defineProperties(step, {
     [StepTypeId]: { value: StepTypeId },
-    kind: { value: source.kind },
-    expression: { value: source.expression },
-    ...(source.argument === undefined ? {} : { argument: { value: source.argument } }),
-    timeout: { value: timeout },
-    run: { value: source.run },
+    kind: { value: options.kind },
+    expression: { value: options.expression },
+    ...(options.argument === undefined ? {} : { argument: { value: options.argument } }),
+    ...(options.timeout === undefined ? {} : { timeout: { value: options.timeout } }),
+    run: { value: options.run },
     pipe: {
       value() {
         return PipeableRuntime.pipeArguments(this, arguments);
@@ -666,41 +679,22 @@ const makeStepFactory = <Kind extends StepKind, Captures>(
     const impl = (hasArgument ? second : first) as (
       ...args: ReadonlyArray<unknown>
     ) => Effect.Effect<unknown, unknown, unknown>;
-    const step = ((self: Scenario<unknown, unknown, unknown>) =>
-      makeScenario(self.name, [...self.steps, step as AnyStep])) as Step<
-      Kind,
-      unknown,
-      unknown,
-      unknown,
-      unknown,
-      Captures,
-      unknown
-    >;
-    Object.defineProperties(step, {
-      [StepTypeId]: { value: StepTypeId },
-      kind: { value: kind },
-      expression: { value: matcher },
-      ...(argument === undefined ? {} : { argument: { value: argument } }),
-      run: {
-        value: (captures: Captures, decodedArgument: unknown, state: unknown) =>
-          impl(
-            ...handlerArgs(
-              impl,
-              hasCaptures,
-              argument !== undefined,
-              captures,
-              decodedArgument,
-              state,
-            ),
+    return makeStep({
+      kind,
+      expression: matcher,
+      ...(argument === undefined ? {} : { argument }),
+      run: (captures: Captures, decodedArgument: unknown, state: unknown) =>
+        impl(
+          ...handlerArgs(
+            impl,
+            hasCaptures,
+            argument !== undefined,
+            captures,
+            decodedArgument,
+            state,
           ),
-      },
-      pipe: {
-        value() {
-          return PipeableRuntime.pipeArguments(this, arguments);
-        },
-      },
+        ),
     });
-    return step;
   }) as StepFactory<Captures, Kind>;
   Object.defineProperties(factory, {
     kind: { value: kind },
