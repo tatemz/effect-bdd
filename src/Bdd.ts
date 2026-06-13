@@ -588,17 +588,39 @@ interface CapturedStepFactory<Captures, Kind extends StepKind> {
   ): Step<Kind, In, Out, E, R, Captures, Arg>;
 }
 
-const makeFeature = <E, R>(
-  name: string,
-  scenarios: ReadonlyArray<Scenario<any, any, any>>,
-): Feature<E, R> => ({
+const FeatureProto = {
   [FeatureTypeId]: FeatureTypeId,
-  name,
-  scenarios,
   pipe() {
     return PipeableRuntime.pipeArguments(this, arguments);
   },
-});
+};
+
+const ScenarioProto = {
+  [ScenarioTypeId]: ScenarioTypeId,
+  pipe() {
+    return PipeableRuntime.pipeArguments(this, arguments);
+  },
+};
+
+const StepProto = {
+  [StepTypeId]: StepTypeId,
+  pipe() {
+    return PipeableRuntime.pipeArguments(this, arguments);
+  },
+};
+
+const makeFeature = <E, R>(
+  name: string,
+  scenarios: ReadonlyArray<Scenario<any, any, any>>,
+): Feature<E, R> => {
+  const feature = Object.create(FeatureProto) as Feature<E, R> & {
+    name: string;
+    scenarios: ReadonlyArray<Scenario<any, any, any>>;
+  };
+  feature.name = name;
+  feature.scenarios = scenarios;
+  return feature;
+};
 
 const makeScenario = <State, E, R>(
   name: string,
@@ -609,16 +631,9 @@ const makeScenario = <State, E, R>(
       ...self.scenarios,
       appendScenario as Scenario<State, E, R>,
     ])) as Scenario<State, E, R>;
-  Object.defineProperties(appendScenario, {
-    [ScenarioTypeId]: { value: ScenarioTypeId },
-    name: { value: name },
-    steps: { value: steps },
-    pipe: {
-      value() {
-        return PipeableRuntime.pipeArguments(this, arguments);
-      },
-    },
-  });
+  Object.setPrototypeOf(appendScenario, ScenarioProto);
+  Object.defineProperty(appendScenario, "name", { value: name });
+  (appendScenario as Scenario<State, E, R> & { steps: ReadonlyArray<AnyStep> }).steps = steps;
   return appendScenario;
 };
 
@@ -643,20 +658,24 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     Captures,
     Argument
   >;
-  Object.defineProperties(step, {
-    [StepTypeId]: { value: StepTypeId },
-    kind: { value: options.kind },
-    expression: { value: options.expression },
-    ...(options.argument === undefined ? {} : { argument: { value: options.argument } }),
-    ...(options.timeout === undefined ? {} : { timeout: { value: options.timeout } }),
-    run: { value: options.run },
-    pipe: {
-      value() {
-        return PipeableRuntime.pipeArguments(this, arguments);
-      },
-    },
-  });
-  return step;
+  Object.setPrototypeOf(step, StepProto);
+  const self = step as Step<Kind, In, Out, E, R, Captures, Argument> & {
+    kind: Kind;
+    expression: Expression<Captures>;
+    argument?: StepArg<Argument>;
+    timeout?: Duration.Input;
+    run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
+  };
+  self.kind = options.kind;
+  self.expression = options.expression;
+  if (options.argument !== undefined) {
+    self.argument = options.argument;
+  }
+  if (options.timeout !== undefined) {
+    self.timeout = options.timeout;
+  }
+  self.run = options.run;
+  return self;
 };
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
@@ -696,11 +715,13 @@ const makeStepFactory = <Kind extends StepKind, Captures>(
         ),
     });
   }) as StepFactory<Captures, Kind>;
-  Object.defineProperties(factory, {
-    kind: { value: kind },
-    expression: { value: matcher },
-  });
-  return factory;
+  const self = factory as StepFactory<Captures, Kind> & {
+    kind: Kind;
+    expression: Expression<Captures>;
+  };
+  self.kind = kind;
+  self.expression = matcher;
+  return self;
 };
 
 const handlerArgs = (
