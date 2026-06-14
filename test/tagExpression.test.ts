@@ -8,8 +8,8 @@ interface TagExpressionModule {
 }
 
 const loadTagExpression: Effect.Effect<TagExpressionModule> = Effect.promise(
-  () =>
-    import(["../src/internal/cli", "tagExpression.ts"].join("/")) as Promise<TagExpressionModule>,
+  async (): Promise<TagExpressionModule> =>
+    import(["../src/internal/cli", "tagExpression.ts"].join("/")),
 );
 
 describe("tagExpression", () => {
@@ -47,10 +47,10 @@ describe("tagExpression", () => {
       assert.strictEqual(result._tag, "Failure");
       if (result._tag === "Failure") {
         const error = Option.getOrThrow(Cause.findErrorOption(result.cause));
-        assert.match(
-          String((error as { readonly message: string }).message),
-          /Could not parse tag expression/,
-        );
+        assert.strictEqual(error instanceof Error, true);
+        if (error instanceof Error) {
+          assert.match(String(error.message), /Could not parse tag expression/);
+        }
       }
     }),
   );

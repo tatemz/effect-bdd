@@ -44,6 +44,7 @@ import {
 } from "./rules/no-sync-schema-boundaries/rule.mjs";
 import { noThrowStatements, noThrowStatementsRuleName } from "./rules/no-throw-statements/rule.mjs";
 import { noTryCatch, noTryCatchRuleName } from "./rules/no-try-catch/rule.mjs";
+import { noTypeAssertions, noTypeAssertionsRuleName } from "./rules/no-type-assertions/rule.mjs";
 import {
   noUntypedTryPromise,
   noUntypedTryPromiseRuleName,
@@ -66,6 +67,7 @@ export const rules = {
   [noSyncSchemaBoundariesRuleName]: noSyncSchemaBoundaries,
   [noThrowStatementsRuleName]: noThrowStatements,
   [noTryCatchRuleName]: noTryCatch,
+  [noTypeAssertionsRuleName]: noTypeAssertions,
   [noUntypedTryPromiseRuleName]: noUntypedTryPromise,
 };
 

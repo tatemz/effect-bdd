@@ -233,17 +233,11 @@ describe("developer experience", () => {
     Effect.gen(function* () {
       const stepError = yield* runError(runSingleScenarioShoppingCart(stepFailureFeature));
       assert.strictEqual(stepError._tag, "StepError");
-      assert.strictEqual(
-        (stepError as { readonly cause: unknown }).cause,
-        "expected subtotal 99, got 42",
-      );
+      assert.strictEqual(stepError.cause, "expected subtotal 99, got 42");
 
       const matchError = yield* runError(runSingleScenarioShoppingCart(matchFailureFeature));
       assert.strictEqual(matchError._tag, "MatchError");
-      assert.deepStrictEqual(
-        (matchError as { readonly candidates: ReadonlyArray<string> }).candidates,
-        ["{qty} {sku} are added at {price} each"],
-      );
+      assert.deepStrictEqual(matchError.candidates, ["{qty} {sku} are added at {price} each"]);
 
       const parseError = yield* runError(
         Bdd.run(parseFailureShoppingCart, parseFailureFeature).pipe(
@@ -251,10 +245,7 @@ describe("developer experience", () => {
         ),
       );
       assert.strictEqual(parseError._tag, "ParseError");
-      assert.strictEqual(
-        (parseError as { readonly message: string }).message,
-        "And found before a Given, When, or Then step",
-      );
+      assert.strictEqual(parseError.message, "And found before a Given, When, or Then step");
     }),
   );
 });

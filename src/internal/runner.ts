@@ -297,7 +297,7 @@ export const runScenarioTask = <E, R>(
       title: task.scenarioTitle,
       steps: task.pickle.steps.length,
       tags: task.tags,
-    }),
+    })),
   );
 
 const runSteps: <E, R>(
@@ -319,14 +319,11 @@ const runSteps: <E, R>(
     });
   }
 
+  const initialState: Effect.Effect<unknown, RunError, R> = Effect.succeed(undefined);
   return yield* Fn.pipe(
     Arr.zip(definitions, steps),
-    Arr.reduce(
-      Effect.succeed<unknown>(undefined) as Effect.Effect<unknown, RunError, R>,
-      (state, [definition, step], index) =>
-        Effect.flatMap(state, (previous) =>
-          runStep(task, definition, step, index, previous, options),
-        ),
+    Arr.reduce(initialState, (state, [definition, step], index) =>
+      Effect.flatMap(state, (previous) => runStep(task, definition, step, index, previous, options)),
     ),
   );
 });

@@ -80,14 +80,11 @@ describe("Bdd", () => {
     }
 
     const scenario = Bdd.scenario("Failure").pipe(
-      Bdd.given`zero`(() => Effect.succeed(0) as Effect.Effect<number, "given failed", Inventory>),
+      Bdd.given`zero`((): Effect.Effect<number, "given failed", Inventory> => Effect.succeed(0)),
       Bdd.when`increment`(
-        (state: number) =>
-          Effect.succeed(state + 1) as Effect.Effect<number, "when failed", Pricing>,
+        (state: number): Effect.Effect<number, "when failed", Pricing> => Effect.succeed(state + 1),
       ),
-      Bdd.then`one`(
-        (state: number) => Effect.succeed(state) as Effect.Effect<number, "then failed">,
-      ),
+      Bdd.then`one`((state: number): Effect.Effect<number, "then failed"> => Effect.succeed(state)),
     );
 
     const feature = Bdd.feature("Counter").pipe(scenario);
@@ -104,9 +101,7 @@ describe("Bdd", () => {
 
     const feature = Bdd.feature("Counter").pipe(
       Bdd.scenario("Needs inventory").pipe(
-        Bdd.when`needs inventory`(
-          () => Effect.succeed(0) as Effect.Effect<number, never, Inventory>,
-        ),
+        Bdd.when`needs inventory`((): Effect.Effect<number, never, Inventory> => Effect.succeed(0)),
       ),
     );
 

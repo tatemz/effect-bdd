@@ -12,7 +12,8 @@ const load = Effect.fnUntraced(function* (path: string) {
   const pathService = yield* Path.Path;
   const resolved = pathService.resolve(path);
   return yield* Effect.tryPromise({
-    try: () => import(pathToFileURL(resolved).href) as Promise<Record<string, unknown>>,
+    try: (): Promise<Record<string, unknown>> =>
+      import(pathToFileURL(resolved).href).then((module) => module),
     catch: (cause) => moduleLoadError(resolved, cause),
   });
 });

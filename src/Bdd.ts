@@ -3,7 +3,7 @@
  */
 import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import type * as Option from "effect/Option";
@@ -84,17 +84,15 @@ export type CapturesOf<Captures extends ReadonlyArray<Capture<string, any>>> = {
   readonly [C in Captures[number] as C["name"]]: C extends Capture<string, infer A> ? A : never;
 };
 
-type EmptyCaptures<Captures> = keyof Captures extends never ? true : false;
-
 /**
  * A compiled step expression.
  *
  * @category models
  * @since 0.1.0
  */
-export interface Expression<A> {
+export interface Expression<_A> {
   readonly source: string;
-  readonly match: (text: string) => Option.Option<A>;
+  readonly match: (text: string) => Option.Option<unknown>;
 }
 
 /**
@@ -581,11 +579,6 @@ export interface StepTag<Kind extends StepKind> {
   ): CapturedStepFactory<CapturesOf<Captures>, Kind>;
 }
 
-type StepFactory<Captures, Kind extends StepKind> =
-  EmptyCaptures<Captures> extends true
-    ? EmptyStepFactory<Kind>
-    : CapturedStepFactory<Captures, Kind>;
-
 interface EmptyStepFactory<Kind extends StepKind> {
   readonly kind: Kind;
   readonly expression: Expression<{}>;
@@ -621,57 +614,35 @@ interface CapturedStepFactory<Captures, Kind extends StepKind> {
   ): Step<Kind, In, Out, E, R, Captures, Arg>;
 }
 
-const FeatureProto = {
-  [FeatureTypeId]: FeatureTypeId,
-  pipe() {
-    return PipeableRuntime.pipeArguments(this, arguments);
-  },
-};
-
-const ScenarioProto = {
-  [ScenarioTypeId]: ScenarioTypeId,
-  pipe() {
-    return PipeableRuntime.pipeArguments(this, arguments);
-  },
-};
-
-const StepProto = {
-  [StepTypeId]: StepTypeId,
-  pipe() {
-    return PipeableRuntime.pipeArguments(this, arguments);
-  },
-};
-
 const makeFeature = <E, R>(
   title: string,
   scenarios: ReadonlyArray<Scenario<any, any, any>>,
-): Feature<E, R> => {
-  const feature = Object.create(FeatureProto) as Feature<E, R> & {
-    title: string;
-    scenarios: ReadonlyArray<Scenario<any, any, any>>;
-  };
-  feature.title = title;
-  feature.scenarios = scenarios;
-  return Object.freeze(feature);
-};
+): Feature<E, R> =>
+  Object.freeze({
+    [FeatureTypeId]: FeatureTypeId,
+    title,
+    scenarios,
+    pipe() {
+      return PipeableRuntime.pipeArguments(this, arguments);
+    },
+  });
 
 const makeScenario = <State, E, R>(
   title: string,
   steps: ReadonlyArray<AnyStep>,
 ): Scenario<State, E, R> => {
-  const appendScenario = ((self: Feature<unknown, unknown>) =>
-    makeFeature(self.title, [
-      ...self.scenarios,
-      appendScenario as Scenario<State, E, R>,
-    ])) as Scenario<State, E, R>;
-  Object.setPrototypeOf(appendScenario, ScenarioProto);
-  const self = appendScenario as Scenario<State, E, R> & {
-    title: string;
-    steps: ReadonlyArray<AnyStep>;
-  };
-  self.title = title;
-  self.steps = steps;
-  return Object.freeze(self);
+  function appendScenario<E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0> {
+    return makeFeature(self.title, [...self.scenarios, scenario]);
+  }
+  const scenario: Scenario<State, E, R> = Object.assign(appendScenario, {
+    [ScenarioTypeId]: ScenarioTypeId,
+    title,
+    steps,
+    pipe() {
+      return PipeableRuntime.pipeArguments(this, arguments);
+    },
+  });
+  return Object.freeze(scenario);
 };
 
 interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
@@ -685,56 +656,78 @@ interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> 
 const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
 ): Step<Kind, In, Out, E, R, Captures, Argument> => {
-  const step = ((self: Scenario<In, unknown, unknown>) =>
-    makeScenario(self.title, [...self.steps, step as AnyStep])) as Step<
-    Kind,
-    In,
-    Out,
-    E,
-    R,
-    Captures,
-    Argument
-  >;
-  Object.setPrototypeOf(step, StepProto);
-  const self = step as Step<Kind, In, Out, E, R, Captures, Argument> & {
-    kind: Kind;
-    expression: Expression<Captures>;
-    argument?: StepArg<Argument>;
-    timeout?: Duration.Duration;
-    run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
-  };
-  self.kind = options.kind;
-  self.expression = options.expression;
-  if (options.argument !== undefined) {
-    self.argument = options.argument;
+  function appendStep<E0, R0>(self: Scenario<In, E0, R0>): Scenario<Out, E | E0, R | R0> {
+    return makeScenario(self.title, [...self.steps, step]);
   }
-  if (options.timeout !== undefined) {
-    self.timeout = options.timeout;
-  }
-  self.run = options.run;
-  return Object.freeze(self);
+  const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(appendStep, {
+    [StepTypeId]: StepTypeId,
+    kind: options.kind,
+    expression: options.expression,
+    ...(options.argument === undefined ? {} : { argument: options.argument }),
+    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    run: options.run,
+    pipe() {
+      return PipeableRuntime.pipeArguments(this, arguments);
+    },
+  });
+  return Object.freeze(step);
 };
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
-  return ((strings: TemplateStringsArray, ...captures: ReadonlyArray<Capture<string, unknown>>) =>
-    makeStepFactory(
-      kind,
-      expression.makeMatcher(strings, captures),
-      captures.length > 0,
-    )) as StepTag<Kind>;
+  function stepTag(strings: TemplateStringsArray): EmptyStepFactory<Kind>;
+  function stepTag<
+    const Captures extends readonly [Capture<string, any>, ...Array<Capture<string, any>>],
+  >(
+    strings: TemplateStringsArray,
+    ...captures: Captures
+  ): CapturedStepFactory<CapturesOf<Captures>, Kind>;
+  function stepTag(
+    strings: TemplateStringsArray,
+    ...captures: ReadonlyArray<Capture<string, unknown>>
+  ) {
+    return captures.length === 0
+      ? makeStepFactory(kind, expression.makeMatcher(strings, captures), false)
+      : makeStepFactory(kind, expression.makeMatcher(strings, captures), true);
+  }
+  return stepTag;
 }
 
-const makeStepFactory = <Kind extends StepKind, Captures>(
+function makeStepFactory<Kind extends StepKind>(
+  kind: Kind,
+  matcher: Expression<unknown>,
+  hasCaptures: false,
+): EmptyStepFactory<Kind>;
+function makeStepFactory<Kind extends StepKind, Captures>(
+  kind: Kind,
+  matcher: Expression<Captures>,
+  hasCaptures: true,
+): CapturedStepFactory<Captures, Kind>;
+function makeStepFactory<Kind extends StepKind, Captures>(
   kind: Kind,
   matcher: Expression<Captures>,
   hasCaptures: boolean,
-): StepFactory<Captures, Kind> => {
-  const factory = ((first: unknown, second?: unknown) => {
+) {
+  function factory<Out, E, R>(
+    impl: () => Effect.Effect<Out, E, R>,
+  ): Step<Kind, unknown, Out, E, R, Captures>;
+  function factory<In, Out, E, R>(
+    impl: (state: In) => Effect.Effect<Out, E, R>,
+  ): Step<Kind, In, Out, E, R, Captures>;
+  function factory<Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (arg: Arg) => Effect.Effect<Out, E, R>,
+  ): Step<Kind, unknown, Out, E, R, Captures, Arg>;
+  function factory<Arg, In, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (arg: Arg, state: In) => Effect.Effect<Out, E, R>,
+  ): Step<Kind, In, Out, E, R, Captures, Arg>;
+  function factory(
+    first: unknown,
+    second?: unknown,
+  ): Step<Kind, any, any, any, any, Captures, any> {
     const hasArgument = isStepArg(first);
     const argument = hasArgument ? first : undefined;
-    const impl = (hasArgument ? second : first) as (
-      ...args: ReadonlyArray<unknown>
-    ) => Effect.Effect<unknown, unknown, unknown>;
+    const impl = stepImplementation(hasArgument ? second : first);
     return makeStep({
       kind,
       expression: matcher,
@@ -751,15 +744,24 @@ const makeStepFactory = <Kind extends StepKind, Captures>(
           ),
         ),
     });
-  }) as StepFactory<Captures, Kind>;
-  const self = factory as StepFactory<Captures, Kind> & {
-    kind: Kind;
-    expression: Expression<Captures>;
-  };
-  self.kind = kind;
-  self.expression = matcher;
-  return self;
-};
+  }
+  return Object.assign(factory, {
+    kind,
+    expression: matcher,
+  });
+}
+
+type StepImplementation = (
+  ...args: ReadonlyArray<unknown>
+) => Effect.Effect<unknown, unknown, unknown>;
+
+const invalidStepImplementation: StepImplementation = () =>
+  Effect.fail(new TypeError("Expected a step implementation function."));
+
+const isStepImplementation = (u: unknown): u is StepImplementation => typeof u === "function";
+
+const stepImplementation = (u: unknown): StepImplementation =>
+  isStepImplementation(u) ? u : invalidStepImplementation;
 
 const handlerArgs = (
   impl: (...args: ReadonlyArray<unknown>) => unknown,
@@ -780,5 +782,4 @@ const isStepArg = (u: unknown): u is StepArg<unknown> =>
   typeof u === "object" &&
   u !== null &&
   "_tag" in u &&
-  ((u as { readonly _tag: unknown })._tag === "TableArg" ||
-    (u as { readonly _tag: unknown })._tag === "DocStringArg");
+  (u._tag === "TableArg" || u._tag === "DocStringArg");

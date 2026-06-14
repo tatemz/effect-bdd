@@ -178,7 +178,8 @@ Feature: Keyword wildcard
   });
 
   it.effect("inherits concrete keyword semantics for And and But", () => {
-    const setup = Bdd.given`setup`(() => Effect.succeed(["setup"] as ReadonlyArray<string>));
+    const setupState: ReadonlyArray<string> = ["setup"];
+    const setup = Bdd.given`setup`(() => Effect.succeed(setupState));
     const moreSetup = Bdd.given`more setup`((state: ReadonlyArray<string>) =>
       Effect.succeed(Arr.append(state, "more setup")),
     );
@@ -227,7 +228,8 @@ Feature: Keyword inheritance
       readonly cart: Cart;
       readonly payload?: Schema.Schema.Type<typeof Payload>;
     };
-    const givenEmpty = Bdd.given`an empty cart`(() => Effect.succeed({ cart: emptyCart } as State));
+    const initialState: State = { cart: emptyCart };
+    const givenEmpty = Bdd.given`an empty cart`(() => Effect.succeed(initialState));
     const whenItems = Bdd.when`the following items are added:`(
       Bdd.table(Item),
       (items, state: State) =>
@@ -302,7 +304,7 @@ Feature: Shopping cart
 
       assert.strictEqual(result._tag, "Failure");
       if (result._tag === "Failure") {
-        const error = Option.getOrThrow(Cause.findErrorOption(result.cause)) as Bdd.RunError;
+        const error = Option.getOrThrow(Cause.findErrorOption(result.cause));
         assert.strictEqual(error._tag, "MatchError");
         assert.notStrictEqual(error.cause, undefined);
       }
@@ -331,7 +333,7 @@ Feature: Shopping cart
 
       assert.strictEqual(result._tag, "Failure");
       if (result._tag === "Failure") {
-        const error = Option.getOrThrow(Cause.findErrorOption(result.cause)) as Bdd.RunError;
+        const error = Option.getOrThrow(Cause.findErrorOption(result.cause));
         assert.strictEqual(error._tag, "StepError");
         assert.strictEqual(error.cause, "wrong total");
       }
@@ -418,7 +420,8 @@ Feature: Timeouts
 
   it.effect("runs feature and rule backgrounds as explicit leading chain steps", () => {
     type State = ReadonlyArray<string>;
-    const featureSetup = Bdd.given`feature setup`(() => Effect.succeed(["feature"] as State));
+    const featureSetupState: State = ["feature"];
+    const featureSetup = Bdd.given`feature setup`(() => Effect.succeed(featureSetupState));
     const ruleSetup = Bdd.given`rule setup`((state: State) =>
       Effect.succeed(Arr.append(state, "rule")),
     );

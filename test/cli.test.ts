@@ -739,10 +739,9 @@ Feature: Counter
         if (Exit.isFailure(exit)) {
           const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
           assert.strictEqual(error instanceof CliError.UserError, true);
-          assert.match(
-            String((error as CliError.UserError).cause),
-            /Multiple feature definitions matched/,
-          );
+          if (error instanceof CliError.UserError) {
+            assert.match(String(error.cause), /Multiple feature definitions matched/);
+          }
         }
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
@@ -778,9 +777,11 @@ Feature: Counter
         if (Exit.isFailure(exit)) {
           const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
           assert.strictEqual(error instanceof CliError.UserError, true);
-          const cause = String((error as CliError.UserError).cause);
-          assert.match(cause, /Could not load step module/);
-          assert.match(cause, /boom while importing step module/);
+          if (error instanceof CliError.UserError) {
+            const cause = String(error.cause);
+            assert.match(cause, /Could not load step module/);
+            assert.match(cause, /boom while importing step module/);
+          }
         }
       }),
     ).pipe(Effect.provide(NodeServices.layer)),

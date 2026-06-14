@@ -15,7 +15,7 @@ export const runError = <A, R>(
     const result = yield* Effect.exit(effect);
     assert.strictEqual(result._tag, "Failure");
     if (result._tag === "Failure") {
-      return Option.getOrThrow(Cause.findErrorOption(result.cause)) as Bdd.RunError;
+      return Option.getOrThrow(Cause.findErrorOption(result.cause));
     }
     return yield* Effect.die("expected Bdd.run to fail");
   });

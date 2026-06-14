@@ -25,7 +25,8 @@
     "unicorn/no-array-sort": "off",
     "effect-bdd/no-inline-nested-effect-gen": "error",
     "effect-bdd/no-process-env": "error",
-    "effect-bdd/no-effect-or-die": "error"
+    "effect-bdd/no-effect-or-die": "error",
+    "effect-bdd/no-type-assertions": "error"
   },
   "overrides": [
     {

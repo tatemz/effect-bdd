@@ -13,9 +13,9 @@ export interface Capture<Name extends string, A> {
 }
 
 /** @internal */
-export interface Matcher<A> {
+export interface Matcher<_A> {
   readonly source: string;
-  readonly match: (text: string) => Option.Option<A>;
+  readonly match: (text: string) => Option.Option<unknown>;
 }
 
 interface MatcherState {
@@ -36,10 +36,10 @@ export const makeCapture = <const Name extends string, A>(
 });
 
 /** @internal */
-export const makeMatcher = <A>(
+export const makeMatcher = (
   strings: TemplateStringsArray,
   captures: ReadonlyArray<Capture<string, unknown>>,
-): Matcher<A> => {
+): Matcher<unknown> => {
   const state = Fn.pipe(
     strings,
     Arr.reduce(initialMatcherState, (state, literal, index) =>
@@ -56,7 +56,7 @@ export const makeMatcher = <A>(
       if (match === null) {
         return Option.none();
       }
-      return Option.map(decodeCaptures(state.names, decoders, match), (out) => out as A);
+      return decodeCaptures(state.names, decoders, match);
     },
   };
 };

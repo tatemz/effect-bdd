@@ -180,7 +180,19 @@ export const stepKeyword = (
 
 const normalizeKeyword = (keyword: string): Keyword => {
   const trimmed = Str.trim(keyword);
-  return trimmed === "*" ? "*" : (trimmed as Keyword);
+  switch (trimmed) {
+    case "Given":
+    case "When":
+    case "Then":
+    case "And":
+    case "But":
+    case "*": {
+      return trimmed;
+    }
+    default: {
+      return "Given";
+    }
+  }
 };
 
 const parseError = (

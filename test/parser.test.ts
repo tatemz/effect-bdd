@@ -9,9 +9,8 @@ describe("parser", () => {
       sku: Schema.String,
       qty: Schema.NumberFromString,
     });
-    const givenEmpty = Bdd.given`an empty cart`(() =>
-      Effect.succeed([] as ReadonlyArray<Schema.Schema.Type<typeof Item>>),
-    );
+    const emptyItems: ReadonlyArray<Schema.Schema.Type<typeof Item>> = [];
+    const givenEmpty = Bdd.given`an empty cart`(() => Effect.succeed(emptyItems));
     const whenItems = Bdd.when`the following items are added:`(Bdd.table(Item), (items) =>
       Effect.succeed(items),
     );
