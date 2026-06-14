@@ -235,6 +235,61 @@ export const timeouts = Bdd.feature("Timeouts").pipe(
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("shows slow scenarios without verbose output", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Timing
+
+  Scenario: Slow path
+    When wait slowly
+
+  Scenario: Fast path
+    When finish fast
+`,
+          steps: `
+import { Bdd } from "effect-bdd"
+import { Effect } from "effect"
+
+export const timing = Bdd.feature("Timing").pipe(
+  Bdd.scenario("Slow path").pipe(
+    Bdd.when\`wait slowly\`(() => Effect.sleep("100 millis"))
+  ),
+  Bdd.scenario("Fast path").pipe(
+    Bdd.when\`finish fast\`(() => Effect.void)
+  )
+)
+`,
+        });
+        const textReport = fixture.path("slow.txt");
+
+        yield* TestClock.withLive(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("*.mjs"),
+            "--reporter",
+            "text",
+            "--output-file.text",
+            textReport,
+            "--show-slow",
+            "75",
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
+
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
+
+        assert.match(text, /Features: 1, Scenarios: 2, passed: 2, failed: 0/);
+        assert.match(text, /Slow scenarios \(>= 75ms\):/);
+        assert.match(text, /PASS .*Timing \/ Slow path/);
+        assert.strictEqual(/Fast path/.test(text), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("reports unmatched feature files and unused feature definitions", () =>
     Effect.scoped(
       Effect.gen(function* () {

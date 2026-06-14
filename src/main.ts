@@ -93,6 +93,17 @@ const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Print every scenario result instead of only failures and diagnostics."),
 );
 
+const showSlow = Flag.integer("show-slow").pipe(
+  Flag.withDescription(
+    "Print passing or failing scenarios at or above this duration in milliseconds.",
+  ),
+  Flag.filter(
+    (value) => value > 0,
+    (value) => `Expected --show-slow to be greater than 0, got ${value}`,
+  ),
+  Flag.optional,
+);
+
 const tags = Flag.string("tags").pipe(
   Flag.withAlias("t"),
   Flag.withDescription("Cucumber-style tag expression. Can be supplied multiple times."),
@@ -125,6 +136,7 @@ export const cli = Command.make(
     parallel,
     stepTimeout,
     verbose,
+    showSlow,
     tags,
     title,
     failFast,
@@ -140,6 +152,7 @@ export const cli = Command.make(
     parallel,
     stepTimeout,
     verbose,
+    showSlow,
     tags,
     title,
     failFast,
@@ -165,6 +178,7 @@ export const cli = Command.make(
     };
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
       verbose,
+      ...(Option.isSome(showSlow) ? { showSlowMillis: showSlow.value } : {}),
     }).pipe(Effect.mapError(toUserError));
     const result = yield* Runner.run(options).pipe(Effect.mapError(toUserError));
     yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError));

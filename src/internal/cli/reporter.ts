@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Inspectable from "effect/Inspectable";
+import * as Order from "effect/Order";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Str from "effect/String";
@@ -31,12 +32,15 @@ export const makeReporters = (
   },
   options: {
     readonly verbose: boolean;
+    readonly showSlowMillis?: number;
   },
 ): Effect.Effect<ReadonlyArray<Reporter>, ReporterError> =>
   Effect.forEach(names, (name) => {
     switch (name) {
       case "text": {
-        return Effect.succeed(textReporter(outputFiles.text, options.verbose));
+        return Effect.succeed(
+          textReporter(outputFiles.text, options.verbose, options.showSlowMillis),
+        );
       }
       case "html": {
         return outputFiles.html === undefined
@@ -85,12 +89,16 @@ export const emitAll: (
   },
 );
 
-const textReporter = (outputFile: string | undefined, verbose: boolean): Reporter => ({
+const textReporter = (
+  outputFile: string | undefined,
+  verbose: boolean,
+  showSlowMillis: number | undefined,
+): Reporter => ({
   name: "text",
   emit: (result) =>
     outputFile === undefined
-      ? Console.log(renderText(result, verbose))
-      : writeFile(outputFile, renderText(result, verbose)),
+      ? Console.log(renderText(result, verbose, showSlowMillis))
+      : writeFile(outputFile, renderText(result, verbose, showSlowMillis)),
 });
 
 const htmlReporter = (outputFile: string): Reporter => ({
@@ -142,7 +150,11 @@ const writeFile: (
   },
 );
 
-const renderText = (result: CliRunResult, verbose: boolean): string => {
+const renderText = (
+  result: CliRunResult,
+  verbose: boolean,
+  showSlowMillis: number | undefined,
+): string => {
   const summary = [
     `Features: ${result.summary.features}, Scenarios: ${result.summary.total}, passed: ${result.summary.passed}, failed: ${result.summary.failed}`,
     `Duration: ${result.summary.durationMillis}ms`,
@@ -155,12 +167,35 @@ const renderText = (result: CliRunResult, verbose: boolean): string => {
         Arr.filter((scenario) => scenario.outcome._tag === "Failed"),
         Arr.map(renderScenarioText),
       );
+  const slowScenarioLines = renderSlowScenarios(result.results, showSlowMillis);
   const diagnosticLines = renderDiagnosticsText(result.diagnostics);
   return Fn.pipe(
     summary,
     Arr.appendAll(scenarioLines),
+    Arr.appendAll(slowScenarioLines),
     Arr.appendAll(diagnosticLines),
     Arr.join("\n"),
+  );
+};
+
+const renderSlowScenarios = (
+  results: ReadonlyArray<ScenarioResult>,
+  showSlowMillis: number | undefined,
+): ReadonlyArray<string> => {
+  if (showSlowMillis === undefined) {
+    return [];
+  }
+  const slow = Fn.pipe(
+    results,
+    Arr.filter((result) => result.durationMillis >= showSlowMillis),
+    Arr.sort(Order.mapInput(Order.Number, (result: ScenarioResult) => -result.durationMillis)),
+  );
+  if (slow.length === 0) {
+    return [];
+  }
+  return Fn.pipe(
+    ["", `Slow scenarios (>= ${showSlowMillis}ms):`],
+    Arr.appendAll(Arr.map(slow, renderScenarioText)),
   );
 };
 
