@@ -10,7 +10,13 @@ import * as Predicate from "effect/Predicate";
 import * as Str from "effect/String";
 import { StepTimeoutError } from "../../Errors.ts";
 import { ReporterError } from "./errors.ts";
-import type { CliDiagnostic, CliRunResult, ReporterName, ScenarioResult } from "./models.ts";
+import {
+  isFatalDiagnostic,
+  type CliDiagnostic,
+  type CliRunResult,
+  type ReporterName,
+  type ScenarioResult,
+} from "./models.ts";
 
 /** @internal */
 export interface Reporter {
@@ -305,9 +311,10 @@ const renderJson = (result: CliRunResult): string =>
 
 const renderJunit = (result: CliRunResult): string => {
   const diagnostics = result.diagnostics.length;
+  const fatalDiagnostics = Fn.pipe(result.diagnostics, Arr.filter(isFatalDiagnostic)).length;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="effect-bdd" tests="${result.summary.total + diagnostics}" failures="${
-    result.summary.failed + diagnostics
+    result.summary.failed + fatalDiagnostics
   }" time="${result.summary.durationMillis / 1000}">
 ${Fn.pipe(result.results, Arr.map(renderJunitScenario), Arr.join("\n"))}
 ${Fn.pipe(result.diagnostics, Arr.map(renderJunitDiagnostic), Arr.join("\n"))}
@@ -331,9 +338,11 @@ const renderJunitScenario = (result: ScenarioResult): string => {
 };
 
 const renderJunitDiagnostic = (diagnostic: CliDiagnostic): string =>
-  `  <testcase classname="effect-bdd diagnostics" name="${escapeXml(diagnostic.message)}">
+  isFatalDiagnostic(diagnostic)
+    ? `  <testcase classname="effect-bdd diagnostics" name="${escapeXml(diagnostic.message)}">
     <failure message="${escapeXml(diagnostic.message)}">${escapeXml(renderDiagnosticText(diagnostic))}</failure>
-  </testcase>`;
+  </testcase>`
+    : `  <testcase classname="effect-bdd diagnostics" name="${escapeXml(diagnostic.message)}"></testcase>`;
 
 const renderScenarioName = (result: ScenarioResult): string =>
   result.task.core.ruleTitle === undefined

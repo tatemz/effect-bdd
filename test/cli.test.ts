@@ -289,6 +289,97 @@ Feature: Missing source
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("allows unused definitions during focused runs by default", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Starts clean
+    Then the counter is 0
+`,
+          steps: `${counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs),
+  Bdd.scenario("Unused counter chain").pipe(thenCounterIs)
+`)}
+
+export const other = Bdd.feature("Other").pipe(
+  Bdd.scenario("Unused other chain").pipe(thenCounterIs)
+)
+`,
+        });
+        const textReport = fixture.path("unused-default.txt");
+        const junitReport = fixture.path("unused-default.xml");
+
+        yield* runCli([
+          "--features",
+          fixture.path("*.feature"),
+          "--steps",
+          fixture.path("*.mjs"),
+          "--reporter",
+          "text",
+          "--reporter",
+          "junit",
+          "--output-file.text",
+          textReport,
+          "--output-file.junit",
+          junitReport,
+        ]).pipe(Effect.provide(NodeServices.layer));
+
+        const fs = yield* FileSystem.FileSystem;
+        const text = yield* fs.readFileString(textReport);
+        const junit = yield* fs.readFileString(junitReport);
+
+        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(text, /Unused definitions:/);
+        assert.match(text, /Scenario chain exported but no source scenario matched/);
+        assert.match(text, /Feature definition exported but no feature file matched: Other/);
+        assert.match(junit, /failures="0"/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("fails unused definitions in strict mode", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Starts clean
+    Then the counter is 0
+`,
+          steps: `${counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs),
+  Bdd.scenario("Unused counter chain").pipe(thenCounterIs)
+`)}
+
+export const other = Bdd.feature("Other").pipe(
+  Bdd.scenario("Unused other chain").pipe(thenCounterIs)
+)
+`,
+        });
+
+        const exit = yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("*.mjs"),
+            "--reporter",
+            "text",
+            "--output-file.text",
+            fixture.path("unused-strict.txt"),
+            "--strict",
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("reports unmatched source steps", () =>
     Effect.scoped(
       Effect.gen(function* () {
