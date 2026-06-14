@@ -42,14 +42,6 @@ export interface RunSummary {
 }
 
 /** @internal */
-export interface DiscoveredScenario {
-  readonly featurePath: string;
-  readonly featureTitle: string;
-  readonly scenarioTitle: string;
-  readonly scenarioLine: number;
-}
-
-/** @internal */
 export interface DiscoverySummary {
   readonly featurePatterns: ReadonlyArray<string>;
   readonly featurePaths: ReadonlyArray<string>;
@@ -58,7 +50,12 @@ export interface DiscoverySummary {
   readonly featureDefinitions: ReadonlyArray<string>;
   readonly scenariosDiscovered: number;
   readonly scenariosSelected: number;
-  readonly selectedScenarios: ReadonlyArray<DiscoveredScenario>;
+  readonly selectedScenarios: ReadonlyArray<{
+    readonly featurePath: string;
+    readonly featureTitle: string;
+    readonly scenarioTitle: string;
+    readonly scenarioLine: number;
+  }>;
 }
 
 /** @internal */
