@@ -18,6 +18,7 @@ import type {
   CliDiagnostic,
   CliOptions,
   CliRunResult,
+  DiscoverySummary,
   FeatureSource,
   RunSummary,
   ScenarioResult,
@@ -42,7 +43,8 @@ export const run: (
 > = Effect.fnUntraced(function* (options: CliOptions) {
   const startedAt = yield* Clock.currentTimeMillis;
   const sources = yield* loadFeatureSources(options.features);
-  const definitions = yield* loadFeatureDefinitions(options.steps);
+  const loadedDefinitions = yield* loadFeatureDefinitions(options.steps);
+  const definitions = loadedDefinitions.definitions;
   const built = yield* Fn.pipe(
     sources,
     Effect.forEach((source) => buildScenarioTasks(source, definitions)),
@@ -59,6 +61,14 @@ export const run: (
     results,
     diagnostics,
     summary: summarize(sources.length, results, finishedAt - startedAt),
+    discovery: summarizeDiscovery(
+      options,
+      sources,
+      loadedDefinitions.paths,
+      definitions,
+      built,
+      filteredTasks,
+    ),
   } satisfies CliRunResult;
 });
 
@@ -306,6 +316,31 @@ const summarize = (
     durationMillis,
   };
 };
+
+const summarizeDiscovery = (
+  options: CliOptions,
+  sources: ReadonlyArray<FeatureSource>,
+  stepModulePaths: ReadonlyArray<string>,
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
+  built: BuiltScenarios,
+  selectedTasks: ReadonlyArray<ScenarioTask>,
+): DiscoverySummary => ({
+  featurePatterns: options.features,
+  featurePaths: Arr.map(sources, (source) => source.path),
+  stepPatterns: options.steps,
+  stepModulePaths,
+  featureDefinitions: Arr.map(definitions, (definition) => definition.title),
+  scenariosDiscovered: built.tasks.length,
+  scenariosSelected: selectedTasks.length,
+  selectedScenarios: Arr.map(selectedTasks, discoveredScenario),
+});
+
+const discoveredScenario = (task: ScenarioTask): DiscoverySummary["selectedScenarios"][number] => ({
+  featurePath: task.featurePath,
+  featureTitle: task.core.featureTitle,
+  scenarioTitle: task.core.scenarioTitle,
+  scenarioLine: task.core.scenarioLine,
+});
 
 const combineBuiltScenarios = (built: ReadonlyArray<BuiltScenarios>): BuiltScenarios => ({
   tasks: Fn.pipe(
