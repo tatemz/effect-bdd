@@ -166,7 +166,10 @@ export const cli = Command.make(
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
       verbose,
     }).pipe(Effect.mapError(toUserError));
-    const result = yield* Runner.run(options).pipe(Effect.mapError(toUserError));
+    const result = yield* Runner.run(options, {
+      onEvent: (event) =>
+        Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
+    }).pipe(Effect.mapError(toUserError));
     yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError));
     if (result.summary.failed > 0 || result.diagnostics.length > 0) {
       return yield* Effect.fail(
