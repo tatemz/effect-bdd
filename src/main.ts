@@ -1,4 +1,5 @@
 /** @internal */
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Fn from "effect/Function";
@@ -9,7 +10,7 @@ import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import PackageJson from "../package.json" with { type: "json" };
 import { GlobResolver } from "./internal/cli/glob.ts";
-import type { CliOptions } from "./internal/cli/models.ts";
+import { isFatalDiagnostic, type CliOptions } from "./internal/cli/models.ts";
 import { ModuleLoader } from "./internal/cli/moduleLoader.ts";
 import * as Reporter from "./internal/cli/reporter.ts";
 import * as Runner from "./internal/cli/runner.ts";
@@ -122,6 +123,10 @@ const failFast = Flag.boolean("fail-fast").pipe(
   Flag.withDescription("Stop after the first failed scenario. Runs sequentially when enabled."),
 );
 
+const strict = Flag.boolean("strict").pipe(
+  Flag.withDescription("Fail when any loaded feature or scenario definition is unused."),
+);
+
 /** @internal */
 export const cli = Command.make(
   "effect-bdd",
@@ -140,6 +145,7 @@ export const cli = Command.make(
     tags,
     title,
     failFast,
+    strict,
   },
   Effect.fnUntraced(function* ({
     features,
@@ -156,6 +162,7 @@ export const cli = Command.make(
     tags,
     title,
     failFast,
+    strict,
   }) {
     const options: CliOptions = {
       features,
@@ -173,6 +180,7 @@ export const cli = Command.make(
         titles: title,
         failFast,
       },
+      strict,
       parallel,
       ...(Option.isSome(stepTimeout) ? { stepTimeout: stepTimeout.value } : {}),
     };
@@ -185,13 +193,16 @@ export const cli = Command.make(
         Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
     }).pipe(Effect.mapError(toUserError));
     yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError));
-    if (result.summary.failed > 0 || result.diagnostics.length > 0) {
+    const failingDiagnostics = strict
+      ? result.diagnostics
+      : Arr.filter(result.diagnostics, isFatalDiagnostic);
+    if (result.summary.failed > 0 || failingDiagnostics.length > 0) {
       return yield* Effect.fail(
         new CliError.UserError({
           cause:
             result.summary.failed > 0
               ? `${result.summary.failed} scenario(s) failed`
-              : `${result.diagnostics.length} diagnostic(s) reported`,
+              : `${failingDiagnostics.length} diagnostic(s) reported`,
         }),
       );
     }
