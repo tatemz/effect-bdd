@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
+import * as Record from "effect/Record";
 import type * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
@@ -135,8 +136,10 @@ const buildScenarioTasks: (
       );
     }
 
-    const scenarioDefinitions = new Map(
-      Arr.map(definition.scenarios, (scenario) => [scenario.title, scenario] as const),
+    const scenarioDefinitions = Fn.pipe(
+      definition.scenarios,
+      Arr.map((scenario) => [scenario.title, scenario] as const),
+      Record.fromEntries,
     );
     const built = Arr.map(parsed.pickles, (pickle, scenarioIndex) =>
       buildScenarioTask(source, parsed, definition, scenarioDefinitions, pickle, scenarioIndex),
@@ -176,7 +179,10 @@ const buildScenarioTask = (
   source: FeatureSource,
   parsed: Parser.CompiledFeature,
   definition: Bdd.Feature<unknown, never>,
-  scenarioDefinitions: ReadonlyMap<string, Bdd.Feature<unknown, never>["scenarios"][number]>,
+  scenarioDefinitions: Record.ReadonlyRecord<
+    string,
+    Bdd.Feature<unknown, never>["scenarios"][number]
+  >,
   pickle: Parser.CompiledFeature["pickles"][number],
   scenarioIndex: number,
 ): BuiltScenario => {
@@ -187,8 +193,8 @@ const buildScenarioTask = (
     Option.getOrElse(() => pickle.name),
   );
   const scenarioLine = sourceScenarioLine(pickle, sourceScenario, parsed.line);
-  const scenarioDefinition = scenarioDefinitions.get(scenarioTitle);
-  if (scenarioDefinition === undefined) {
+  const scenarioDefinition = Record.get(scenarioDefinitions, scenarioTitle);
+  if (Option.isNone(scenarioDefinition)) {
     return {
       _tag: "Diagnostic",
       diagnostic: {
@@ -207,7 +213,7 @@ const buildScenarioTask = (
       featurePath: source.path,
       core: {
         featureDefinition: definition,
-        scenarioDefinition,
+        scenarioDefinition: scenarioDefinition.value,
         featureTitle: parsed.name,
         scenarioTitle: pickle.name,
         sourceScenarioTitle: scenarioTitle,
@@ -243,8 +249,7 @@ const sourceScenarioRuleFields = (
     Option.getOrElse(() => ({})),
   );
 
-type SourceScenarioEntry =
-  Parser.SourceIndex["scenarios"] extends ReadonlyMap<string, infer Entry> ? Entry : never;
+type SourceScenarioEntry = Parser.SourceIndex["scenarios"][string];
 
 type SourceScenarioRule = SourceScenarioEntry extends { readonly rule: infer Rule } ? Rule : never;
 

@@ -234,8 +234,8 @@ const buildScenarioTasks = <E, R>(
             candidates: [entry.scenarioTitle],
           });
         }
-        const scenarioDefinition = scenarioDefinitions.get(entry.scenarioTitle);
-        if (scenarioDefinition === undefined) {
+        const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
+        if (Option.isNone(scenarioDefinition)) {
           return matchErrorEffect({
             message: `No scenario chain matched source scenario "${entry.scenarioTitle}"`,
             scenario: entry.scenarioTitle,
@@ -246,7 +246,7 @@ const buildScenarioTasks = <E, R>(
         }
         return Effect.succeed({
           featureDefinition,
-          scenarioDefinition,
+          scenarioDefinition: scenarioDefinition.value,
           featureTitle: feature.name,
           scenarioTitle: entry.pickle.name,
           sourceScenarioTitle: entry.scenarioTitle,
@@ -548,8 +548,12 @@ const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefin
 
 const scenarioDefinitionMap = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
-): ReadonlyMap<string, ScenarioDefinition<R>> =>
-  new Map(Arr.map(featureDefinition.scenarios, (scenario) => [scenario.title, scenario] as const));
+): Record.ReadonlyRecord<string, ScenarioDefinition<R>> =>
+  Fn.pipe(
+    featureDefinition.scenarios,
+    Arr.map((scenario) => [scenario.title, scenario] as const),
+    Record.fromEntries,
+  );
 
 /** @internal */
 const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {

@@ -39,6 +39,8 @@
         "effect-bdd/no-native-array-methods-in-src": "error",
         "effect-bdd/no-native-string-methods-in-src": "error",
         "effect-bdd/no-native-object-methods-in-src": "error",
+        "effect-bdd/no-native-map-in-src": "error",
+        "effect-bdd/no-native-set-in-src": "error",
         "effect-bdd/no-effect-named-imports-in-src": "error",
         "effect-bdd/no-schema-optional": "error",
         "effect-bdd/no-sync-schema-boundaries": "error",

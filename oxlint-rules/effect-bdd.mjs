@@ -28,10 +28,12 @@ import {
   noNativeDateUrlJsonBoundaries,
   noNativeDateUrlJsonBoundariesRuleName,
 } from "./rules/no-native-date-url-json-boundaries/rule.mjs";
+import { noNativeMapInSrc, noNativeMapInSrcRuleName } from "./rules/no-native-map-in-src/rule.mjs";
 import {
   noNativeObjectMethodsInSrc,
   noNativeObjectMethodsInSrcRuleName,
 } from "./rules/no-native-object-methods-in-src/rule.mjs";
+import { noNativeSetInSrc, noNativeSetInSrcRuleName } from "./rules/no-native-set-in-src/rule.mjs";
 import {
   noNativeStringMethodsInSrc,
   noNativeStringMethodsInSrcRuleName,
@@ -60,7 +62,9 @@ export const rules = {
   [noInlineNestedEffectGenRuleName]: noInlineNestedEffectGen,
   [noNativeArrayMethodsInSrcRuleName]: noNativeArrayMethodsInSrc,
   [noNativeDateUrlJsonBoundariesRuleName]: noNativeDateUrlJsonBoundaries,
+  [noNativeMapInSrcRuleName]: noNativeMapInSrc,
   [noNativeObjectMethodsInSrcRuleName]: noNativeObjectMethodsInSrc,
+  [noNativeSetInSrcRuleName]: noNativeSetInSrc,
   [noNativeStringMethodsInSrcRuleName]: noNativeStringMethodsInSrc,
   [noProcessEnvRuleName]: noProcessEnv,
   [noSchemaOptionalRuleName]: noSchemaOptional,

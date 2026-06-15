@@ -12,6 +12,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
+import * as Record from "effect/Record";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
 import { ParseError } from "../Errors.ts";
@@ -54,8 +55,8 @@ export class GherkinCompiler extends Context.Service<
 
 /** @internal */
 export interface SourceIndex {
-  readonly steps: ReadonlyMap<string, CucumberStep>;
-  readonly scenarios: ReadonlyMap<
+  readonly steps: Record.ReadonlyRecord<string, CucumberStep>;
+  readonly scenarios: Record.ReadonlyRecord<
     string,
     {
       readonly scenario: CucumberScenario;
@@ -104,13 +105,12 @@ interface ScenarioEntry {
 const indexDocument = (document: GherkinDocument): SourceIndex => {
   const entries = Fn.pipe(document.feature?.children ?? [], Arr.flatMap(indexFeatureChild));
   return {
-    steps: new Map(
-      Fn.pipe(
-        entries,
-        Arr.flatMap(({ steps }) => steps),
-      ),
+    steps: Fn.pipe(
+      entries,
+      Arr.flatMap(({ steps }) => steps),
+      Record.fromEntries,
     ),
-    scenarios: new Map(Fn.pipe(entries, Arr.filterMap(scenarioEntry))),
+    scenarios: Fn.pipe(entries, Arr.filterMap(scenarioEntry), Record.fromEntries),
   };
 };
 
@@ -165,8 +165,8 @@ export const findScenario = (pickle: Pickle, index: SourceIndex) =>
   Fn.pipe(
     pickle.astNodeIds,
     Option.liftPredicate((ids): ids is ReadonlyArray<string> => ids.length > 0),
-    Option.flatMap(() => Arr.findFirst(pickle.astNodeIds, (id) => index.scenarios.has(id))),
-    Option.flatMap((id) => Option.fromNullishOr(index.scenarios.get(id))),
+    Option.flatMap(() => Arr.findFirst(pickle.astNodeIds, (id) => Record.has(index.scenarios, id))),
+    Option.flatMap((id) => Record.get(index.scenarios, id)),
   );
 
 /** @internal */
@@ -176,8 +176,8 @@ const findStep = (
 ): CucumberStep | undefined =>
   Fn.pipe(
     pickleStep.astNodeIds,
-    Arr.findFirst((id) => index.steps.has(id)),
-    Option.flatMap((id) => Option.fromNullishOr(index.steps.get(id))),
+    Arr.findFirst((id) => Record.has(index.steps, id)),
+    Option.flatMap((id) => Record.get(index.steps, id)),
     Option.getOrUndefined,
   );
 
