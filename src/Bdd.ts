@@ -634,14 +634,19 @@ const makeScenario = <State, E, R>(
   function appendScenario<E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0> {
     return makeFeature(self.title, [...self.scenarios, scenario]);
   }
-  const scenario: Scenario<State, E, R> = Object.assign(appendScenario, {
+  const properties: Pick<
+    Scenario<State, E, R>,
+    typeof ScenarioTypeId | "title" | "steps" | "pipe"
+  > = {
     [ScenarioTypeId]: ScenarioTypeId,
     title,
     steps,
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
-  });
+  };
+  // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
+  const scenario: Scenario<State, E, R> = Object.assign(appendScenario, properties);
   return Object.freeze(scenario);
 };
 
@@ -656,10 +661,18 @@ interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> 
 const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
 ): Step<Kind, In, Out, E, R, Captures, Argument> => {
-  function appendStep<E0, R0>(self: Scenario<In, E0, R0>): Scenario<Out, E | E0, R | R0> {
+  function appendStep<State extends In, E0, R0>(
+    self: Scenario<State, E0, R0>,
+  ): Scenario<Out, E | E0, R | R0> {
     return makeScenario(self.title, [...self.steps, step]);
   }
-  const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(appendStep, {
+  const properties: Pick<
+    Step<Kind, In, Out, E, R, Captures, Argument>,
+    typeof StepTypeId | "kind" | "expression" | "run" | "pipe"
+  > & {
+    readonly argument?: StepArg<Argument>;
+    readonly timeout?: Duration.Duration;
+  } = {
     [StepTypeId]: StepTypeId,
     kind: options.kind,
     expression: options.expression,
@@ -669,7 +682,12 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
-  });
+  };
+  // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
+  const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(
+    appendStep,
+    properties,
+  );
   return Object.freeze(step);
 };
 
@@ -745,6 +763,7 @@ function makeStepFactory<Kind extends StepKind, Captures>(
         ),
     });
   }
+  // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
   return Object.assign(factory, {
     kind,
     expression: matcher,
@@ -778,8 +797,8 @@ const handlerArgs = (
   return impl.length > args.length ? Arr.append(args, state) : args;
 };
 
+const isStepArgTag = (tag: unknown): tag is StepArg<unknown>["_tag"] =>
+  tag === "TableArg" || tag === "DocStringArg";
+
 const isStepArg = (u: unknown): u is StepArg<unknown> =>
-  typeof u === "object" &&
-  u !== null &&
-  "_tag" in u &&
-  (u._tag === "TableArg" || u._tag === "DocStringArg");
+  typeof u === "object" && u !== null && "_tag" in u && isStepArgTag(u._tag);

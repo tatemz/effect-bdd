@@ -22,13 +22,13 @@ describe("public API", () => {
       assert.strictEqual(Object.isFrozen(scenario), true);
       assert.strictEqual(Object.isFrozen(feature), true);
       assert.throws(() => {
-        (feature as { title: string }).title = "Mutated";
+        Object.defineProperty(feature, "title", { value: "Mutated" });
       }, TypeError);
       assert.throws(() => {
-        (scenario as { title: string }).title = "Mutated";
+        Object.defineProperty(scenario, "title", { value: "Mutated" });
       }, TypeError);
       assert.throws(() => {
-        (step as { timeout?: unknown }).timeout = Duration.seconds(1);
+        Object.defineProperty(step, "timeout", { value: Duration.seconds(1) });
       }, TypeError);
     });
   });

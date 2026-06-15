@@ -5,33 +5,45 @@ export const isIdentifier = (node, name) =>
 
 export const literalValue = (node) => (node?.type === "Literal" ? node.value : undefined);
 
+export const memberExpression = (node) => {
+  const expression = unchain(node);
+  return expression?.type === "MemberExpression" ? expression : undefined;
+};
+
 export const propertyName = (member) => {
-  const node = unchain(member);
-  if (!node || node.type !== "MemberExpression") {
+  const node = memberExpression(member);
+  if (node === undefined) {
     return undefined;
   }
-  if (!node.computed && node.property?.type === "Identifier") {
-    return node.property.name;
-  }
-  const value = literalValue(node.property);
+  return node.computed
+    ? computedPropertyName(node.property)
+    : identifierPropertyName(node.property);
+};
+
+const identifierPropertyName = (property) =>
+  property?.type === "Identifier" ? property.name : undefined;
+
+const computedPropertyName = (property) => {
+  const value = literalValue(property);
   return typeof value === "string" ? value : undefined;
 };
 
 export const objectName = (member) => {
-  const node = unchain(member);
-  return node?.type === "MemberExpression" && node.object?.type === "Identifier"
-    ? node.object.name
-    : undefined;
+  const node = memberExpression(member);
+  return identifierPropertyName(node?.object);
 };
 
 export const isMemberCall = (node, namespace, method) => {
-  const call = unchain(node);
-  return (
-    call?.type === "CallExpression" &&
-    unchain(call.callee)?.type === "MemberExpression" &&
-    objectName(call.callee) === namespace &&
-    propertyName(call.callee) === method
-  );
+  const call = callExpression(node);
+  return call === undefined ? false : memberCallMatches(call, namespace, method);
 };
+
+const callExpression = (node) => {
+  const call = unchain(node);
+  return call?.type === "CallExpression" ? call : undefined;
+};
+
+const memberCallMatches = (call, namespace, method) =>
+  objectName(call.callee) === namespace && propertyName(call.callee) === method;
 
 export const normalizePath = (path) => path.replaceAll("\\", "/");

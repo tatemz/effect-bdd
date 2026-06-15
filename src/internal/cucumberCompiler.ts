@@ -29,39 +29,52 @@ const compileWithCucumber = (source: string, uri: string): ParsedSource => {
 const parseErrorFromCause = (cause: unknown): ParseError => {
   const location = causeLocation(cause);
   return new ParseError({
-    message: Predicate.isError(cause) ? cause.message : String(cause),
-    line: location?.line ?? 1,
-    column: location?.column ?? 1,
+    message: causeMessage(cause),
+    line: locationLine(location),
+    column: locationColumn(location),
   });
 };
+
+const causeMessage = (cause: unknown): string =>
+  Predicate.isError(cause) ? cause.message : String(cause);
+
+const locationLine = (location: { readonly line: number } | undefined): number =>
+  location?.line ?? 1;
+
+const locationColumn = (location: { readonly column?: number } | undefined): number =>
+  location?.column ?? 1;
 
 const causeLocation = (
   cause: unknown,
 ): { readonly line: number; readonly column?: number } | undefined => {
-  if (
-    typeof cause === "object" &&
-    cause !== null &&
-    "errors" in cause &&
-    Arr.isArray(cause.errors) &&
-    cause.errors.length > 0
-  ) {
-    return causeLocation(cause.errors[0]);
-  }
-  if (typeof cause === "object" && cause !== null && "location" in cause) {
-    const location = cause.location;
-    if (
-      typeof location === "object" &&
-      location !== null &&
-      "line" in location &&
-      typeof location.line === "number"
-    ) {
-      return {
-        line: location.line,
-        ...("column" in location && typeof location.column === "number"
-          ? { column: location.column }
-          : {}),
-      };
-    }
-  }
-  return undefined;
+  const firstError = firstNestedError(cause);
+  return firstError === undefined ? locationFromCause(cause) : causeLocation(firstError);
 };
+
+const isObject = (value: unknown): value is object => typeof value === "object" && value !== null;
+
+const firstNestedError = (cause: unknown): unknown | undefined =>
+  isObject(cause) && "errors" in cause && Arr.isArray(cause.errors) ? cause.errors[0] : undefined;
+
+const locationFromCause = (
+  cause: unknown,
+): { readonly line: number; readonly column?: number } | undefined =>
+  isObject(cause) && "location" in cause ? normalizeLocation(cause.location) : undefined;
+
+const normalizeLocation = (
+  location: unknown,
+): { readonly line: number; readonly column?: number } | undefined => {
+  if (!hasLine(location)) {
+    return undefined;
+  }
+  const column = numericColumn(location);
+  return column === undefined ? { line: location.line } : { line: location.line, column };
+};
+
+const hasLine = (
+  location: unknown,
+): location is { readonly line: number; readonly column?: unknown } =>
+  isObject(location) && "line" in location && typeof location.line === "number";
+
+const numericColumn = (location: { readonly column?: unknown }): number | undefined =>
+  "column" in location && typeof location.column === "number" ? location.column : undefined;

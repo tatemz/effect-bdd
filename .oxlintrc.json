@@ -18,7 +18,7 @@
     "complexity": [
       "error",
       {
-        "max": 15,
+        "max": 4,
         "variant": "classic"
       }
     ],

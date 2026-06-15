@@ -128,12 +128,30 @@ const indexScenarioChild = (
   child: CucumberFeatureChild | CucumberRuleChild,
   rule: CucumberRule | undefined,
 ): ChildIndex => ({
-  steps: Fn.pipe(
-    [...(child.background?.steps ?? []), ...(child.scenario?.steps ?? [])],
-    Arr.map((step) => [step.id, step] as const),
-  ),
-  scenario: child.scenario === undefined ? undefined : { scenario: child.scenario, rule },
+  steps: stepsForChild(child),
+  scenario: scenarioForChild(child, rule),
 });
+
+const stepsForChild = (
+  child: CucumberFeatureChild | CucumberRuleChild,
+): ReadonlyArray<readonly [string, CucumberStep]> =>
+  Fn.pipe([...backgroundSteps(child), ...scenarioSteps(child)], Arr.map(stepEntry));
+
+const backgroundSteps = (
+  child: CucumberFeatureChild | CucumberRuleChild,
+): ReadonlyArray<CucumberStep> => child.background?.steps ?? [];
+
+const scenarioSteps = (
+  child: CucumberFeatureChild | CucumberRuleChild,
+): ReadonlyArray<CucumberStep> => child.scenario?.steps ?? [];
+
+const stepEntry = (step: CucumberStep): readonly [string, CucumberStep] => [step.id, step];
+
+const scenarioForChild = (
+  child: CucumberFeatureChild | CucumberRuleChild,
+  rule: CucumberRule | undefined,
+): ScenarioEntry | undefined =>
+  child.scenario === undefined ? undefined : { scenario: child.scenario, rule };
 
 const scenarioEntry = (
   child: ChildIndex,
@@ -178,22 +196,16 @@ export const stepKeyword = (
   return source === undefined ? "Given" : normalizeKeyword(source.keyword);
 };
 
-const normalizeKeyword = (keyword: string): Keyword => {
-  const trimmed = Str.trim(keyword);
-  switch (trimmed) {
-    case "Given":
-    case "When":
-    case "Then":
-    case "And":
-    case "But":
-    case "*": {
-      return trimmed;
-    }
-    default: {
-      return "Given";
-    }
-  }
+const keywords: Readonly<Record<string, Keyword>> = {
+  Given: "Given",
+  When: "When",
+  Then: "Then",
+  And: "And",
+  But: "But",
+  "*": "*",
 };
+
+const normalizeKeyword = (keyword: string): Keyword => keywords[Str.trim(keyword)] ?? "Given";
 
 const parseError = (
   message: string,

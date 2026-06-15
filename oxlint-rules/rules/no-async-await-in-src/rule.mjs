@@ -3,11 +3,13 @@ import { createRule, report } from "../shared/rule.mjs";
 
 export const noAsyncAwaitInSrcRuleName = "no-async-await-in-src";
 
-const isAsyncFunction = (node) =>
-  (node?.type === "FunctionDeclaration" ||
-    node?.type === "FunctionExpression" ||
-    node?.type === "ArrowFunctionExpression") &&
-  node.async;
+const functionTypes = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+]);
+
+const isAsyncFunction = (node) => functionTypes.has(node?.type) && node.async;
 
 export const noAsyncAwaitInSrc = createRule({
   description: "Disallow ambient async/await and raw Promise construction in source files.",

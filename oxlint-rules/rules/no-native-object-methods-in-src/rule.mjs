@@ -1,4 +1,4 @@
-import { objectName, propertyName, unchain } from "../shared/ast.mjs";
+import { memberExpression, objectName, propertyName } from "../shared/ast.mjs";
 import { createRule, report } from "../shared/rule.mjs";
 
 export const noNativeObjectMethodsInSrcRuleName = "no-native-object-methods-in-src";
@@ -20,15 +20,14 @@ export const noNativeObjectMethodsInSrc = createRule({
   create(context) {
     return {
       CallExpression(node) {
-        const callee = unchain(node.callee);
-        if (
-          callee?.type === "MemberExpression" &&
-          objectName(callee) === "Object" &&
-          objectStaticMethods.has(propertyName(callee))
-        ) {
+        const callee = memberExpression(node.callee);
+        if (callee !== undefined && isNativeObjectMethodCall(callee)) {
           report(context, node, "nativeObject");
         }
       },
     };
   },
 });
+
+const isNativeObjectMethodCall = (callee) =>
+  objectName(callee) === "Object" && objectStaticMethods.has(propertyName(callee));

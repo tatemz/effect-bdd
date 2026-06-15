@@ -5,9 +5,11 @@ export const noInlineNestedEffectGenRuleName = "no-inline-nested-effect-gen";
 
 const isEffectGenCall = (node) => isMemberCall(node, "Effect", "gen");
 
-const isCallbackReturningEffectGen = (node) =>
-  (node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression") &&
-  isEffectGenCall(node.body);
+const callbackTypes = new Set(["ArrowFunctionExpression", "FunctionExpression"]);
+
+const isCallback = (node) => callbackTypes.has(node?.type);
+
+const isCallbackReturningEffectGen = (node) => isCallback(node) && isEffectGenCall(node.body);
 
 export const noInlineNestedEffectGen = createRule({
   description: "Disallow nested inline Effect.gen calls inside other effect flows.",

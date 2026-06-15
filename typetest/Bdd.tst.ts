@@ -2,6 +2,14 @@ import { Bdd } from "effect-bdd";
 import { Duration, Effect, Schema } from "effect";
 import { describe, expect, test } from "tstyche";
 
+interface TimeoutInventory {
+  readonly _: unique symbol;
+}
+
+const runTimeoutStep = (
+  state: number,
+): Effect.Effect<string, "boom", TimeoutInventory> => Effect.succeed(String(state));
+
 describe("Bdd", () => {
   test("captures infer a named struct", () => {
     const qty = Bdd.capture("qty", Schema.NumberFromString);
@@ -125,19 +133,15 @@ describe("Bdd", () => {
   });
 
   test("withTimeout preserves step type information", () => {
-    interface Inventory {
-      readonly _: unique symbol;
-    }
-
-    const step = Bdd.when`needs inventory`(
-      (state: number) => Effect.succeed(String(state)) as Effect.Effect<string, "boom", Inventory>,
-    );
+    const step = Bdd.when`needs inventory`(runTimeoutStep);
     const timed = step.pipe(Bdd.withTimeout(Duration.seconds(1)));
     const timedDataFirst = Bdd.withTimeout(step, Duration.seconds(1));
 
-    expect(timed).type.toBe<Bdd.Step<"When", number, string, "boom", Inventory, {}, undefined>>();
+    expect(timed).type.toBe<
+      Bdd.Step<"When", number, string, "boom", TimeoutInventory, {}, undefined>
+    >();
     expect(timedDataFirst).type.toBe<
-      Bdd.Step<"When", number, string, "boom", Inventory, {}, undefined>
+      Bdd.Step<"When", number, string, "boom", TimeoutInventory, {}, undefined>
     >();
     expect(Bdd.withTimeout).type.not.toBeCallableWith(step, "1 second");
   });

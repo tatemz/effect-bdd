@@ -10,7 +10,12 @@ import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import PackageJson from "../package.json" with { type: "json" };
 import { GlobResolver } from "./internal/cli/glob.ts";
-import { isFatalDiagnostic, type CliOptions } from "./internal/cli/models.ts";
+import {
+  isFatalDiagnostic,
+  type CliOptions,
+  type CliRunResult,
+  type ReporterName,
+} from "./internal/cli/models.ts";
 import { ModuleLoader } from "./internal/cli/moduleLoader.ts";
 import * as Reporter from "./internal/cli/reporter.ts";
 import * as Runner from "./internal/cli/runner.ts";
@@ -77,8 +82,18 @@ const stepTimeout = Flag.string("step-timeout").pipe(
 );
 
 function parseStepTimeout(value: string): Duration.Duration {
+  const input = Fn.pipe(
+    value,
+    Option.liftPredicate(isDurationInputString),
+    Option.getOrThrowWith(
+      () =>
+        new Error(
+          'Expected --step-timeout to be a positive finite Effect duration, such as "500 millis" or "5 seconds"',
+        ),
+    ),
+  );
   return Fn.pipe(
-    Duration.fromInput(value as Duration.Input),
+    Duration.fromInput(input),
     Option.filter((duration) => Duration.isPositive(duration) && Duration.isFinite(duration)),
     Option.getOrThrowWith(
       () =>
@@ -88,6 +103,15 @@ function parseStepTimeout(value: string): Duration.Duration {
     ),
   );
 }
+
+type DurationInputString = `${number} ${Duration.Unit}` | "Infinity" | "-Infinity";
+
+const isDurationInputString = (value: string): value is DurationInputString =>
+  value === "Infinity" ||
+  value === "-Infinity" ||
+  /^-?\d+(?:\.\d+)? (?:nano|nanos|micro|micros|milli|millis|second|seconds|minute|minutes|hour|hours|day|days|week|weeks)$/.test(
+    value,
+  );
 
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withAlias("v"),
@@ -135,62 +159,19 @@ export const cli = Command.make(
     failFast,
     strict,
   },
-  Effect.fnUntraced(function* ({
-    features,
-    steps,
-    reporter,
-    outputFileText,
-    outputFileHtml,
-    outputFileJson,
-    outputFileJunit,
-    parallel,
-    stepTimeout,
-    verbose,
-    tags,
-    title,
-    failFast,
-    strict,
-  }) {
-    const options: CliOptions = {
-      features,
-      steps,
-      reporters: reporter.length === 0 ? ["text"] : reporter,
-      outputFiles: {
-        ...(Option.isSome(outputFileText) ? { text: outputFileText.value } : {}),
-        ...(Option.isSome(outputFileHtml) ? { html: outputFileHtml.value } : {}),
-        ...(Option.isSome(outputFileJson) ? { json: outputFileJson.value } : {}),
-        ...(Option.isSome(outputFileJunit) ? { junit: outputFileJunit.value } : {}),
-      },
-      verbose,
-      filters: {
-        tags,
-        titles: title,
-        failFast,
-      },
-      strict,
-      parallel,
-      ...(Option.isSome(stepTimeout) ? { stepTimeout: stepTimeout.value } : {}),
-    };
+  Effect.fnUntraced(function* (args) {
+    const options = cliOptions(args);
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
-      verbose,
+      verbose: options.verbose,
     }).pipe(Effect.mapError(toUserError));
     const result = yield* Runner.run(options, {
       onEvent: (event) =>
         Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
     }).pipe(Effect.mapError(toUserError));
     yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError));
-    const failingDiagnostics = strict
-      ? result.diagnostics
-      : Arr.filter(result.diagnostics, isFatalDiagnostic);
-    if (result.summary.failed > 0 || failingDiagnostics.length > 0) {
-      return yield* Effect.fail(
-        new CliError.UserError({
-          cause:
-            result.summary.failed > 0
-              ? `${result.summary.failed} scenario(s) failed`
-              : `${failingDiagnostics.length} diagnostic(s) reported`,
-        }),
-      );
+    const failure = resultFailure(result, options.strict);
+    if (Option.isSome(failure)) {
+      return yield* Effect.fail(failure.value);
     }
   }),
 ).pipe(
@@ -207,3 +188,84 @@ export const run = Command.run(cli, {
 
 const toUserError = (error: { readonly message: string }): CliError.UserError =>
   new CliError.UserError({ cause: error.message });
+
+interface CliArgs {
+  readonly features: ReadonlyArray<string>;
+  readonly steps: ReadonlyArray<string>;
+  readonly reporter: ReadonlyArray<ReporterName>;
+  readonly outputFileText: Option.Option<string>;
+  readonly outputFileHtml: Option.Option<string>;
+  readonly outputFileJson: Option.Option<string>;
+  readonly outputFileJunit: Option.Option<string>;
+  readonly parallel: number;
+  readonly stepTimeout: Option.Option<Duration.Duration>;
+  readonly verbose: boolean;
+  readonly tags: ReadonlyArray<string>;
+  readonly title: ReadonlyArray<string>;
+  readonly failFast: boolean;
+  readonly strict: boolean;
+}
+
+const cliOptions = (args: CliArgs): CliOptions => ({
+  features: args.features,
+  steps: args.steps,
+  reporters: defaultReporters(args.reporter),
+  outputFiles: {
+    ...textOutputFile(args.outputFileText),
+    ...htmlOutputFile(args.outputFileHtml),
+    ...jsonOutputFile(args.outputFileJson),
+    ...junitOutputFile(args.outputFileJunit),
+  },
+  verbose: args.verbose,
+  filters: {
+    tags: args.tags,
+    titles: args.title,
+    failFast: args.failFast,
+  },
+  strict: args.strict,
+  parallel: args.parallel,
+  ...stepTimeoutOption(args.stepTimeout),
+});
+
+const defaultReporters = (reporters: ReadonlyArray<ReporterName>): ReadonlyArray<ReporterName> =>
+  reporters.length === 0 ? ["text"] : reporters;
+
+const textOutputFile = (
+  file: Option.Option<string>,
+): Pick<CliOptions["outputFiles"], "text"> | {} =>
+  Option.isSome(file) ? { text: file.value } : {};
+
+const htmlOutputFile = (
+  file: Option.Option<string>,
+): Pick<CliOptions["outputFiles"], "html"> | {} =>
+  Option.isSome(file) ? { html: file.value } : {};
+
+const jsonOutputFile = (
+  file: Option.Option<string>,
+): Pick<CliOptions["outputFiles"], "json"> | {} =>
+  Option.isSome(file) ? { json: file.value } : {};
+
+const junitOutputFile = (
+  file: Option.Option<string>,
+): Pick<CliOptions["outputFiles"], "junit"> | {} =>
+  Option.isSome(file) ? { junit: file.value } : {};
+
+const stepTimeoutOption = (
+  timeout: Option.Option<Duration.Duration>,
+): Pick<CliOptions, "stepTimeout"> | {} =>
+  Option.isSome(timeout) ? { stepTimeout: timeout.value } : {};
+
+const resultFailure = (result: CliRunResult, strict: boolean): Option.Option<CliError.UserError> =>
+  Option.map(resultFailureCause(result, strict), (cause) => new CliError.UserError({ cause }));
+
+const resultFailureCause = (result: CliRunResult, strict: boolean): Option.Option<string> => {
+  if (result.summary.failed > 0) {
+    return Option.some(`${result.summary.failed} scenario(s) failed`);
+  }
+  const failingDiagnostics = strict
+    ? result.diagnostics
+    : Arr.filter(result.diagnostics, isFatalDiagnostic);
+  return failingDiagnostics.length > 0
+    ? Option.some(`${failingDiagnostics.length} diagnostic(s) reported`)
+    : Option.none();
+};

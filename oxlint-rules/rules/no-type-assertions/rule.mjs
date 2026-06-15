@@ -3,10 +3,15 @@ import { createRule, report } from "../shared/rule.mjs";
 export const noTypeAssertionsRuleName = "no-type-assertions";
 
 const isConstAssertion = (node) =>
-  node.typeAnnotation?.type === "TSConstKeyword" ||
-  (node.typeAnnotation?.type === "TSTypeReference" &&
-    node.typeAnnotation.typeName?.type === "Identifier" &&
-    node.typeAnnotation.typeName.name === "const");
+  isConstKeyword(node.typeAnnotation) || isConstTypeReference(node.typeAnnotation);
+
+const isConstKeyword = (annotation) => annotation?.type === "TSConstKeyword";
+
+const isConstTypeReference = (annotation) =>
+  annotation?.type === "TSTypeReference" && isConstIdentifier(annotation.typeName);
+
+const isConstIdentifier = (typeName) =>
+  typeName?.type === "Identifier" && typeName.name === "const";
 
 export const noTypeAssertions = createRule({
   description: "Disallow unsafe TypeScript type assertions.",

@@ -18,24 +18,24 @@ const fenceBody = (fence) => fence.split("\n").slice(1, -1).join("\n");
 
 const extractExamples = (file) => {
   const text = readFileSync(join(root, file), "utf8");
-  if (file.endsWith(".md")) {
-    return (text.match(/```ts\n[\s\S]*?```/g) ?? []).map(fenceBody);
-  }
-  const examples = [];
-  const docComments = text.match(/\/\*\*[\s\S]*?\*\//g) ?? [];
-  for (const comment of docComments) {
-    if (!comment.includes("@example")) continue;
-    for (const fence of comment.match(/```ts\n[\s\S]*?```/g) ?? []) {
-      examples.push(
-        fenceBody(fence)
-          .split("\n")
-          .map((line) => line.replace(/^\s*\* ?/, ""))
-          .join("\n"),
-      );
-    }
-  }
-  return examples;
+  return file.endsWith(".md") ? extractMarkdownExamples(text) : extractJSDocExamples(text);
 };
+
+const extractMarkdownExamples = (text) => tsFences(text).map(fenceBody);
+
+const extractJSDocExamples = (text) =>
+  text.match(/\/\*\*[\s\S]*?\*\//g)?.flatMap(extractJSDocCommentExamples) ?? [];
+
+const extractJSDocCommentExamples = (comment) =>
+  comment.includes("@example") ? tsFences(comment).map(jsDocFenceBody) : [];
+
+const tsFences = (text) => text.match(/```ts\n[\s\S]*?```/g) ?? [];
+
+const jsDocFenceBody = (fence) =>
+  fenceBody(fence)
+    .split("\n")
+    .map((line) => line.replace(/^\s*\* ?/, ""))
+    .join("\n");
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });

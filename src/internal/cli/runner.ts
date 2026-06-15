@@ -186,13 +186,7 @@ const buildScenarioTask = (
     Option.map(({ scenario }) => scenario.name),
     Option.getOrElse(() => pickle.name),
   );
-  const scenarioLine =
-    pickle.location?.line ??
-    Fn.pipe(
-      sourceScenario,
-      Option.map(({ scenario }) => scenario.location.line),
-      Option.getOrElse(() => parsed.line),
-    );
+  const scenarioLine = sourceScenarioLine(pickle, sourceScenario, parsed.line);
   const scenarioDefinition = scenarioDefinitions.get(scenarioTitle);
   if (scenarioDefinition === undefined) {
     return {
@@ -207,11 +201,6 @@ const buildScenarioTask = (
       },
     };
   }
-  const rule = Fn.pipe(
-    sourceScenario,
-    Option.map(({ rule }) => rule),
-    Option.getOrUndefined,
-  );
   return {
     _tag: "Task",
     task: {
@@ -224,12 +213,7 @@ const buildScenarioTask = (
         sourceScenarioTitle: scenarioTitle,
         scenarioIndex,
         scenarioLine,
-        ...(rule === undefined
-          ? {}
-          : {
-              ruleTitle: rule.name,
-              ruleLine: rule.location.line,
-            }),
+        ...sourceScenarioRuleFields(sourceScenario),
         tags: Arr.map(pickle.tags, (tag) => tag.name),
         pickle,
         source: parsed.source,
@@ -237,6 +221,42 @@ const buildScenarioTask = (
     },
   };
 };
+
+const sourceScenarioLine = (
+  pickle: Parser.CompiledFeature["pickles"][number],
+  sourceScenario: ReturnType<typeof Parser.findScenario>,
+  fallbackLine: number,
+): number =>
+  pickle.location?.line ??
+  Fn.pipe(
+    sourceScenario,
+    Option.map(({ scenario }) => scenario.location.line),
+    Option.getOrElse(() => fallbackLine),
+  );
+
+const sourceScenarioRuleFields = (
+  sourceScenario: ReturnType<typeof Parser.findScenario>,
+): { readonly ruleTitle: string; readonly ruleLine: number } | {} =>
+  Fn.pipe(
+    sourceScenario,
+    Option.map(({ rule }) => ruleFields(rule)),
+    Option.getOrElse(() => ({})),
+  );
+
+type SourceScenarioEntry =
+  Parser.SourceIndex["scenarios"] extends ReadonlyMap<string, infer Entry> ? Entry : never;
+
+type SourceScenarioRule = SourceScenarioEntry extends { readonly rule: infer Rule } ? Rule : never;
+
+const ruleFields = (
+  rule: SourceScenarioRule,
+): { readonly ruleTitle: string; readonly ruleLine: number } | {} =>
+  rule === undefined
+    ? {}
+    : {
+        ruleTitle: rule.name,
+        ruleLine: rule.location.line,
+      };
 
 const runScenario = Effect.fnUntraced(function* (
   options: CliOptions,

@@ -1,4 +1,4 @@
-import { objectName, propertyName, unchain } from "../shared/ast.mjs";
+import { memberExpression, objectName, propertyName } from "../shared/ast.mjs";
 import { isEffectStdlibCall } from "../shared/effect.mjs";
 import { createRule, report } from "../shared/rule.mjs";
 
@@ -46,20 +46,20 @@ export const noNativeArrayMethodsInSrc = createRule({
   create(context) {
     return {
       CallExpression(node) {
-        const callee = unchain(node.callee);
-        if (callee?.type !== "MemberExpression" || isEffectStdlibCall(callee)) {
-          return;
-        }
-
-        const method = propertyName(callee);
-        const namespace = objectName(callee);
-        if (
-          (namespace === "Array" && arrayStaticMethods.has(method)) ||
-          arrayInstanceMethods.has(method)
-        ) {
+        const callee = memberExpression(node.callee);
+        if (callee !== undefined && isNativeArrayMethodCall(callee)) {
           report(context, node, "nativeArray");
         }
       },
     };
   },
 });
+
+const isNativeArrayMethodCall = (callee) =>
+  !isEffectStdlibCall(callee) && isArrayMethodCall(callee);
+
+const isArrayMethodCall = (callee) =>
+  isArrayStaticMethod(callee) || arrayInstanceMethods.has(propertyName(callee));
+
+const isArrayStaticMethod = (callee) =>
+  objectName(callee) === "Array" && arrayStaticMethods.has(propertyName(callee));

@@ -12,14 +12,16 @@ export const noUntypedTryPromise = createRule({
   create(context) {
     return {
       CallExpression(node) {
-        if (
-          isMemberCall(node, "Effect", "tryPromise") &&
-          (node.arguments[0]?.type === "ArrowFunctionExpression" ||
-            node.arguments[0]?.type === "FunctionExpression")
-        ) {
+        if (isUntypedTryPromise(node)) {
           report(context, node, "untypedTryPromise");
         }
       },
     };
   },
 });
+
+const isUntypedTryPromise = (node) =>
+  isMemberCall(node, "Effect", "tryPromise") && isFunctionArgument(node.arguments[0]);
+
+const isFunctionArgument = (node) =>
+  node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";

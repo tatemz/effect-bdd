@@ -366,14 +366,15 @@ Feature: Timeouts
 
       assert.strictEqual(result._tag, "Failure");
       if (result._tag === "Failure") {
-        const error = Option.getOrThrow(Cause.findErrorOption(result.cause)) as Bdd.RunError;
-        assert.strictEqual(error._tag, "StepError");
-        assert.match(error.message, /Step timed out after .*: the step hangs/);
-        assert.strictEqual(error.cause instanceof Bdd.StepTimeoutError, true);
-        assert.deepStrictEqual(
-          (error.cause as InstanceType<typeof Bdd.StepTimeoutError>).timeout,
-          Duration.millis(1),
-        );
+        const error = Option.getOrThrow(Cause.findErrorOption(result.cause));
+        assert.strictEqual(error instanceof Bdd.StepError, true);
+        if (error instanceof Bdd.StepError) {
+          assert.match(error.message, /Step timed out after .*: the step hangs/);
+          assert.strictEqual(error.cause instanceof Bdd.StepTimeoutError, true);
+          if (error.cause instanceof Bdd.StepTimeoutError) {
+            assert.deepStrictEqual(error.cause.timeout, Duration.millis(1));
+          }
+        }
       }
     });
   });

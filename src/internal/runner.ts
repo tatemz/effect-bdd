@@ -297,7 +297,7 @@ export const runScenarioTask = <E, R>(
       title: task.scenarioTitle,
       steps: task.pickle.steps.length,
       tags: task.tags,
-    })),
+    }),
   );
 
 const runSteps: <E, R>(
@@ -432,52 +432,81 @@ const decodeArgument = (
   source: Parser.SourceIndex,
 ): Effect.Effect<unknown, MatchError> => {
   const candidates = [stepDefinition.expression.source];
-  if (stepDefinition.argument === undefined) {
-    return hasStepArgument(step)
-      ? failStep(
-          `Step "${step.text}" has an unexpected argument`,
-          scenario,
-          step,
-          source,
-          candidates,
-        )
-      : Effect.succeed(undefined);
-  }
-
-  if (stepDefinition.argument._tag === "TableArg") {
-    return step.argument?.dataTable === undefined
-      ? failStep(`Step "${step.text}" requires a DataTable`, scenario, step, source, candidates)
-      : Fn.pipe(
-          stepDefinition.argument.decode(step.argument.dataTable),
-          Effect.mapError((cause) =>
-            matchError(
-              `Could not decode DataTable for step "${step.text}"`,
-              scenario,
-              step,
-              source,
-              candidates,
-              cause,
-            ),
-          ),
-        );
-  }
-
-  return step.argument?.docString === undefined
-    ? failStep(`Step "${step.text}" requires a DocString`, scenario, step, source, candidates)
-    : Fn.pipe(
-        stepDefinition.argument.decode(step.argument.docString),
-        Effect.mapError((cause) =>
-          matchError(
-            `Could not decode DocString for step "${step.text}"`,
-            scenario,
-            step,
-            source,
-            candidates,
-            cause,
-          ),
-        ),
-      );
+  const argument = stepDefinition.argument;
+  return argument === undefined
+    ? decodeNoArgument(scenario, step, source, candidates)
+    : decodeExpectedArgument(argument, scenario, step, source, candidates);
 };
+
+const decodeNoArgument = (
+  scenario: string,
+  step: PickleStep,
+  source: Parser.SourceIndex,
+  candidates: ReadonlyArray<string>,
+): Effect.Effect<unknown, MatchError> =>
+  hasStepArgument(step)
+    ? failStep(`Step "${step.text}" has an unexpected argument`, scenario, step, source, candidates)
+    : Effect.succeed(undefined);
+
+const decodeExpectedArgument = (
+  argument: StepArg<unknown>,
+  scenario: string,
+  step: PickleStep,
+  source: Parser.SourceIndex,
+  candidates: ReadonlyArray<string>,
+): Effect.Effect<unknown, MatchError> =>
+  argument._tag === "TableArg"
+    ? decodeTableArgument(argument, scenario, step, source, candidates)
+    : decodeDocStringArgument(argument, scenario, step, source, candidates);
+
+const decodeTableArgument = (
+  argument: TableArg<unknown>,
+  scenario: string,
+  step: PickleStep,
+  source: Parser.SourceIndex,
+  candidates: ReadonlyArray<string>,
+): Effect.Effect<unknown, MatchError> =>
+  step.argument?.dataTable === undefined
+    ? failStep(`Step "${step.text}" requires a DataTable`, scenario, step, source, candidates)
+    : mapArgumentDecodeError(
+        argument.decode(step.argument.dataTable),
+        `Could not decode DataTable for step "${step.text}"`,
+        scenario,
+        step,
+        source,
+        candidates,
+      );
+
+const decodeDocStringArgument = (
+  argument: DocStringArg<unknown>,
+  scenario: string,
+  step: PickleStep,
+  source: Parser.SourceIndex,
+  candidates: ReadonlyArray<string>,
+): Effect.Effect<unknown, MatchError> =>
+  step.argument?.docString === undefined
+    ? failStep(`Step "${step.text}" requires a DocString`, scenario, step, source, candidates)
+    : mapArgumentDecodeError(
+        argument.decode(step.argument.docString),
+        `Could not decode DocString for step "${step.text}"`,
+        scenario,
+        step,
+        source,
+        candidates,
+      );
+
+const mapArgumentDecodeError = (
+  effect: Effect.Effect<unknown, unknown>,
+  message: string,
+  scenario: string,
+  step: PickleStep,
+  source: Parser.SourceIndex,
+  candidates: ReadonlyArray<string>,
+): Effect.Effect<unknown, MatchError> =>
+  Fn.pipe(
+    effect,
+    Effect.mapError((cause) => matchError(message, scenario, step, source, candidates, cause)),
+  );
 
 const validateFeatureDefinition = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,

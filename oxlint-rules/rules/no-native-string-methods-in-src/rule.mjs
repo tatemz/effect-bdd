@@ -1,4 +1,4 @@
-import { objectName, propertyName, unchain } from "../shared/ast.mjs";
+import { memberExpression, objectName, propertyName } from "../shared/ast.mjs";
 import { isEffectStdlibCall } from "../shared/effect.mjs";
 import { createRule, report } from "../shared/rule.mjs";
 
@@ -34,14 +34,9 @@ const stringInstanceMethods = new Set([
 const stringStaticMethods = new Set(["fromCharCode", "fromCodePoint", "raw"]);
 
 const isSchemaMatchCall = (callee) => {
-  const expression = unchain(callee);
-  const object = unchain(expression?.object);
-  return (
-    expression?.type === "MemberExpression" &&
-    propertyName(expression) === "match" &&
-    object?.type === "MemberExpression" &&
-    propertyName(object) === "expression"
-  );
+  const expression = memberExpression(callee);
+  const object = memberExpression(expression?.object);
+  return propertyName(expression) === "match" && propertyName(object) === "expression";
 };
 
 export const noNativeStringMethodsInSrc = createRule({
@@ -52,24 +47,20 @@ export const noNativeStringMethodsInSrc = createRule({
   create(context) {
     return {
       CallExpression(node) {
-        const callee = unchain(node.callee);
-        if (
-          callee?.type !== "MemberExpression" ||
-          isEffectStdlibCall(callee) ||
-          isSchemaMatchCall(callee)
-        ) {
-          return;
-        }
-
-        const method = propertyName(callee);
-        const namespace = objectName(callee);
-        if (
-          (namespace === "String" && stringStaticMethods.has(method)) ||
-          stringInstanceMethods.has(method)
-        ) {
+        const callee = memberExpression(node.callee);
+        if (callee !== undefined && isNativeStringMethodCall(callee)) {
           report(context, node, "nativeString");
         }
       },
     };
   },
 });
+
+const isNativeStringMethodCall = (callee) =>
+  !isEffectStdlibCall(callee) && !isSchemaMatchCall(callee) && isStringMethodCall(callee);
+
+const isStringMethodCall = (callee) =>
+  isStringStaticMethod(callee) || stringInstanceMethods.has(propertyName(callee));
+
+const isStringStaticMethod = (callee) =>
+  objectName(callee) === "String" && stringStaticMethods.has(propertyName(callee));

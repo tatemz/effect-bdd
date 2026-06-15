@@ -44,28 +44,47 @@ export const makeReporters = (
     readonly verbose: boolean;
   },
 ): Effect.Effect<ReadonlyArray<Reporter>, ReporterError> =>
-  Effect.forEach(names, (name) => {
-    switch (name) {
-      case "text": {
-        return Effect.succeed(textReporter(outputFiles.text, options.verbose));
-      }
-      case "html": {
-        return outputFiles.html === undefined
-          ? Effect.fail(new ReporterError({ message: "Reporter html requires --output-file.html" }))
-          : Effect.succeed(htmlReporter(outputFiles.html));
-      }
-      case "json": {
-        return Effect.succeed(jsonReporter(outputFiles.json));
-      }
-      case "junit": {
-        return outputFiles.junit === undefined
-          ? Effect.fail(
-              new ReporterError({ message: "Reporter junit requires --output-file.junit" }),
-            )
-          : Effect.succeed(junitReporter(outputFiles.junit));
-      }
-    }
-  });
+  Effect.forEach(names, (name) => makeReporter(name, outputFiles, options));
+
+type OutputFiles = CliOptionsOutputFiles;
+
+type CliOptionsOutputFiles = {
+  readonly text?: string;
+  readonly html?: string;
+  readonly json?: string;
+  readonly junit?: string;
+};
+
+type ReporterOptions = {
+  readonly verbose: boolean;
+};
+
+type ReporterFactory = (
+  outputFiles: OutputFiles,
+  options: ReporterOptions,
+) => Effect.Effect<Reporter, ReporterError>;
+
+const reporterFactories: { readonly [Name in ReporterName]: ReporterFactory } = {
+  text: (outputFiles, options) => Effect.succeed(textReporter(outputFiles.text, options.verbose)),
+  html: (outputFiles) => requireOutputFile("html", outputFiles.html).pipe(Effect.map(htmlReporter)),
+  json: (outputFiles) => Effect.succeed(jsonReporter(outputFiles.json)),
+  junit: (outputFiles) =>
+    requireOutputFile("junit", outputFiles.junit).pipe(Effect.map(junitReporter)),
+};
+
+const makeReporter = (
+  name: ReporterName,
+  outputFiles: OutputFiles,
+  options: ReporterOptions,
+): Effect.Effect<Reporter, ReporterError> => reporterFactories[name](outputFiles, options);
+
+const requireOutputFile = (
+  name: "html" | "junit",
+  outputFile: string | undefined,
+): Effect.Effect<string, ReporterError> =>
+  outputFile === undefined
+    ? Effect.fail(new ReporterError({ message: `Reporter ${name} requires --output-file.${name}` }))
+    : Effect.succeed(outputFile);
 
 /** @internal */
 export const emitAll: (
@@ -280,21 +299,21 @@ const renderDiscoveredScenario = (
 ): string =>
   `  ${scenario.featurePath}:${scenario.scenarioLine} ${scenario.featureTitle} / ${scenario.scenarioTitle}`;
 
-const renderRunEvent = (event: RunEvent, verbose: boolean): string | undefined => {
-  switch (event._tag) {
-    case "ScenarioStarted": {
-      return `RUNNING ${event.task.featurePath}:${event.task.core.scenarioLine} ${renderTaskName(
-        event.task,
-      )}`;
-    }
-    case "ScenarioFinished": {
-      if (event.result.outcome._tag === "Passed" && !verbose) {
-        return undefined;
-      }
-      return renderScenarioText(event.result);
-    }
-  }
-};
+const renderRunEvent = (event: RunEvent, verbose: boolean): string | undefined =>
+  event._tag === "ScenarioStarted"
+    ? renderScenarioStartedEvent(event)
+    : renderScenarioFinishedEvent(event, verbose);
+
+const renderScenarioStartedEvent = (
+  event: Extract<RunEvent, { readonly _tag: "ScenarioStarted" }>,
+): string =>
+  `RUNNING ${event.task.featurePath}:${event.task.core.scenarioLine} ${renderTaskName(event.task)}`;
+
+const renderScenarioFinishedEvent = (
+  event: Extract<RunEvent, { readonly _tag: "ScenarioFinished" }>,
+  verbose: boolean,
+): string | undefined =>
+  event.result.outcome._tag === "Passed" && !verbose ? undefined : renderScenarioText(event.result);
 
 const renderScenarioText = (result: ScenarioResult): string => {
   const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
@@ -387,18 +406,29 @@ const renderDiagnosticsText = (
 };
 
 const renderDiagnosticText = (diagnostic: CliDiagnostic): string => {
+  if (isUnusedDiagnostic(diagnostic)) {
+    return `  ${diagnostic.message}`;
+  }
+  return renderUnmatchedDiagnosticText(diagnostic);
+};
+
+type UnusedDiagnostic = Extract<
+  CliDiagnostic,
+  { readonly _tag: "UnusedFeatureDefinition" | "UnusedScenarioDefinition" }
+>;
+
+const isUnusedDiagnostic = (diagnostic: CliDiagnostic): diagnostic is UnusedDiagnostic =>
+  diagnostic._tag === "UnusedFeatureDefinition" || diagnostic._tag === "UnusedScenarioDefinition";
+
+const renderUnmatchedDiagnosticText = (
+  diagnostic: Exclude<CliDiagnostic, UnusedDiagnostic>,
+): string => {
   switch (diagnostic._tag) {
     case "UnmatchedFeature": {
       return `  ${diagnostic.featurePath}:${diagnostic.line}\n    Feature: ${diagnostic.featureTitle}\n    Reason: ${diagnostic.message}`;
     }
     case "UnmatchedScenario": {
       return `  ${diagnostic.featurePath}:${diagnostic.scenarioLine}\n    Scenario: ${diagnostic.scenarioTitle}\n    Reason: ${diagnostic.message}`;
-    }
-    case "UnusedFeatureDefinition": {
-      return `  ${diagnostic.message}`;
-    }
-    case "UnusedScenarioDefinition": {
-      return `  ${diagnostic.message}`;
     }
   }
 };
