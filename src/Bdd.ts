@@ -684,10 +684,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     },
   };
   // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
-  const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(
-    appendStep,
-    properties,
-  );
+  const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(appendStep, properties);
   return Object.freeze(step);
 };
 

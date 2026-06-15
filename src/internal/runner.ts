@@ -323,7 +323,9 @@ const runSteps: <E, R>(
   return yield* Fn.pipe(
     Arr.zip(definitions, steps),
     Arr.reduce(initialState, (state, [definition, step], index) =>
-      Effect.flatMap(state, (previous) => runStep(task, definition, step, index, previous, options)),
+      Effect.flatMap(state, (previous) =>
+        runStep(task, definition, step, index, previous, options),
+      ),
     ),
   );
 });

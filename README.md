@@ -286,6 +286,7 @@ Important flags:
 - `--parallel`: run scenarios concurrently.
 - `--fail-fast`: stop after the first failed scenario.
 - `--step-timeout`: maximum duration for each step, using Effect Duration input such as `"500 millis"` or `"5 seconds"`.
+- `--strict`: fail the CLI on unused feature or scenario definitions. Without `--strict`, only unmatched selected feature files/scenarios fail the run.
 - `--verbose`: show passing scenarios in text output.
 
 ### Glob Syntax
@@ -316,12 +317,12 @@ effect-bdd \
 
 That can load step modules for features you did not select. The selected `.feature` scenarios still must have matching `Bdd.scenario(...)` chains, but other loaded feature exports may be reported under `Unused definitions:` because their `.feature` files were outside this run.
 
-If that is noise for a local focused run, narrow `--steps` to the matching module. For full-suite CI, keep broad `--features` and `--steps` globs so drift detection can catch missing or extra definitions.
+Unused definitions are non-fatal by default, which keeps focused local runs useful. For full-suite CI, keep broad `--features` and `--steps` globs and add `--strict` so drift detection catches missing or extra definitions.
 
 Node requires an explicit TypeScript loader for `.ts` step modules:
 
 ```sh
-node --import tsx ./node_modules/.bin/effect-bdd \
+NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
   --features "features/**/*.feature" \
   --steps "features/**/*.step.ts"
 ```

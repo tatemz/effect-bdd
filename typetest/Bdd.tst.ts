@@ -6,9 +6,8 @@ interface TimeoutInventory {
   readonly _: unique symbol;
 }
 
-const runTimeoutStep = (
-  state: number,
-): Effect.Effect<string, "boom", TimeoutInventory> => Effect.succeed(String(state));
+const runTimeoutStep = (state: number): Effect.Effect<string, "boom", TimeoutInventory> =>
+  Effect.succeed(String(state));
 
 describe("Bdd", () => {
   test("captures infer a named struct", () => {
