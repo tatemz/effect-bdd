@@ -47,7 +47,42 @@ describe("cli", () => {
           result.stdout,
           /Discovery: 9 feature file\(s\), 2 step module\(s\), 9 feature definition\(s\), 27 scenario\(s\) \(27 selected\)/,
         );
+        assert.strictEqual(/RUNNING .*fixtures/.test(result.stdout), false);
         assert.strictEqual(/PASS .*fixtures/.test(result.stdout), false);
+        assert.match(result.stderr, /RUNNING .*fixtures/);
+        assert.strictEqual(/PASS .*fixtures/.test(result.stderr), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("streams passing scenario results to stderr in verbose text output", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const bddRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+        const repoRoot = path.dirname(path.dirname(bddRoot));
+        const fixtureRoot = path.join(bddRoot, "test", "fixtures");
+        const result = yield* Effect.promise(() =>
+          execFilePromise(
+            process.execPath,
+            [
+              path.join(bddRoot, "src", "bin.ts"),
+              "--features",
+              path.join(fixtureRoot, "*.feature"),
+              "--steps",
+              path.join(fixtureRoot, "*.step.ts"),
+              "--reporter",
+              "text",
+              "--verbose",
+            ],
+            { cwd: repoRoot },
+          ),
+        );
+
+        assert.match(result.stdout, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.strictEqual(/PASS .*Minimal \/ minimalistic/.test(result.stdout), false);
+        assert.match(result.stderr, /RUNNING .*Minimal \/ minimalistic/);
+        assert.match(result.stderr, /PASS .*Minimal \/ minimalistic/);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
