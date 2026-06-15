@@ -53,6 +53,23 @@ export interface RunSummary {
 }
 
 /** @internal */
+export interface DiscoverySummary {
+  readonly featurePatterns: ReadonlyArray<string>;
+  readonly featurePaths: ReadonlyArray<string>;
+  readonly stepPatterns: ReadonlyArray<string>;
+  readonly stepModulePaths: ReadonlyArray<string>;
+  readonly featureDefinitions: ReadonlyArray<string>;
+  readonly scenariosDiscovered: number;
+  readonly scenariosSelected: number;
+  readonly selectedScenarios: ReadonlyArray<{
+    readonly featurePath: string;
+    readonly featureTitle: string;
+    readonly scenarioTitle: string;
+    readonly scenarioLine: number;
+  }>;
+}
+
+/** @internal */
 export type CliDiagnostic =
   | {
       readonly _tag: "UnmatchedFeature";
@@ -90,6 +107,7 @@ export interface CliRunResult {
   readonly results: ReadonlyArray<ScenarioResult>;
   readonly diagnostics: ReadonlyArray<CliDiagnostic>;
   readonly summary: RunSummary;
+  readonly discovery: DiscoverySummary;
 }
 
 /** @internal */

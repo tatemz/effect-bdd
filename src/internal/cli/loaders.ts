@@ -12,6 +12,12 @@ import type { FeatureSource } from "./models.ts";
 import { ModuleLoader } from "./moduleLoader.ts";
 
 /** @internal */
+export interface LoadedFeatureDefinitions {
+  readonly paths: ReadonlyArray<string>;
+  readonly definitions: ReadonlyArray<Bdd.Feature<unknown, never>>;
+}
+
+/** @internal */
 export const loadFeatureSources: (
   patterns: ReadonlyArray<string>,
 ) => Effect.Effect<
@@ -44,7 +50,7 @@ export const loadFeatureSources: (
 export const loadFeatureDefinitions: (
   patterns: ReadonlyArray<string>,
 ) => Effect.Effect<
-  ReadonlyArray<Bdd.Feature<unknown, never>>,
+  LoadedFeatureDefinitions,
   DiscoveryError | ModuleLoadError,
   GlobResolver | ModuleLoader | Path.Path
 > = Effect.fnUntraced(function* (patterns: ReadonlyArray<string>) {
@@ -57,7 +63,10 @@ export const loadFeatureDefinitions: (
   const definitions = yield* Effect.forEach(paths, (path) =>
     Fn.pipe(loader.load(path), Effect.map(extractFeatureDefinitions)),
   );
-  return yield* nonEmptyDefinitions(Arr.flatten(definitions));
+  return {
+    paths,
+    definitions: yield* nonEmptyDefinitions(Arr.flatten(definitions)),
+  };
 });
 
 const nonEmptyPaths = (

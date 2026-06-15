@@ -16,6 +16,7 @@ import {
   isFatalDiagnostic,
   type CliDiagnostic,
   type CliRunResult,
+  type DiscoverySummary,
   type ReporterName,
   type RunEvent,
   type ScenarioResult,
@@ -235,6 +236,7 @@ const renderText = (
   includeScenarioLines: boolean,
   showSlowMillis: number | undefined,
 ): string => {
+  const discovery = renderDiscoveryText(result.discovery, verbose);
   const summary = [
     `Features: ${result.summary.features}, Scenarios: ${result.summary.total}, passed: ${result.summary.passed}, failed: ${result.summary.failed}`,
     `Duration: ${result.summary.durationMillis}ms`,
@@ -250,7 +252,8 @@ const renderText = (
   const slowScenarioLines = renderSlowScenarios(result.results, showSlowMillis);
   const diagnosticLines = renderDiagnosticsText(result.diagnostics);
   return Fn.pipe(
-    summary,
+    discovery,
+    Arr.appendAll(summary),
     Arr.appendAll(includeScenarioLines ? scenarioLines : []),
     Arr.appendAll(slowScenarioLines),
     Arr.appendAll(diagnosticLines),
@@ -278,6 +281,36 @@ const renderSlowScenarios = (
     Arr.appendAll(Arr.map(slow, renderScenarioText)),
   );
 };
+
+const renderDiscoveryText = (
+  discovery: DiscoverySummary,
+  verbose: boolean,
+): ReadonlyArray<string> => {
+  const summary = [
+    `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`,
+    "",
+  ];
+  if (!verbose) {
+    return summary;
+  }
+  return Fn.pipe(
+    summary,
+    Arr.appendAll(["Feature files:"]),
+    Arr.appendAll(Arr.map(discovery.featurePaths, (path) => `  ${path}`)),
+    Arr.appendAll(["Step modules:"]),
+    Arr.appendAll(Arr.map(discovery.stepModulePaths, (path) => `  ${path}`)),
+    Arr.appendAll(["Feature definitions:"]),
+    Arr.appendAll(Arr.map(discovery.featureDefinitions, (title) => `  ${title}`)),
+    Arr.appendAll(["Selected scenarios:"]),
+    Arr.appendAll(Arr.map(discovery.selectedScenarios, renderDiscoveredScenario)),
+    Arr.appendAll([""]),
+  );
+};
+
+const renderDiscoveredScenario = (
+  scenario: DiscoverySummary["selectedScenarios"][number],
+): string =>
+  `  ${scenario.featurePath}:${scenario.scenarioLine} ${scenario.featureTitle} / ${scenario.scenarioTitle}`;
 
 const renderRunEvent = (event: RunEvent, verbose: boolean): string | undefined => {
   switch (event._tag) {
@@ -406,6 +439,7 @@ const renderJson = (result: CliRunResult): string =>
   JSON.stringify(
     {
       summary: result.summary,
+      discovery: result.discovery,
       scenarios: Arr.map(result.results, (scenario) => ({
         source: {
           path: scenario.task.featurePath,

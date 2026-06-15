@@ -43,6 +43,10 @@ describe("cli", () => {
         );
 
         assert.match(result.stdout, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.match(
+          result.stdout,
+          /Discovery: 9 feature file\(s\), 2 step module\(s\), 9 feature definition\(s\), 27 scenario\(s\) \(27 selected\)/,
+        );
         assert.strictEqual(/RUNNING .*fixtures/.test(result.stdout), false);
         assert.strictEqual(/PASS .*fixtures/.test(result.stdout), false);
         assert.match(result.stderr, /RUNNING .*fixtures/);
@@ -108,6 +112,10 @@ describe("cli", () => {
         const text = yield* fs.readFileString(textReport);
 
         assert.match(text, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.match(text, /Feature files:/);
+        assert.match(text, /Step modules:/);
+        assert.match(text, /Feature definitions:/);
+        assert.match(text, /Selected scenarios:/);
         assert.match(text, /Minimal \/ minimalistic/);
         assert.match(text, /Some rules \/ A \/ Example A/);
         assert.match(text, /DocString variations \/ minimalistic/);
@@ -169,8 +177,11 @@ Feature: Counter
         const html = yield* fs.readFileString(htmlReport);
 
         assert.match(text, /Features: 1, Scenarios: 2, passed: 2, failed: 0/);
-        assert.strictEqual(text.indexOf("Increment"), text.lastIndexOf("Increment"));
-        assert.ok(text.indexOf("Increment") < text.indexOf("Starts clean"));
+        assert.match(
+          text,
+          /Discovery: 1 feature file\(s\), 1 step module\(s\), 1 feature definition\(s\), 2 scenario\(s\) \(2 selected\)/,
+        );
+        assert.ok(text.indexOf("PASS ") < text.lastIndexOf("PASS "));
         assert.match(html, /effect-bdd report/);
         assert.match(html, /Starts clean/);
       }),
@@ -591,6 +602,10 @@ Feature: Counter
         const text = yield* fs.readFileString(textReport);
 
         assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(
+          text,
+          /Discovery: 1 feature file\(s\), 1 step module\(s\), 1 feature definition\(s\), 2 scenario\(s\) \(1 selected\)/,
+        );
         assert.match(text, /Increment/);
         assert.strictEqual(/Starts clean/.test(text), false);
         assert.strictEqual(/Unmatched source/.test(text), false);
@@ -685,7 +700,7 @@ Feature: Counter
 
         assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
         assert.match(text, /Fails first/);
-        assert.strictEqual(/Fails later/.test(text), false);
+        assert.strictEqual(/(?:PASS|FAIL) .*Fails later/.test(text), false);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -732,6 +747,7 @@ Feature: Counter
         const junit = yield* fs.readFileString(junitReport);
 
         assert.match(json, /"summary"/);
+        assert.match(json, /"discovery"/);
         assert.match(json, /"status": "passed"/);
         assert.match(junit, /<testsuite name="effect-bdd"/);
         assert.match(junit, /<testcase classname="Counter"/);
