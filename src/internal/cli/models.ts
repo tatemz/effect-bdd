@@ -33,6 +33,17 @@ export interface ScenarioResult {
 }
 
 /** @internal */
+export type RunEvent =
+  | {
+      readonly _tag: "ScenarioStarted";
+      readonly task: ScenarioTask;
+    }
+  | {
+      readonly _tag: "ScenarioFinished";
+      readonly result: ScenarioResult;
+    };
+
+/** @internal */
 export interface RunSummary {
   readonly features: number;
   readonly total: number;

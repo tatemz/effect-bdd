@@ -19,6 +19,7 @@ import type {
   CliOptions,
   CliRunResult,
   FeatureSource,
+  RunEvent,
   RunSummary,
   ScenarioResult,
   ScenarioTask,
@@ -32,14 +33,19 @@ interface BuiltScenarios {
   readonly matchedFeatureTitles: ReadonlyArray<string>;
 }
 
+interface RunEvents {
+  readonly onEvent?: (event: RunEvent) => Effect.Effect<void, never, any>;
+}
+
 /** @internal */
 export const run: (
   options: CliOptions,
+  events?: RunEvents,
 ) => Effect.Effect<
   CliRunResult,
   CliRunError,
   FileSystem.FileSystem | GlobResolver | ModuleLoader | Path.Path | Parser.GherkinCompiler
-> = Effect.fnUntraced(function* (options: CliOptions) {
+> = Effect.fnUntraced(function* (options: CliOptions, events?: RunEvents) {
   const startedAt = yield* Clock.currentTimeMillis;
   const sources = yield* loadFeatureSources(options.features);
   const definitions = yield* loadFeatureDefinitions(options.steps);
@@ -49,7 +55,7 @@ export const run: (
     Effect.map(combineBuiltScenarios),
   );
   const filteredTasks = yield* filterTasks(options, built.tasks);
-  const results = yield* runScenarios(options, filteredTasks);
+  const results = yield* runScenarios(options, filteredTasks, events);
   const finishedAt = yield* Clock.currentTimeMillis;
   const diagnostics: ReadonlyArray<CliDiagnostic> = Fn.pipe(
     built.diagnostics,
@@ -222,11 +228,16 @@ const buildScenarioTask = (
   };
 };
 
-const runScenario = Effect.fnUntraced(function* (options: CliOptions, task: ScenarioTask) {
+const runScenario = Effect.fnUntraced(function* (
+  options: CliOptions,
+  task: ScenarioTask,
+  events?: RunEvents,
+) {
+  yield* emitRunEvent(events, { _tag: "ScenarioStarted", task });
   const startedAt = yield* Clock.currentTimeMillis;
   const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core, runOptions(options)));
   const finishedAt = yield* Clock.currentTimeMillis;
-  return {
+  const scenarioResult = {
     task,
     outcome:
       result._tag === "Success"
@@ -234,37 +245,47 @@ const runScenario = Effect.fnUntraced(function* (options: CliOptions, task: Scen
         : { _tag: "Failed", error: result.failure },
     durationMillis: finishedAt - startedAt,
   } satisfies ScenarioResult;
+  yield* emitRunEvent(events, { _tag: "ScenarioFinished", result: scenarioResult });
+  return scenarioResult;
 });
 
 const runScenarios = (
   options: CliOptions,
   tasks: ReadonlyArray<ScenarioTask>,
+  events?: RunEvents,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   options.filters.failFast
-    ? runScenariosFailFast(options, tasks)
-    : Effect.forEach(tasks, (task) => runScenario(options, task), {
+    ? runScenariosFailFast(options, tasks, events)
+    : Effect.forEach(tasks, (task) => runScenario(options, task, events), {
         concurrency: options.parallel,
       });
 
 const runScenariosFailFast = (
   options: CliOptions,
   tasks: ReadonlyArray<ScenarioTask>,
+  events?: RunEvents,
 ): Effect.Effect<ReadonlyArray<ScenarioResult>, never, any> =>
   Fn.pipe(
     tasks,
     Arr.matchLeft({
       onEmpty: () => Effect.succeed<ReadonlyArray<ScenarioResult>>([]),
       onNonEmpty: (task, rest) =>
-        Effect.flatMap(runScenario(options, task), (result) =>
+        Effect.flatMap(runScenario(options, task, events), (result) =>
           result.outcome._tag === "Failed"
             ? Effect.succeed([result])
-            : Effect.map(runScenariosFailFast(options, rest), Arr.prepend(result)),
+            : Effect.map(runScenariosFailFast(options, rest, events), Arr.prepend(result)),
         ),
     }),
   );
 
 const runOptions = (options: CliOptions): CoreRunner.RunOptions =>
   options.stepTimeout === undefined ? {} : { stepTimeout: options.stepTimeout };
+
+const emitRunEvent = (
+  events: RunEvents | undefined,
+  event: RunEvent,
+): Effect.Effect<void, never, any> =>
+  events?.onEvent === undefined ? Effect.void : events.onEvent(event);
 
 const filterTasks = (
   options: CliOptions,
