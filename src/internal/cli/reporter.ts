@@ -1,5 +1,4 @@
 import * as Arr from "effect/Array";
-import * as Console from "effect/Console";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -8,17 +7,27 @@ import * as Inspectable from "effect/Inspectable";
 import * as Order from "effect/Order";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
+import * as Stdio from "effect/Stdio";
+import * as Stream from "effect/Stream";
 import * as Str from "effect/String";
 import { StepTimeoutError } from "../../Errors.ts";
 import { ReporterError } from "./errors.ts";
-import type { CliDiagnostic, CliRunResult, ReporterName, ScenarioResult } from "./models.ts";
+import type {
+  CliDiagnostic,
+  CliRunResult,
+  ReporterName,
+  RunEvent,
+  ScenarioResult,
+  ScenarioTask,
+} from "./models.ts";
 
 /** @internal */
 export interface Reporter {
   readonly name: ReporterName;
+  readonly onEvent?: (event: RunEvent) => Effect.Effect<void, ReporterError, Stdio.Stdio>;
   readonly emit: (
     result: CliRunResult,
-  ) => Effect.Effect<void, ReporterError, FileSystem.FileSystem | Path.Path>;
+  ) => Effect.Effect<void, ReporterError, FileSystem.FileSystem | Path.Path | Stdio.Stdio>;
 }
 
 /** @internal */
@@ -64,8 +73,8 @@ export const makeReporters = (
 export const emitAll: (
   reporters: ReadonlyArray<Reporter>,
   result: CliRunResult,
-) => Effect.Effect<void, ReporterError, FileSystem.FileSystem | Path.Path> = Effect.fnUntraced(
-  function* (reporters: ReadonlyArray<Reporter>, result: CliRunResult) {
+) => Effect.Effect<void, ReporterError, FileSystem.FileSystem | Path.Path | Stdio.Stdio> =
+  Effect.fnUntraced(function* (reporters: ReadonlyArray<Reporter>, result: CliRunResult) {
     const exits = yield* Effect.forEach(
       reporters,
       (reporter) => Effect.exit(reporter.emit(result)),
@@ -86,20 +95,63 @@ export const emitAll: (
         }),
       );
     }
-  },
-);
+  });
+
+/** @internal */
+export const emitEventAll: (
+  reporters: ReadonlyArray<Reporter>,
+  event: RunEvent,
+) => Effect.Effect<void, ReporterError, Stdio.Stdio> = Effect.fnUntraced(function* (
+  reporters: ReadonlyArray<Reporter>,
+  event: RunEvent,
+) {
+  const exits = yield* Effect.forEach(
+    reporters,
+    (reporter) =>
+      reporter.onEvent === undefined
+        ? Effect.exit(Effect.void)
+        : Effect.exit(reporter.onEvent(event)),
+    {
+      concurrency: "unbounded",
+    },
+  );
+  const failures = Fn.pipe(
+    exits,
+    Arr.filter((exit) => exit._tag === "Failure"),
+    Arr.map((exit) => exit.cause),
+  );
+  if (failures.length > 0) {
+    return yield* Effect.fail(
+      new ReporterError({
+        message: "One or more reporters failed",
+        cause: failures,
+      }),
+    );
+  }
+});
 
 const textReporter = (
   outputFile: string | undefined,
   verbose: boolean,
   showSlowMillis: number | undefined,
-): Reporter => ({
-  name: "text",
-  emit: (result) =>
-    outputFile === undefined
-      ? Console.log(renderText(result, verbose, showSlowMillis))
-      : writeFile(outputFile, renderText(result, verbose, showSlowMillis)),
-});
+): Reporter => {
+  const streamProgress = outputFile === undefined;
+  return {
+    name: "text",
+    ...(streamProgress
+      ? {
+          onEvent: (event: RunEvent) => {
+            const text = renderRunEvent(event, verbose);
+            return text === undefined ? Effect.void : writeStderr(`${text}\n`);
+          },
+        }
+      : {}),
+    emit: (result) =>
+      outputFile === undefined
+        ? writeStdout(`${renderText(result, verbose, false, showSlowMillis)}\n`)
+        : writeFile(outputFile, renderText(result, verbose, true, showSlowMillis)),
+  };
+};
 
 const htmlReporter = (outputFile: string): Reporter => ({
   name: "html",
@@ -110,7 +162,7 @@ const jsonReporter = (outputFile: string | undefined): Reporter => ({
   name: "json",
   emit: (result) =>
     outputFile === undefined
-      ? Console.log(renderJson(result))
+      ? writeStdout(`${renderJson(result)}\n`)
       : writeFile(outputFile, renderJson(result)),
 });
 
@@ -150,9 +202,36 @@ const writeFile: (
   },
 );
 
+const writeStdout = (content: string): Effect.Effect<void, ReporterError, Stdio.Stdio> =>
+  writeStdio("stdout", content);
+
+const writeStderr = (content: string): Effect.Effect<void, ReporterError, Stdio.Stdio> =>
+  writeStdio("stderr", content);
+
+const writeStdio: (
+  name: "stdout" | "stderr",
+  content: string,
+) => Effect.Effect<void, ReporterError, Stdio.Stdio> = Effect.fnUntraced(function* (
+  name: "stdout" | "stderr",
+  content: string,
+) {
+  const stdio = yield* Stdio.Stdio;
+  const sink = name === "stdout" ? stdio.stdout() : stdio.stderr();
+  yield* Stream.run(Stream.make(content), sink).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ReporterError({
+          message: `Could not write ${name}`,
+          cause,
+        }),
+    ),
+  );
+});
+
 const renderText = (
   result: CliRunResult,
   verbose: boolean,
+  includeScenarioLines: boolean,
   showSlowMillis: number | undefined,
 ): string => {
   const summary = [
@@ -171,7 +250,7 @@ const renderText = (
   const diagnosticLines = renderDiagnosticsText(result.diagnostics);
   return Fn.pipe(
     summary,
-    Arr.appendAll(scenarioLines),
+    Arr.appendAll(includeScenarioLines ? scenarioLines : []),
     Arr.appendAll(slowScenarioLines),
     Arr.appendAll(diagnosticLines),
     Arr.join("\n"),
@@ -199,6 +278,22 @@ const renderSlowScenarios = (
   );
 };
 
+const renderRunEvent = (event: RunEvent, verbose: boolean): string | undefined => {
+  switch (event._tag) {
+    case "ScenarioStarted": {
+      return `RUNNING ${event.task.featurePath}:${event.task.core.scenarioLine} ${renderTaskName(
+        event.task,
+      )}`;
+    }
+    case "ScenarioFinished": {
+      if (event.result.outcome._tag === "Passed" && !verbose) {
+        return undefined;
+      }
+      return renderScenarioText(event.result);
+    }
+  }
+};
+
 const renderScenarioText = (result: ScenarioResult): string => {
   const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
   const base = `${prefix} ${result.task.featurePath}:${result.task.core.scenarioLine} ${renderScenarioName(
@@ -208,6 +303,11 @@ const renderScenarioText = (result: ScenarioResult): string => {
     ? base
     : `${base}\n  ${renderError(result.outcome.error)}`;
 };
+
+const renderTaskName = (task: ScenarioTask): string =>
+  task.core.ruleTitle === undefined
+    ? `${task.core.featureTitle} / ${task.core.scenarioTitle}`
+    : `${task.core.featureTitle} / ${task.core.ruleTitle} / ${task.core.scenarioTitle}`;
 
 const renderHtml = (result: CliRunResult): string =>
   `<!doctype html>

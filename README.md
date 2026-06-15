@@ -118,7 +118,7 @@ scenario chains
 one exported Bdd.feature(...)
 ```
 
-One Gherkin `Feature:` should map to one exported `Bdd.feature("Feature name")`. Do not split one feature across multiple exported feature definitions. Reusable steps can live anywhere, but compose them into a single feature export per feature name.
+One Gherkin `Feature:` should map to one exported `Bdd.feature("Feature name")`. Do not split one feature across multiple exported feature definitions. Reusable steps can live anywhere, but compose them into a single feature export per feature name. When the CLI loads shared step modules, every exported `Bdd.feature(...)` is considered during discovery.
 
 ## Backgrounds
 
@@ -170,6 +170,7 @@ The scenario chain must mirror the compiled feature-file steps exactly.
 - Wrong order or text: `Step 2 text mismatch: source says "...", chain expects "..."`.
 - Missing scenario chain: `Scenario has no matching Bdd.scenario chain`.
 - Extra scenario chain: `Scenario chain exported but no source scenario matched`.
+- Extra feature export: `Feature definition exported but no feature file matched`.
 - Duplicate feature exports: CLI discovery fails with `Multiple feature definitions matched "X"`.
 - Duplicate scenario chains in one feature: CLI discovery fails before running scenarios.
 
@@ -286,6 +287,36 @@ Important flags:
 - `--fail-fast`: stop after the first failed scenario.
 - `--step-timeout`: maximum duration for each step, using Effect Duration input such as `"500 millis"` or `"5 seconds"`.
 - `--verbose`: show passing scenarios in text output.
+
+### Glob Syntax
+
+`--features` and `--steps` use effect-bdd's built-in glob resolver, not your shell's full glob language. Supported tokens are:
+
+- `*`: zero or more characters inside one path segment.
+- `?`: exactly one character inside one path segment.
+- `**`: zero or more path segments.
+
+Patterns without wildcards are treated as literal file paths. Brace expansion (`{unit,e2e}`), extglob, and shell character classes are not supported. Pass multiple `--features` or `--steps` flags instead; matches are unioned, deduped, and sorted.
+
+Quote glob arguments in the shell so effect-bdd receives the pattern:
+
+```sh
+effect-bdd --features "features/**/*.feature" --steps "features/**/*.step.ts"
+```
+
+### Focused Runs and Shared Steps
+
+Focused runs are common in larger repos:
+
+```sh
+effect-bdd \
+  --features "features/counter.feature" \
+  --steps "features/**/*.step.ts"
+```
+
+That can load step modules for features you did not select. The selected `.feature` scenarios still must have matching `Bdd.scenario(...)` chains, but other loaded feature exports may be reported under `Unused definitions:` because their `.feature` files were outside this run.
+
+If that is noise for a local focused run, narrow `--steps` to the matching module. For full-suite CI, keep broad `--features` and `--steps` globs so drift detection can catch missing or extra definitions.
 
 Node requires an explicit TypeScript loader for `.ts` step modules:
 
