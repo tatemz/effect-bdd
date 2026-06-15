@@ -20,7 +20,7 @@
     "url": "git+https://github.com/tatemz/effect-bdd.git"
   },
   "bin": {
-    "effect-bdd": "./dist/bin.js"
+    "effect-bdd": "dist/bin.js"
   },
   "files": [
     "dist/**/*.js",
