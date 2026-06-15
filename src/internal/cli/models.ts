@@ -82,6 +82,10 @@ export type CliDiagnostic =
     };
 
 /** @internal */
+export const isFatalDiagnostic = (diagnostic: CliDiagnostic): boolean =>
+  diagnostic._tag === "UnmatchedFeature" || diagnostic._tag === "UnmatchedScenario";
+
+/** @internal */
 export interface CliRunResult {
   readonly results: ReadonlyArray<ScenarioResult>;
   readonly diagnostics: ReadonlyArray<CliDiagnostic>;
@@ -107,6 +111,7 @@ export interface CliOptions {
     readonly junit?: string;
   };
   readonly verbose: boolean;
+  readonly strict: boolean;
   readonly filters: CliFilters;
   readonly parallel: number;
   readonly stepTimeout?: Duration.Duration;
