@@ -15,6 +15,7 @@ import {
   noAsyncAwaitInSrc,
   noAsyncAwaitInSrcRuleName,
 } from "./rules/no-async-await-in-src/rule.mjs";
+import { noAnyAnnotation, noAnyAnnotationRuleName } from "./rules/no-any-annotation/rule.mjs";
 import { noForLoopsInSrc, noForLoopsInSrcRuleName } from "./rules/no-for-loops-in-src/rule.mjs";
 import {
   noInlineNestedEffectGen,
@@ -44,15 +45,24 @@ import {
   noSyncSchemaBoundaries,
   noSyncSchemaBoundariesRuleName,
 } from "./rules/no-sync-schema-boundaries/rule.mjs";
+import {
+  noTagEqualityDiscrimination,
+  noTagEqualityDiscriminationRuleName,
+} from "./rules/no-tag-equality-discrimination/rule.mjs";
 import { noThrowStatements, noThrowStatementsRuleName } from "./rules/no-throw-statements/rule.mjs";
 import { noTryCatch, noTryCatchRuleName } from "./rules/no-try-catch/rule.mjs";
 import { noTypeAssertions, noTypeAssertionsRuleName } from "./rules/no-type-assertions/rule.mjs";
+import {
+  noUntracedEffectFnInPublic,
+  noUntracedEffectFnInPublicRuleName,
+} from "./rules/no-untraced-effect-fn-in-public/rule.mjs";
 import {
   noUntypedTryPromise,
   noUntypedTryPromiseRuleName,
 } from "./rules/no-untyped-try-promise/rule.mjs";
 
 export const rules = {
+  [noAnyAnnotationRuleName]: noAnyAnnotation,
   [noAsyncAwaitInSrcRuleName]: noAsyncAwaitInSrc,
   [noEffectDefectApisInSrcRuleName]: noEffectDefectApisInSrc,
   [noEffectNamedImportsInSrcRuleName]: noEffectNamedImportsInSrc,
@@ -69,9 +79,11 @@ export const rules = {
   [noProcessEnvRuleName]: noProcessEnv,
   [noSchemaOptionalRuleName]: noSchemaOptional,
   [noSyncSchemaBoundariesRuleName]: noSyncSchemaBoundaries,
+  [noTagEqualityDiscriminationRuleName]: noTagEqualityDiscrimination,
   [noThrowStatementsRuleName]: noThrowStatements,
   [noTryCatchRuleName]: noTryCatch,
   [noTypeAssertionsRuleName]: noTypeAssertions,
+  [noUntracedEffectFnInPublicRuleName]: noUntracedEffectFnInPublic,
   [noUntypedTryPromiseRuleName]: noUntypedTryPromise,
 };
 

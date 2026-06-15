@@ -44,9 +44,36 @@
         "effect-bdd/no-effect-named-imports-in-src": "error",
         "effect-bdd/no-schema-optional": "error",
         "effect-bdd/no-sync-schema-boundaries": "error",
+        "effect-bdd/no-tag-equality-discrimination": [
+          "error",
+          {
+            "allowedFiles": [
+              "src/internal/cli/models.ts",
+              "src/internal/cli/reporter.ts",
+              "src/internal/cli/runner.ts",
+              "src/internal/cli/tagExpression.ts",
+              "src/internal/runner.ts"
+            ]
+          }
+        ],
         "effect-bdd/no-throw-statements": "error",
         "effect-bdd/no-try-catch": "error",
         "effect-bdd/no-untyped-try-promise": "error"
+      }
+    },
+    {
+      "files": ["src/**"],
+      "rules": {
+        "effect-bdd/no-any-annotation": [
+          "error",
+          {
+            "allowedFiles": [
+              "src/Bdd.ts",
+              "src/internal/cli/models.ts",
+              "src/internal/cli/runner.ts"
+            ]
+          }
+        ]
       }
     },
     {
@@ -58,6 +85,12 @@
             "allowedFiles": ["src/internal/cli/reporter.ts"]
           }
         ]
+      }
+    },
+    {
+      "files": ["src/index.ts", "src/Bdd.ts", "src/Errors.ts"],
+      "rules": {
+        "effect-bdd/no-untraced-effect-fn-in-public": "error"
       }
     }
   ]
