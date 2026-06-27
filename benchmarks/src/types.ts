@@ -7,6 +7,17 @@ export interface BenchmarkConfig {
   readonly warmups: number;
   readonly parallel: number;
   readonly profile: BenchmarkProfile;
+  readonly generatedScale: GeneratedScale;
+}
+
+export interface GeneratedScale {
+  readonly parseFeatures: number;
+  readonly parseScenariosPerFeature: number;
+  readonly outlineExamples: number;
+  readonly discoveryFeatures: number;
+  readonly discoveryScenariosPerFeature: number;
+  readonly parallelScenarios: number;
+  readonly reporterScenarios: number;
 }
 
 export interface BenchmarkEnvironment {

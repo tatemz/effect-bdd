@@ -5,8 +5,8 @@ import { parseArgs } from "node:util";
 import { assertSuccessful, runCommand } from "./process.ts";
 import { benchmarkRoot, fromRepoRoot, resultsRoot } from "./paths.ts";
 import { runCucumberJs, runEffectBddApi, runEffectBddCli } from "./runners.ts";
-import { ensureGeneratedSuites } from "./generatedSuites.ts";
-import { suiteById, suites } from "./suites.ts";
+import { defaultGeneratedScale, ensureGeneratedSuites } from "./generatedSuites.ts";
+import { suiteById, suitesFor } from "./suites.ts";
 import { summarizeRunner } from "./statistics.ts";
 import type {
   BenchmarkProfile,
@@ -14,6 +14,7 @@ import type {
   BenchmarkEnvironment,
   BenchmarkResult,
   BenchmarkRun,
+  GeneratedScale,
   RunnerId,
   SuiteDefinition,
   SuiteResult,
@@ -23,7 +24,7 @@ const runnerOrder: ReadonlyArray<RunnerId> = ["effect-bdd-cli", "cucumber-js", "
 
 const main = async (): Promise<void> => {
   const { config, outputFile, selectedSuites } = parseCli();
-  await ensureGeneratedSuites();
+  await ensureGeneratedSuites(config.generatedScale);
   const suiteResults = await selectedSuites.reduce<Promise<ReadonlyArray<SuiteResult>>>(
     async (previousResults, suite) => [
       ...(await previousResults),
@@ -145,19 +146,49 @@ const parseCli = (): {
       warmups: { type: "string", default: "3" },
       parallel: { type: "string", default: "1" },
       profile: { type: "string", default: "tsx" },
+      "generated-parse-features": {
+        type: "string",
+        default: String(defaultGeneratedScale.parseFeatures),
+      },
+      "generated-parse-scenarios-per-feature": {
+        type: "string",
+        default: String(defaultGeneratedScale.parseScenariosPerFeature),
+      },
+      "generated-outline-examples": {
+        type: "string",
+        default: String(defaultGeneratedScale.outlineExamples),
+      },
+      "generated-discovery-features": {
+        type: "string",
+        default: String(defaultGeneratedScale.discoveryFeatures),
+      },
+      "generated-discovery-scenarios-per-feature": {
+        type: "string",
+        default: String(defaultGeneratedScale.discoveryScenariosPerFeature),
+      },
+      "generated-parallel-scenarios": {
+        type: "string",
+        default: String(defaultGeneratedScale.parallelScenarios),
+      },
+      "generated-reporter-scenarios": {
+        type: "string",
+        default: String(defaultGeneratedScale.reporterScenarios),
+      },
       out: { type: "string", default: path.join(resultsRoot, "latest.json") },
       suite: { type: "string", multiple: true },
     },
   });
   activeProfile = benchmarkProfile(parsed.values.profile);
+  const generatedScale = parseGeneratedScale(parsed.values);
+  const availableSuiteDefinitions = suitesFor(generatedScale);
   const explicitSuiteSelection = parsed.values.suite !== undefined;
   const availableSuites =
     activeProfile === "compiled"
-      ? suites.filter((suite) => suite.supportsCompiled !== false)
-      : suites;
+      ? availableSuiteDefinitions.filter((suite) => suite.supportsCompiled !== false)
+      : availableSuiteDefinitions;
   const suiteIds = parsed.values.suite ?? availableSuites.map((suite) => suite.id);
   const selectedSuites = suiteIds.map((id) =>
-    selectedSuite(id, activeProfile, explicitSuiteSelection),
+    selectedSuite(id, activeProfile, explicitSuiteSelection, availableSuiteDefinitions),
   );
   return {
     config: {
@@ -165,6 +196,7 @@ const parseCli = (): {
       warmups: nonNegativeInteger("warmups", parsed.values.warmups),
       parallel: positiveInteger("parallel", parsed.values.parallel),
       profile: activeProfile,
+      generatedScale,
     },
     outputFile: parsed.values.out,
     selectedSuites,
@@ -175,21 +207,60 @@ const selectedSuite = (
   id: string,
   profile: BenchmarkProfile,
   explicitSuiteSelection: boolean,
+  availableSuites: ReadonlyArray<SuiteDefinition>,
 ): SuiteDefinition => {
-  const suite = knownSuite(id);
+  const suite = knownSuite(id, availableSuites);
   assertSupportedSuite(suite, profile, explicitSuiteSelection);
   return suite;
 };
 
-const knownSuite = (id: string): SuiteDefinition => {
-  const suite = suiteById(id);
+const knownSuite = (
+  id: string,
+  availableSuites: ReadonlyArray<SuiteDefinition>,
+): SuiteDefinition => {
+  const suite = suiteById(id, availableSuites);
   if (suite !== undefined) {
     return suite;
   }
   throw new Error(
-    `Unknown benchmark suite "${id}". Known suites: ${suites.map((s) => s.id).join(", ")}`,
+    `Unknown benchmark suite "${id}". Known suites: ${availableSuites.map((s) => s.id).join(", ")}`,
   );
 };
+
+const parseGeneratedScale = (values: ReturnType<typeof parseArgs>["values"]): GeneratedScale => ({
+  parseFeatures: positiveInteger(
+    "generated-parse-features",
+    stringCliValue(values["generated-parse-features"]),
+  ),
+  parseScenariosPerFeature: positiveInteger(
+    "generated-parse-scenarios-per-feature",
+    stringCliValue(values["generated-parse-scenarios-per-feature"]),
+  ),
+  outlineExamples: positiveInteger(
+    "generated-outline-examples",
+    stringCliValue(values["generated-outline-examples"]),
+  ),
+  discoveryFeatures: positiveInteger(
+    "generated-discovery-features",
+    stringCliValue(values["generated-discovery-features"]),
+  ),
+  discoveryScenariosPerFeature: positiveInteger(
+    "generated-discovery-scenarios-per-feature",
+    stringCliValue(values["generated-discovery-scenarios-per-feature"]),
+  ),
+  parallelScenarios: positiveInteger(
+    "generated-parallel-scenarios",
+    stringCliValue(values["generated-parallel-scenarios"]),
+  ),
+  reporterScenarios: positiveInteger(
+    "generated-reporter-scenarios",
+    stringCliValue(values["generated-reporter-scenarios"]),
+  ),
+});
+
+const stringCliValue = (
+  value: string | boolean | ReadonlyArray<string | boolean> | undefined,
+): string | undefined => (typeof value === "string" ? value : undefined);
 
 const assertSupportedSuite = (
   suite: SuiteDefinition,

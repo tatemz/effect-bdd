@@ -1,6 +1,6 @@
 import { fromBenchmarkRoot, fromRepoRoot } from "./paths.ts";
-import { generatedSuites } from "./generatedSuites.ts";
-import type { SuiteDefinition } from "./types.ts";
+import { defaultGeneratedScale, generatedSuitesFor } from "./generatedSuites.ts";
+import type { GeneratedScale, SuiteDefinition } from "./types.ts";
 
 const fixtureFeature = (name: string): string => fromRepoRoot("test", "fixtures", name);
 const exampleFeature = (name: string): string => fromRepoRoot("examples", name);
@@ -27,7 +27,7 @@ const cucumberGherkinGoodModules = [
   fromBenchmarkRoot("cucumber", "kitchen-sink.steps.ts"),
 ];
 
-export const suites: ReadonlyArray<SuiteDefinition> = [
+const checkedInSuites: ReadonlyArray<SuiteDefinition> = [
   {
     id: "gherkin-good",
     name: "Gherkin corpus fixtures",
@@ -57,8 +57,13 @@ export const suites: ReadonlyArray<SuiteDefinition> = [
     effectBddFeatureModules: [fromBenchmarkRoot("effect-bdd", "counter.steps.ts")],
     cucumberStepModules: [fromBenchmarkRoot("cucumber", "counter.steps.ts")],
   },
-  ...generatedSuites,
 ];
 
-export const suiteById = (id: string): SuiteDefinition | undefined =>
-  suites.find((suite) => suite.id === id);
+export const suitesFor = (
+  scale: GeneratedScale = defaultGeneratedScale,
+): ReadonlyArray<SuiteDefinition> => [...checkedInSuites, ...generatedSuitesFor(scale)];
+
+export const suiteById = (
+  id: string,
+  candidates: ReadonlyArray<SuiteDefinition>,
+): SuiteDefinition | undefined => candidates.find((suite) => suite.id === id);

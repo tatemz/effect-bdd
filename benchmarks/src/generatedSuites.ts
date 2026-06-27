@@ -1,64 +1,81 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { fromBenchmarkRoot } from "./paths.ts";
-import type { SuiteDefinition } from "./types.ts";
+import type { GeneratedScale, SuiteDefinition } from "./types.ts";
 
 const generatedRoot = fromBenchmarkRoot("generated");
 const generatedFeatureRoot = path.join(generatedRoot, "features");
 const generatedEffectRoot = path.join(generatedRoot, "effect-bdd");
 const generatedCucumberRoot = path.join(generatedRoot, "cucumber");
 
-export const generatedSuites: ReadonlyArray<SuiteDefinition> = [
-  suite(
-    "parse-scale",
-    "Parse scale",
-    "40 generated features with 5 scenarios each.",
-    ["parse-scale", "*.feature"],
-    generatedFeatureFilePaths(path.join(generatedFeatureRoot, "parse-scale"), 40),
-  ),
-  suite(
-    "outline-scale",
-    "Outline scale",
-    "One scenario outline expanded to 120 examples.",
-    ["outline-scale", "*.feature"],
-    [path.join(generatedFeatureRoot, "outline-scale", "outline-scale.feature")],
-  ),
-  suite(
-    "discovery-scale",
-    "Discovery scale",
-    "40 generated features spread across a nested directory tree.",
-    ["discovery-scale", "**", "*.feature"],
-    generatedFeatureFilePaths(
-      path.join(generatedFeatureRoot, "discovery-scale", "level-a", "level-b"),
-      40,
-    ),
-  ),
-  suite(
-    "parallel-scale",
-    "Parallel scale",
-    "One feature with 120 independent no-op scenarios.",
-    ["parallel-scale", "*.feature"],
-    [path.join(generatedFeatureRoot, "parallel-scale", "parallel-scale.feature")],
-  ),
-  suite(
-    "reporter-overhead",
-    "Reporter overhead",
-    "One feature with 80 scenarios to amplify scenario event and JSON report costs.",
-    ["reporter-overhead", "*.feature"],
-    [path.join(generatedFeatureRoot, "reporter-overhead", "reporter-overhead.feature")],
-  ),
-];
+export const defaultGeneratedScale: GeneratedScale = {
+  parseFeatures: 40,
+  parseScenariosPerFeature: 5,
+  outlineExamples: 120,
+  discoveryFeatures: 40,
+  discoveryScenariosPerFeature: 3,
+  parallelScenarios: 120,
+  reporterScenarios: 80,
+};
 
-export const ensureGeneratedSuites = async (): Promise<void> => {
+export function generatedSuitesFor(scale: GeneratedScale): ReadonlyArray<SuiteDefinition> {
+  return [
+    suite(
+      "parse-scale",
+      "Parse scale",
+      `${scale.parseFeatures} generated features with ${scale.parseScenariosPerFeature} scenarios each.`,
+      ["parse-scale", "*.feature"],
+      generatedFeatureFilePaths(
+        path.join(generatedFeatureRoot, "parse-scale"),
+        scale.parseFeatures,
+      ),
+    ),
+    suite(
+      "outline-scale",
+      "Outline scale",
+      `One scenario outline expanded to ${scale.outlineExamples} examples.`,
+      ["outline-scale", "*.feature"],
+      [path.join(generatedFeatureRoot, "outline-scale", "outline-scale.feature")],
+    ),
+    suite(
+      "discovery-scale",
+      "Discovery scale",
+      `${scale.discoveryFeatures} generated features spread across a nested directory tree.`,
+      ["discovery-scale", "**", "*.feature"],
+      generatedFeatureFilePaths(
+        path.join(generatedFeatureRoot, "discovery-scale", "level-a", "level-b"),
+        scale.discoveryFeatures,
+      ),
+    ),
+    suite(
+      "parallel-scale",
+      "Parallel scale",
+      `One feature with ${scale.parallelScenarios} independent no-op scenarios.`,
+      ["parallel-scale", "*.feature"],
+      [path.join(generatedFeatureRoot, "parallel-scale", "parallel-scale.feature")],
+    ),
+    suite(
+      "reporter-overhead",
+      "Reporter overhead",
+      `One feature with ${scale.reporterScenarios} scenarios to amplify scenario event and JSON report costs.`,
+      ["reporter-overhead", "*.feature"],
+      [path.join(generatedFeatureRoot, "reporter-overhead", "reporter-overhead.feature")],
+    ),
+  ];
+}
+
+export const ensureGeneratedSuites = async (
+  scale: GeneratedScale = defaultGeneratedScale,
+): Promise<void> => {
   await fs.mkdir(generatedFeatureRoot, { recursive: true });
   await fs.mkdir(generatedEffectRoot, { recursive: true });
   await fs.mkdir(generatedCucumberRoot, { recursive: true });
   await Promise.all([
-    writeParseScale(),
-    writeOutlineScale(),
-    writeDiscoveryScale(),
-    writeParallelScale(),
-    writeReporterOverhead(),
+    writeParseScale(scale),
+    writeOutlineScale(scale),
+    writeDiscoveryScale(scale),
+    writeParallelScale(scale),
+    writeReporterOverhead(scale),
   ]);
 };
 
@@ -92,37 +109,37 @@ function generatedFeatureFilePaths(
   );
 }
 
-const writeParseScale = (): Promise<void> =>
+const writeParseScale = (scale: GeneratedScale): Promise<void> =>
   writeManyFeatureSuite({
     id: "parse-scale",
     featureRoot: path.join(generatedFeatureRoot, "parse-scale"),
-    featureCount: 40,
-    scenariosPerFeature: 5,
+    featureCount: scale.parseFeatures,
+    scenariosPerFeature: scale.parseScenariosPerFeature,
   });
 
-const writeDiscoveryScale = (): Promise<void> =>
+const writeDiscoveryScale = (scale: GeneratedScale): Promise<void> =>
   writeManyFeatureSuite({
     id: "discovery-scale",
     featureRoot: path.join(generatedFeatureRoot, "discovery-scale", "level-a", "level-b"),
-    featureCount: 40,
-    scenariosPerFeature: 3,
+    featureCount: scale.discoveryFeatures,
+    scenariosPerFeature: scale.discoveryScenariosPerFeature,
   });
 
-const writeParallelScale = (): Promise<void> =>
+const writeParallelScale = (scale: GeneratedScale): Promise<void> =>
   writeSingleFeatureSuite({
     id: "parallel-scale",
     featureTitle: "Parallel scale",
-    scenarioCount: 120,
+    scenarioCount: scale.parallelScenarios,
   });
 
-const writeReporterOverhead = (): Promise<void> =>
+const writeReporterOverhead = (scale: GeneratedScale): Promise<void> =>
   writeSingleFeatureSuite({
     id: "reporter-overhead",
     featureTitle: "Reporter overhead",
-    scenarioCount: 80,
+    scenarioCount: scale.reporterScenarios,
   });
 
-const writeOutlineScale = async (): Promise<void> => {
+const writeOutlineScale = async (scale: GeneratedScale): Promise<void> => {
   const id = "outline-scale";
   const featureTitle = "Outline scale";
   const featureDir = path.join(generatedFeatureRoot, id);
@@ -137,7 +154,7 @@ const writeOutlineScale = async (): Promise<void> => {
       "",
       "    Examples:",
       "      | value |",
-      ...Array.from({ length: 120 }, (_, index) => `      | ${index + 1} |`),
+      ...Array.from({ length: scale.outlineExamples }, (_, index) => `      | ${index + 1} |`),
       "",
     ].join("\n"),
   );

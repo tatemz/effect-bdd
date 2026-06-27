@@ -59,6 +59,7 @@
     "bench": "pnpm --dir benchmarks run bench",
     "bench:compare": "pnpm --dir benchmarks run compare",
     "bench:compiled": "pnpm --dir benchmarks run compare:compiled",
+    "bench:pressure": "pnpm --dir benchmarks run pressure",
     "bench:report": "pnpm --dir benchmarks run report",
     "bench:smoke": "pnpm --dir benchmarks run smoke",
     "check": "tsc -p tsconfig.json --noEmit",
