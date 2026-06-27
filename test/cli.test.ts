@@ -700,6 +700,64 @@ Feature: Counter
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("releases scoped step resources before the CLI returns from a failing scenario", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Scoped resources
+
+  Scenario: Fails after acquiring resource
+    Given a scoped resource is open
+    When the scenario fails
+`,
+          steps: `
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+import { writeFileSync } from "node:fs";
+
+const givenResource = Bdd.given\`a scoped resource is open\`(() =>
+  Effect.acquireRelease(
+    Effect.succeed({}),
+    () => Effect.sync(() => writeFileSync(${JSON.stringify("${RELEASED}")}, "released"))
+  )
+);
+const whenFails = Bdd.when\`the scenario fails\`(() => Effect.fail("boom"));
+
+export const scopedResources = Bdd.feature("Scoped resources").pipe(
+  Bdd.scenario("Fails after acquiring resource").pipe(givenResource, whenFails)
+);
+`,
+        });
+        const releasedPath = fixture.path("released.txt");
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(
+          fixture.path("steps.mjs"),
+          (yield* fs.readFileString(fixture.path("steps.mjs"))).replace(
+            "${RELEASED}",
+            releasedPath,
+          ),
+        );
+
+        const exit = yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("steps.mjs"),
+            "--reporter",
+            "text",
+            "--output-file.text",
+            fixture.path("scoped-failure.txt"),
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+        assert.strictEqual(yield* fs.readFileString(releasedPath), "released");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("fails when multiple step modules export the same feature definition", () =>
     Effect.scoped(
       Effect.gen(function* () {

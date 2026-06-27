@@ -1,5 +1,5 @@
 import { Bdd } from "effect-bdd";
-import { Duration, Effect, Schema } from "effect";
+import { Context, Duration, Effect, Layer, Schema, Scope } from "effect";
 import { describe, expect, test } from "tstyche";
 
 interface TimeoutInventory {
@@ -143,6 +143,54 @@ describe("Bdd", () => {
       Bdd.Step<"When", number, string, "boom", TimeoutInventory, {}, undefined>
     >();
     expect(Bdd.withTimeout).type.not.toBeCallableWith(step, "1 second");
+  });
+
+  test("run consumes Scope requirements from scenario steps", () => {
+    interface Inventory {
+      readonly _: unique symbol;
+    }
+
+    const feature = Bdd.feature("Scoped").pipe(
+      Bdd.scenario("Needs scope").pipe(
+        Bdd.given`a scoped resource`(
+          (): Effect.Effect<number, never, Scope.Scope | Inventory> => Effect.succeed(1),
+        ),
+      ),
+    );
+
+    expect(Bdd.run(feature, "Feature: Scoped")).type.toBe<
+      Effect.Effect<Bdd.Report, Bdd.RunError, Inventory | Bdd.GherkinCompiler>
+    >();
+  });
+
+  test("provide removes layer services from scenario requirements", () => {
+    class Inventory extends Context.Service<
+      Inventory,
+      {
+        readonly count: number;
+      }
+    >()("Inventory") {}
+    interface Database {
+      readonly _: unique symbol;
+    }
+
+    const providerEffect: Effect.Effect<{ readonly count: number }, "provider failed", Database> =
+      Effect.succeed({ count: 1 });
+
+    const scenario = Bdd.scenario("Needs inventory").pipe(
+      Bdd.given`inventory is available`(
+        (): Effect.Effect<number, "step failed", Inventory> => Effect.succeed(1),
+      ),
+      Bdd.provide(Layer.effect(Inventory, providerEffect)),
+    );
+    const dataFirst = Bdd.provide(
+      Bdd.scenario("Data first"),
+      Layer.succeed(Inventory, { count: 1 }),
+    );
+
+    expect(scenario).type.toBe<Bdd.Scenario<number, "step failed" | "provider failed", Database>>();
+    expect(dataFirst).type.toBe<Bdd.Scenario<void, never, never>>();
+    expect(Bdd.provide).type.not.toBeCallableWith(Bdd.scenario("Bad"), "not a layer");
   });
 
   test("docstrings and data tables infer decoded argument types", () => {
