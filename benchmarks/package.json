@@ -1,0 +1,21 @@
+{
+  "name": "effect-bdd-benchmarks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "pnpm run compare && pnpm run report",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "compare": "tsx src/compare.ts",
+    "report": "tsx src/report.ts"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.90",
+    "effect-bdd": "link:.."
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^13.0.0",
+    "@types/node": "^25.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

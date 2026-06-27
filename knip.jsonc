@@ -26,5 +26,9 @@
       "entry": ["counter.ts", "counter.steps.ts"],
       "project": ["*.ts"],
     },
+    "benchmarks": {
+      "entry": ["cucumber/*.ts"],
+      "project": ["src/**/*.ts", "cucumber/**/*.ts"],
+    },
   },
 }
