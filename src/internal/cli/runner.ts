@@ -4,9 +4,7 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
-import * as Record from "effect/Record";
 import type * as Path from "effect/Path";
-import * as Result from "effect/Result";
 import * as Str from "effect/String";
 import type * as Bdd from "../../Bdd.ts";
 import type { ParseError } from "../../Errors.ts";
@@ -37,7 +35,11 @@ interface BuiltScenarios {
 }
 
 interface FeatureDefinitionIndex {
-  readonly byTitle: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>>;
+  readonly byTitle: FeatureDefinitionTitleIndex;
+}
+
+interface FeatureDefinitionTitleIndex {
+  [title: string]: ReadonlyArray<Bdd.Feature<unknown, never>> | undefined;
 }
 
 interface RunEvents {
@@ -117,10 +119,7 @@ const buildScenarioTasks: (
 ) => Effect.Effect<BuiltScenarios, DiscoveryError | ParseError, Parser.GherkinCompiler> =
   Effect.fnUntraced(function* (source: FeatureSource, definitions: FeatureDefinitionIndex) {
     const parsed = yield* Parser.parse(source.source, source.path);
-    const matches = Fn.pipe(
-      Record.get(definitions.byTitle, parsed.name),
-      Option.getOrElse((): ReadonlyArray<Bdd.Feature<unknown, never>> => []),
-    );
+    const matches = definitions.byTitle[parsed.name] ?? [];
     if (matches.length > 1) {
       return yield* Effect.fail(
         new DiscoveryError({
@@ -163,23 +162,9 @@ const buildScenarioTasks: (
     const resolved = Arr.map(parsed.pickles, resolvePickle(parsed));
     yield* validateDuplicateSourceScenario(parsed, resolved);
 
-    const scenarioDefinitions = Fn.pipe(
-      definition.scenarios,
-      Arr.map((scenario) => [scenario.title, scenario] as const),
-      Record.fromEntries,
-    );
-    const built = Arr.map(resolved, (entry) =>
-      buildScenarioTask(source, parsed, definition, scenarioDefinitions, entry),
-    );
-    const tasks = Arr.filterMap(built, (item) =>
-      item._tag === "Task" ? Result.succeed(item.task) : Result.fail(undefined),
-    );
-    const hasUsedScenarioTitle = titleMatcher(
-      Arr.map(tasks, (task) => task.core.sourceScenarioTitle),
-    );
-    const unmatched = Arr.filterMap(built, (item) =>
-      item._tag === "Diagnostic" ? Result.succeed(item.diagnostic) : Result.fail(undefined),
-    );
+    const scenarioDefinitions = scenarioDefinitionIndex(definition.scenarios);
+    const built = collectBuiltScenarios(resolved, source, parsed, definition, scenarioDefinitions);
+    const hasUsedScenarioTitle = titleMatcher(built.usedScenarioTitles);
     const unused = Fn.pipe(
       definition.scenarios,
       Arr.filter((scenario) => !hasUsedScenarioTitle(scenario.title)),
@@ -194,8 +179,8 @@ const buildScenarioTasks: (
     );
 
     return {
-      tasks,
-      diagnostics: Arr.appendAll(unmatched, unused),
+      tasks: built.tasks,
+      diagnostics: Arr.appendAll(built.unmatched, unused),
       matchedFeatureTitles: [definition.title],
     };
   });
@@ -203,24 +188,25 @@ const buildScenarioTasks: (
 const featureDefinitionIndex = (
   definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
 ): FeatureDefinitionIndex => {
-  const emptyIndex: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>> = {};
-  const byTitle = Arr.reduce(definitions, emptyIndex, (index, definition) =>
-    Record.set(index, definition.title, appendDefinition(index, definition)),
+  const byTitle = Arr.reduce(
+    definitions,
+    emptyFeatureDefinitionTitleIndex(),
+    indexFeatureDefinition,
   );
   return { byTitle };
 };
 
-const appendDefinition = (
-  index: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>>,
+const emptyFeatureDefinitionTitleIndex = (): FeatureDefinitionTitleIndex => Object.create(null);
+
+const indexFeatureDefinition = (
+  index: FeatureDefinitionTitleIndex,
   definition: Bdd.Feature<unknown, never>,
-): ReadonlyArray<Bdd.Feature<unknown, never>> =>
-  Fn.pipe(
-    Record.get(index, definition.title),
-    Option.match({
-      onNone: () => [definition],
-      onSome: Arr.append(definition),
-    }),
-  );
+): FeatureDefinitionTitleIndex => {
+  const existing = index[definition.title];
+  index[definition.title] =
+    existing === undefined ? [definition] : Fn.pipe(existing, Arr.append(definition));
+  return index;
+};
 
 const validateDuplicateScenarioDefinition = (
   definition: Bdd.Feature<unknown, never>,
@@ -266,6 +252,18 @@ type BuiltScenario =
   | { readonly _tag: "Task"; readonly task: ScenarioTask }
   | { readonly _tag: "Diagnostic"; readonly diagnostic: CliDiagnostic };
 
+interface BuiltScenarioCollection {
+  readonly tasks: Array<ScenarioTask>;
+  readonly unmatched: Array<CliDiagnostic>;
+  readonly usedScenarioTitles: Array<string>;
+}
+
+type ScenarioDefinition = Bdd.Feature<unknown, never>["scenarios"][number];
+
+interface ScenarioDefinitionIndex {
+  [title: string]: ScenarioDefinition | undefined;
+}
+
 interface ResolvedPickle {
   readonly pickle: Parser.CompiledFeature["pickles"][number];
   readonly scenarioIndex: number;
@@ -301,14 +299,11 @@ const buildScenarioTask = (
   source: FeatureSource,
   parsed: Parser.CompiledFeature,
   definition: Bdd.Feature<unknown, never>,
-  scenarioDefinitions: Record.ReadonlyRecord<
-    string,
-    Bdd.Feature<unknown, never>["scenarios"][number]
-  >,
+  scenarioDefinitions: ScenarioDefinitionIndex,
   entry: ResolvedPickle,
 ): BuiltScenario => {
-  const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
-  if (Option.isNone(scenarioDefinition)) {
+  const scenarioDefinition = scenarioDefinitions[entry.scenarioTitle];
+  if (scenarioDefinition === undefined) {
     return {
       _tag: "Diagnostic",
       diagnostic: {
@@ -327,7 +322,7 @@ const buildScenarioTask = (
       featurePath: source.path,
       core: {
         featureDefinition: definition,
-        scenarioDefinition: scenarioDefinition.value,
+        scenarioDefinition,
         featureTitle: parsed.name,
         scenarioTitle: entry.pickle.name,
         sourceScenarioTitle: entry.scenarioTitle,
@@ -340,6 +335,58 @@ const buildScenarioTask = (
       },
     },
   };
+};
+
+const collectBuiltScenarios = (
+  resolved: ReadonlyArray<ResolvedPickle>,
+  source: FeatureSource,
+  parsed: Parser.CompiledFeature,
+  definition: Bdd.Feature<unknown, never>,
+  scenarioDefinitions: ScenarioDefinitionIndex,
+): BuiltScenarioCollection =>
+  Fn.pipe(
+    resolved,
+    Arr.reduce(emptyBuiltScenarioCollection(), (collection, entry) =>
+      appendBuiltScenario(
+        collection,
+        buildScenarioTask(source, parsed, definition, scenarioDefinitions, entry),
+      ),
+    ),
+  );
+
+const emptyBuiltScenarioCollection = (): BuiltScenarioCollection => ({
+  tasks: [],
+  unmatched: [],
+  usedScenarioTitles: [],
+});
+
+const appendBuiltScenario = (
+  collection: BuiltScenarioCollection,
+  built: BuiltScenario,
+): BuiltScenarioCollection => {
+  if (built._tag === "Task") {
+    collection.tasks[collection.tasks.length] = built.task;
+    collection.usedScenarioTitles[collection.usedScenarioTitles.length] =
+      built.task.core.sourceScenarioTitle;
+    return collection;
+  }
+  collection.unmatched[collection.unmatched.length] = built.diagnostic;
+  return collection;
+};
+
+const scenarioDefinitionIndex = (
+  scenarios: ReadonlyArray<ScenarioDefinition>,
+): ScenarioDefinitionIndex =>
+  Fn.pipe(scenarios, Arr.reduce(emptyScenarioDefinitionIndex(), indexScenarioDefinition));
+
+const emptyScenarioDefinitionIndex = (): ScenarioDefinitionIndex => Object.create(null);
+
+const indexScenarioDefinition = (
+  index: ScenarioDefinitionIndex,
+  scenario: ScenarioDefinition,
+): ScenarioDefinitionIndex => {
+  index[scenario.title] = scenario;
+  return index;
 };
 
 const sourceScenarioLine = (

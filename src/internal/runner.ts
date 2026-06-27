@@ -279,7 +279,7 @@ const buildScenarioTasks = <E, R>(
     yield* validateFeatureDefinition(featureDefinition, feature);
     yield* validateUniqueScenarioDefinitions(featureDefinition);
 
-    const scenarioDefinitions = scenarioDefinitionMap(featureDefinition);
+    const scenarioDefinitions = scenarioDefinitionIndex(featureDefinition);
     const resolved = Arr.map(feature.pickles, resolvePickle(feature));
     const duplicateSourceTitle = firstDuplicateSourceScenarioTitle(resolved);
     if (Option.isSome(duplicateSourceTitle)) {
@@ -295,8 +295,8 @@ const buildScenarioTasks = <E, R>(
     const tasks = yield* Effect.forEach(
       resolved,
       (entry): Effect.Effect<ScenarioTask<E, R>, MatchError> => {
-        const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
-        if (Option.isNone(scenarioDefinition)) {
+        const scenarioDefinition = scenarioDefinitions[entry.scenarioTitle];
+        if (scenarioDefinition === undefined) {
           return matchErrorEffect({
             message: `No scenario chain matched source scenario "${entry.scenarioTitle}"`,
             scenario: entry.scenarioTitle,
@@ -307,7 +307,7 @@ const buildScenarioTasks = <E, R>(
         }
         return Effect.succeed({
           featureDefinition,
-          scenarioDefinition: scenarioDefinition.value,
+          scenarioDefinition,
           featureTitle: feature.name,
           scenarioTitle: entry.pickle.name,
           sourceScenarioTitle: entry.scenarioTitle,
@@ -725,14 +725,27 @@ const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefin
     }),
   );
 
-const scenarioDefinitionMap = <E, R>(
+interface ScenarioDefinitionIndex<R> {
+  [title: string]: ScenarioDefinition<R> | undefined;
+}
+
+const scenarioDefinitionIndex = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
-): Record.ReadonlyRecord<string, ScenarioDefinition<R>> =>
+): ScenarioDefinitionIndex<R> =>
   Fn.pipe(
     featureDefinition.scenarios,
-    Arr.map((scenario) => [scenario.title, scenario] as const),
-    Record.fromEntries,
+    Arr.reduce(emptyScenarioDefinitionIndex<R>(), indexScenarioDefinition),
   );
+
+const emptyScenarioDefinitionIndex = <R>(): ScenarioDefinitionIndex<R> => Object.create(null);
+
+const indexScenarioDefinition = <R>(
+  index: ScenarioDefinitionIndex<R>,
+  scenario: ScenarioDefinition<R>,
+): ScenarioDefinitionIndex<R> => {
+  index[scenario.title] = scenario;
+  return index;
+};
 
 /** @internal */
 const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {
