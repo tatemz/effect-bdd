@@ -104,6 +104,62 @@ export class StepError extends Schema.TaggedErrorClass<StepError>()("StepError",
 }) {}
 
 /**
+ * An error raised when scenario-level setup fails before Gherkin steps run.
+ *
+ * **Details**
+ *
+ * This includes failures while building scenario-local providers, such as scoped
+ * Layers supplied with `Bdd.provide`.
+ *
+ * @category errors
+ * @since 0.5.0
+ */
+export class ScenarioSetupError extends Schema.TaggedErrorClass<ScenarioSetupError>()(
+  "ScenarioSetupError",
+  {
+    message: Schema.String,
+    scenario: Schema.String,
+    line: Schema.Number,
+    cause: Schema.Unknown,
+  },
+) {}
+
+/**
+ * An error raised when scenario-level teardown fails after Gherkin steps finish.
+ *
+ * **Details**
+ *
+ * Teardown errors are reported against the scenario, not against the last
+ * Gherkin step, because finalizers belong to the scenario lifetime.
+ *
+ * @category errors
+ * @since 0.5.0
+ */
+export class ScenarioTeardownError extends Schema.TaggedErrorClass<ScenarioTeardownError>()(
+  "ScenarioTeardownError",
+  {
+    message: Schema.String,
+    scenario: Schema.String,
+    line: Schema.Number,
+    cause: Schema.Unknown,
+  },
+) {}
+
+/**
+ * A structured cause used when scenario teardown exceeds its configured timeout.
+ *
+ * @category errors
+ * @since 0.5.0
+ */
+export class ScenarioTeardownTimeoutError extends Schema.TaggedErrorClass<ScenarioTeardownTimeoutError>()(
+  "ScenarioTeardownTimeoutError",
+  {
+    message: Schema.String,
+    timeout: Schema.Duration,
+  },
+) {}
+
+/**
  * A structured cause used when a matched step exceeds its configured timeout.
  *
  * **Details**

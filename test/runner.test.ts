@@ -1,6 +1,6 @@
 import { Bdd } from "effect-bdd";
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Duration, Effect, Fiber, Option, Schema } from "effect";
+import { Context, Cause, Duration, Effect, Fiber, Layer, Option, Schema } from "effect";
 import * as Arr from "effect/Array";
 import * as Fn from "effect/Function";
 import { TestClock } from "effect/testing";
@@ -417,6 +417,210 @@ Feature: Timeouts
         scenarios: [{ title: "Slow allowed step", steps: 2, tags: [] }],
       });
     });
+  });
+
+  it.effect("keeps scoped step resources open until the scenario finishes", () => {
+    const events: Array<string> = [];
+    const givenPage = Bdd.given`the app is open`(() =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push("open");
+          return { open: true };
+        }),
+        () =>
+          Effect.sync(() => {
+            events.push("close");
+          }),
+      ),
+    );
+    const whenPageIsUsed = Bdd.when`the page is used`((page: { readonly open: boolean }) =>
+      Effect.sync(() => {
+        assert.deepStrictEqual(events, ["open"]);
+        return page;
+      }),
+    );
+    const thenPageIsStillOpen = Bdd.then`the page is still open`(
+      (page: { readonly open: boolean }) =>
+        Effect.sync(() => {
+          assert.deepStrictEqual(events, ["open"]);
+          return page;
+        }),
+    );
+    const feature = Bdd.feature("Scoped resources").pipe(
+      Bdd.scenario("Resource survives steps").pipe(givenPage, whenPageIsUsed, thenPageIsStillOpen),
+    );
+
+    return Effect.gen(function* () {
+      yield* runBdd(
+        feature,
+        `
+Feature: Scoped resources
+
+  Scenario: Resource survives steps
+    Given the app is open
+    When the page is used
+    Then the page is still open
+`,
+      );
+
+      assert.deepStrictEqual(events, ["open", "close"]);
+    });
+  });
+
+  it.effect("closes scoped step resources when a later step fails", () => {
+    const events: Array<string> = [];
+    const givenPage = Bdd.given`the app is open`(() =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push("open");
+          return {};
+        }),
+        () =>
+          Effect.sync(() => {
+            events.push("close");
+          }),
+      ),
+    );
+    const whenActionFails = Bdd.when`the action fails`(() => Effect.fail("boom" as const));
+    const feature = Bdd.feature("Scoped resources").pipe(
+      Bdd.scenario("Failure closes resource").pipe(givenPage, whenActionFails),
+    );
+
+    return Effect.gen(function* () {
+      const result = yield* Effect.exit(
+        runBdd(
+          feature,
+          `
+Feature: Scoped resources
+
+  Scenario: Failure closes resource
+    Given the app is open
+    When the action fails
+`,
+        ),
+      );
+
+      assert.strictEqual(result._tag, "Failure");
+      assert.deepStrictEqual(events, ["open", "close"]);
+    });
+  });
+
+  it.effect("closes scoped step resources when a later step times out", () => {
+    const events: Array<string> = [];
+    const givenPage = Bdd.given`the app is open`(() =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push("open");
+          return {};
+        }),
+        () =>
+          Effect.sync(() => {
+            events.push("close");
+          }),
+      ),
+    );
+    const whenActionHangs = Bdd.when`the action hangs`(() => Effect.sleep(Duration.millis(50)));
+    const feature = Bdd.feature("Scoped resources").pipe(
+      Bdd.scenario("Timeout closes resource").pipe(givenPage, whenActionHangs),
+    );
+
+    return Effect.gen(function* () {
+      const fiber = yield* Fn.pipe(
+        runBdd(
+          feature,
+          `
+Feature: Scoped resources
+
+  Scenario: Timeout closes resource
+    Given the app is open
+    When the action hangs
+`,
+          { stepTimeout: Duration.millis(1) },
+        ),
+        Effect.forkChild,
+      );
+      yield* TestClock.adjust(Duration.millis(1));
+      const result = yield* Effect.exit(Fiber.join(fiber));
+
+      assert.strictEqual(result._tag, "Failure");
+      assert.deepStrictEqual(events, ["open", "close"]);
+    });
+  });
+
+  it.effect("reports teardown failures against the scenario instead of the final step", () => {
+    const givenBadResource = Bdd.given`a bad resource is open`(() =>
+      Effect.acquireRelease(Effect.succeed({}), () => Effect.die("teardown failed")),
+    );
+    const thenAssertionPasses = Bdd.then`the assertion passes`((state: {}) =>
+      Effect.succeed(state),
+    );
+    const feature = Bdd.feature("Scoped resources").pipe(
+      Bdd.scenario("Teardown fails").pipe(givenBadResource, thenAssertionPasses),
+    );
+
+    return Effect.gen(function* () {
+      const result = yield* Effect.exit(
+        runBdd(
+          feature,
+          `
+Feature: Scoped resources
+
+  Scenario: Teardown fails
+    Given a bad resource is open
+    Then the assertion passes
+`,
+        ),
+      );
+
+      assert.strictEqual(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        const error = Option.getOrThrow(Cause.findErrorOption(result.cause));
+        assert.strictEqual(error instanceof Bdd.ScenarioTeardownError, true);
+        if (error instanceof Bdd.ScenarioTeardownError) {
+          assert.strictEqual(error.scenario, "Teardown fails");
+        }
+      }
+    });
+  });
+
+  it.effect("provides scenario-local services to steps", () => {
+    class Greeting extends Context.Service<
+      Greeting,
+      {
+        readonly message: string;
+      }
+    >()("Greeting") {}
+
+    const whenGreetingRead = Bdd.when`the greeting is read`(() =>
+      Effect.gen(function* () {
+        const greeting = yield* Greeting;
+        return greeting.message;
+      }),
+    );
+    const thenGreetingMatches = Bdd.then`the greeting is hello`((message: string) =>
+      Effect.sync(() => {
+        assert.strictEqual(message, "hello");
+        return message;
+      }),
+    );
+    const feature = Bdd.feature("Scenario providers").pipe(
+      Bdd.scenario("Uses a provider").pipe(
+        whenGreetingRead,
+        thenGreetingMatches,
+        Bdd.provide(Layer.succeed(Greeting, { message: "hello" })),
+      ),
+    );
+
+    return runBdd(
+      feature,
+      `
+Feature: Scenario providers
+
+  Scenario: Uses a provider
+    When the greeting is read
+    Then the greeting is hello
+`,
+    );
   });
 
   it.effect("runs feature and rule backgrounds as explicit leading chain steps", () => {

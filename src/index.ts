@@ -16,9 +16,22 @@ import type {
   Step as Step_,
   TableArg as TableArg_,
 } from "./Bdd.ts";
-import type { StepTimeoutError as StepTimeoutError_ } from "./Errors.ts";
+import type {
+  ScenarioSetupError as ScenarioSetupError_,
+  ScenarioTeardownError as ScenarioTeardownError_,
+  ScenarioTeardownTimeoutError as ScenarioTeardownTimeoutError_,
+  StepTimeoutError as StepTimeoutError_,
+} from "./Errors.ts";
 
-export { MatchError, ParseError, StepError, StepTimeoutError } from "./Errors.ts";
+export {
+  MatchError,
+  ParseError,
+  ScenarioSetupError,
+  ScenarioTeardownError,
+  ScenarioTeardownTimeoutError,
+  StepError,
+  StepTimeoutError,
+} from "./Errors.ts";
 
 /**
  * Namespace-style API for building and running BDD feature definitions.
@@ -97,6 +110,30 @@ export declare namespace Bdd {
    * @since 0.4.0
    */
   export type StepTimeoutError = StepTimeoutError_;
+
+  /**
+   * Error raised when scenario setup fails before Gherkin steps run.
+   *
+   * @category errors
+   * @since 0.5.0
+   */
+  export type ScenarioSetupError = ScenarioSetupError_;
+
+  /**
+   * Error raised when scenario teardown fails after Gherkin steps finish.
+   *
+   * @category errors
+   * @since 0.5.0
+   */
+  export type ScenarioTeardownError = ScenarioTeardownError_;
+
+  /**
+   * Structured cause used when scenario teardown exceeds its configured timeout.
+   *
+   * @category errors
+   * @since 0.5.0
+   */
+  export type ScenarioTeardownTimeoutError = ScenarioTeardownTimeoutError_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.

@@ -1,12 +1,24 @@
 import type { Pickle, PickleStep } from "@cucumber/messages";
 import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import type * as Exit from "effect/Exit";
 import * as Fn from "effect/Function";
+import type * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
-import { MatchError, ParseError, StepError, StepTimeoutError } from "../Errors.ts";
+import * as Scope from "effect/Scope";
+import {
+  MatchError,
+  ParseError,
+  ScenarioSetupError,
+  ScenarioTeardownError,
+  ScenarioTeardownTimeoutError,
+  StepError,
+  StepTimeoutError,
+} from "../Errors.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -26,7 +38,7 @@ export interface DocStringInput {
 /** @internal */
 type ConcreteStepKind = "Given" | "When" | "Then";
 
-type RunError = ParseError | MatchError | StepError;
+type RunError = ParseError | MatchError | ScenarioSetupError | StepError | ScenarioTeardownError;
 
 interface Expression<A> {
   readonly source: string;
@@ -60,6 +72,7 @@ interface AnyStep<R = unknown> {
 interface ScenarioDefinition<R = unknown> {
   readonly title: string;
   readonly steps: ReadonlyArray<AnyStep<R>>;
+  readonly providers: ReadonlyArray<Layer.Layer<unknown, unknown, R>>;
 }
 
 interface FeatureDefinition<E, R> {
@@ -77,6 +90,7 @@ interface Report {
 /** @internal */
 export interface RunOptions {
   readonly stepTimeout?: Duration.Duration;
+  readonly teardownTimeout?: Duration.Duration;
 }
 
 /** @internal */
@@ -129,7 +143,7 @@ export const run = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   source: string,
   options: RunOptions = {},
-): Effect.Effect<Report, RunError, R | Parser.GherkinCompiler> =>
+): Effect.Effect<Report, RunError, Exclude<R, Scope.Scope> | Parser.GherkinCompiler> =>
   Fn.pipe(
     Parser.parse(source),
     Effect.flatMap((feature) =>
@@ -290,14 +304,101 @@ const buildScenarioTasks = <E, R>(
 export const runScenarioTask = <E, R>(
   task: ScenarioTask<E, R>,
   options: RunOptions = {},
-): Effect.Effect<ScenarioReport, RunError, R> =>
-  Fn.pipe(
-    runSteps(task, options),
-    Effect.as({
+): Effect.Effect<ScenarioReport, RunError, Exclude<R, Scope.Scope>> =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const program = Fn.pipe(
+      runSteps(task, options),
+      provideScenarioProviders(task),
+      Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
+      Scope.provide(scope),
+    );
+    const stepExit = yield* Effect.exit(program);
+    const closeExit = yield* Effect.exit(closeScenarioScope(task, scope, stepExit, options));
+    if (closeExit._tag === "Failure") {
+      return yield* Effect.fail(scenarioTeardownErrorFromCause(task, closeExit.cause));
+    }
+    yield* stepExit;
+    return {
       title: task.scenarioTitle,
       steps: task.pickle.steps.length,
       tags: task.tags,
-    }),
+    };
+  });
+
+const provideScenarioProviders =
+  <R>(task: ScenarioTask<unknown, R>) =>
+  <A, E>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | unknown, R> => {
+    const initial: Effect.Effect<A, E | unknown, R> = effect;
+    return Arr.reduce(task.scenarioDefinition.providers, initial, (current, provider) =>
+      Effect.provide(current, provider),
+    );
+  };
+
+const closeScenarioScope = <A, E>(
+  task: ScenarioTask<unknown, unknown>,
+  scope: Scope.Closeable,
+  exit: Exit.Exit<A, E>,
+  options: RunOptions,
+): Effect.Effect<void, ScenarioTeardownError> => {
+  const close = Scope.close(scope, exit);
+  const timeout = options.teardownTimeout;
+  return timeout === undefined
+    ? close
+    : Effect.timeoutOrElse({
+        duration: timeout,
+        orElse: () =>
+          Effect.fail(
+            new ScenarioTeardownError({
+              message: `Scenario teardown timed out after ${formatDuration(timeout)}: ${task.sourceScenarioTitle}`,
+              scenario: task.sourceScenarioTitle,
+              line: task.scenarioLine,
+              cause: new ScenarioTeardownTimeoutError({
+                message: `Timed out after ${formatDuration(timeout)}`,
+                timeout,
+              }),
+            }),
+          ),
+      })(close);
+};
+
+const isRunError = (u: unknown): u is RunError => isDiscoveryRunError(u) || isExecutionRunError(u);
+
+const isDiscoveryRunError = (u: unknown): u is ParseError | MatchError | ScenarioSetupError =>
+  u instanceof ParseError || u instanceof MatchError || u instanceof ScenarioSetupError;
+
+const isExecutionRunError = (u: unknown): u is StepError | ScenarioTeardownError =>
+  u instanceof StepError || u instanceof ScenarioTeardownError;
+
+const scenarioSetupError = (
+  task: ScenarioTask<unknown, unknown>,
+  cause: unknown,
+): ScenarioSetupError =>
+  new ScenarioSetupError({
+    message: `Scenario setup failed: ${task.sourceScenarioTitle}`,
+    scenario: task.sourceScenarioTitle,
+    line: task.scenarioLine,
+    cause,
+  });
+
+const scenarioTeardownErrorFromCause = (
+  task: ScenarioTask<unknown, unknown>,
+  cause: Cause.Cause<ScenarioTeardownError>,
+): ScenarioTeardownError =>
+  Fn.pipe(
+    Cause.findErrorOption(cause),
+    Option.filter(
+      (error): error is ScenarioTeardownError => error instanceof ScenarioTeardownError,
+    ),
+    Option.getOrElse(
+      () =>
+        new ScenarioTeardownError({
+          message: `Scenario teardown failed: ${task.sourceScenarioTitle}`,
+          scenario: task.sourceScenarioTitle,
+          line: task.scenarioLine,
+          cause,
+        }),
+    ),
   );
 
 const runSteps: <E, R>(

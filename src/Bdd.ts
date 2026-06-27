@@ -11,7 +11,16 @@ import type { Pipeable } from "effect/Pipeable";
 import * as PipeableRuntime from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
-import { MatchError, ParseError, StepError, StepTimeoutError } from "./Errors.ts";
+import type * as Scope from "effect/Scope";
+import {
+  MatchError,
+  ParseError,
+  ScenarioSetupError,
+  ScenarioTeardownError,
+  ScenarioTeardownTimeoutError,
+  StepError,
+  StepTimeoutError,
+} from "./Errors.ts";
 import * as cucumberCompiler from "./internal/cucumberCompiler.ts";
 import * as expression from "./internal/expression.ts";
 import * as parser from "./internal/parser.ts";
@@ -27,7 +36,12 @@ const StepTypeId = "~effect-bdd/Bdd/Step";
  * @category errors
  * @since 0.1.0
  */
-export type RunError = ParseError | MatchError | StepError;
+export type RunError =
+  | ParseError
+  | MatchError
+  | ScenarioSetupError
+  | StepError
+  | ScenarioTeardownError;
 
 /**
  * Service used to compile Gherkin source into executable scenarios.
@@ -185,6 +199,14 @@ export interface Step<
 export type AnyStep = Step<StepKind, any, any, any, any, any, any>;
 
 /**
+ * Existential provider type stored in scenario chains.
+ *
+ * @category models
+ * @since 0.5.0
+ */
+export type AnyProvider = Layer.Layer<any, any, any>;
+
+/**
  * A titled scenario chain. The type parameter tracks the current state after
  * the last appended step.
  *
@@ -197,6 +219,7 @@ export interface Scenario<State = void, E = never, R = never> extends Pipeable {
   readonly _State?: (_: State) => State;
   readonly title: string;
   readonly steps: ReadonlyArray<AnyStep>;
+  readonly providers: ReadonlyArray<AnyProvider>;
 }
 
 /**
@@ -258,6 +281,9 @@ type DataTableType = DataTable;
 type DocStringType = DocString;
 type RunOptionsType = RunOptions;
 type StepTimeoutErrorType = StepTimeoutError;
+type ScenarioSetupErrorType = ScenarioSetupError;
+type ScenarioTeardownErrorType = ScenarioTeardownError;
+type ScenarioTeardownTimeoutErrorType = ScenarioTeardownTimeoutError;
 
 /**
  * Options that control `Bdd.run` execution policy.
@@ -267,6 +293,7 @@ type StepTimeoutErrorType = StepTimeoutError;
  */
 export interface RunOptions {
   readonly stepTimeout?: Duration.Duration;
+  readonly teardownTimeout?: Duration.Duration;
 }
 
 /**
@@ -398,6 +425,58 @@ const withTimeout_: WithTimeout = Fn.dual(
 );
 
 /**
+ * Provides scenario-local services to the matched scenario program.
+ *
+ * `Bdd.provide` mirrors `Effect.provide`, but attaches provision before the
+ * scenario program exists. The runner applies the layer once per matched
+ * scenario, so scoped resources are finalized at scenario end.
+ *
+ * @example
+ * ```ts
+ * import { Bdd } from "effect-bdd"
+ * import { Context, Effect, Layer } from "effect"
+ *
+ * class BrowserPage extends Context.Service<BrowserPage, {
+ *   readonly close: () => Effect.Effect<void>
+ * }>()("BrowserPage") {}
+ *
+ * const BrowserPageLive = Layer.effect(
+ *   BrowserPage,
+ *   Effect.acquireRelease(
+ *     Effect.succeed({ close: () => Effect.void }),
+ *     (page) => page.close()
+ *   )
+ * )
+ *
+ * const opensPage = Bdd.scenario("Opens page").pipe(
+ *   Bdd.given`the app is open`(() => Effect.void),
+ *   Bdd.provide(BrowserPageLive)
+ * )
+ * ```
+ *
+ * @category combinators
+ * @since 0.5.0
+ */
+export interface Provide {
+  <ROut, E2, RIn>(
+    provider: Layer.Layer<ROut, E2, RIn>,
+  ): <State, E, R>(self: Scenario<State, E, R>) => Scenario<State, E | E2, Exclude<R, ROut> | RIn>;
+  <State, E, R, ROut, E2, RIn>(
+    self: Scenario<State, E, R>,
+    provider: Layer.Layer<ROut, E2, RIn>,
+  ): Scenario<State, E | E2, Exclude<R, ROut> | RIn>;
+}
+
+const provide_: Provide = Fn.dual(
+  2,
+  <State, E, R, ROut, E2, RIn>(
+    self: Scenario<State, E, R>,
+    provider: Layer.Layer<ROut, E2, RIn>,
+  ): Scenario<State, E | E2, Exclude<R, ROut> | RIn> =>
+    makeScenario(self.title, self.steps, [...self.providers, provider]),
+);
+
+/**
  * Runs Gherkin source against a feature definition.
  *
  * @category execution
@@ -407,7 +486,8 @@ const run_ = <E, R>(
   self: Feature<E, R>,
   source: string,
   options: RunOptions = {},
-): Effect.Effect<Report, RunError, R | GherkinCompiler> => runner.run(self, source, options);
+): Effect.Effect<Report, RunError, Exclude<R, Scope.Scope> | GherkinCompiler> =>
+  runner.run(self, source, options);
 
 /**
  * Checks whether a value is a {@link StepTimeoutError}.
@@ -427,6 +507,9 @@ export const Bdd = {
   ParseError,
   MatchError,
   StepError,
+  ScenarioSetupError,
+  ScenarioTeardownError,
+  ScenarioTeardownTimeoutError,
   StepTimeoutError,
   GherkinCompiler,
   layerCucumber,
@@ -443,6 +526,7 @@ export const Bdd = {
   // oxlint-disable-next-line unicorn/no-thenable
   then: then_,
   withTimeout: withTimeout_,
+  provide: provide_,
   run: run_,
 };
 
@@ -515,6 +599,30 @@ export declare namespace Bdd {
    * @since 0.4.0
    */
   export type StepTimeoutError = StepTimeoutErrorType;
+
+  /**
+   * Error raised when scenario setup fails before Gherkin steps run.
+   *
+   * @category errors
+   * @since 0.5.0
+   */
+  export type ScenarioSetupError = ScenarioSetupErrorType;
+
+  /**
+   * Error raised when scenario teardown fails after Gherkin steps finish.
+   *
+   * @category errors
+   * @since 0.5.0
+   */
+  export type ScenarioTeardownError = ScenarioTeardownErrorType;
+
+  /**
+   * Structured cause used when scenario teardown exceeds its configured timeout.
+   *
+   * @category errors
+   * @since 0.5.0
+   */
+  export type ScenarioTeardownTimeoutError = ScenarioTeardownTimeoutErrorType;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
@@ -630,17 +738,19 @@ const makeFeature = <E, R>(
 const makeScenario = <State, E, R>(
   title: string,
   steps: ReadonlyArray<AnyStep>,
+  providers: ReadonlyArray<AnyProvider> = [],
 ): Scenario<State, E, R> => {
   function appendScenario<E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0> {
     return makeFeature(self.title, [...self.scenarios, scenario]);
   }
   const properties: Pick<
     Scenario<State, E, R>,
-    typeof ScenarioTypeId | "title" | "steps" | "pipe"
+    typeof ScenarioTypeId | "title" | "steps" | "providers" | "pipe"
   > = {
     [ScenarioTypeId]: ScenarioTypeId,
     title,
     steps,
+    providers,
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
@@ -664,7 +774,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   function appendStep<State extends In, E0, R0>(
     self: Scenario<State, E0, R0>,
   ): Scenario<Out, E | E0, R | R0> {
-    return makeScenario(self.title, [...self.steps, step]);
+    return makeScenario(self.title, [...self.steps, step], self.providers);
   }
   const properties: Pick<
     Step<Kind, In, Out, E, R, Captures, Argument>,

@@ -290,6 +290,64 @@ const thenTaxedTotalIs = Bdd.then`the taxed total is ${expected}`(
 );
 ```
 
+### Scenario Resources
+
+Every matched scenario runs in a fresh Effect `Scope`. A step can acquire a scoped
+resource and return it as scenario state; the runner keeps that resource open until the
+scenario finishes, even if a later step fails or times out.
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+
+interface Page {
+  readonly close: () => Effect.Effect<void>;
+}
+
+declare const openPage: Effect.Effect<Page>;
+
+const givenAppIsOpen = Bdd.given`the app is open`(() =>
+  Effect.acquireRelease(openPage, (page) => page.close()),
+);
+
+const whenUserClicks = Bdd.when`the user clicks submit`((page: Page) => Effect.succeed(page));
+```
+
+Use `Bdd.provide` when infrastructure should be available to steps but should not appear as
+a Gherkin step. It mirrors `Effect.provide`, but provision is applied once per matched
+scenario after the scenario program is built.
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Context, Effect, Layer } from "effect";
+
+interface Page {
+  readonly close: () => Effect.Effect<void>;
+}
+
+declare const openPage: Effect.Effect<Page>;
+
+class BrowserPage extends Context.Service<BrowserPage, Page>()("BrowserPage") {}
+
+const BrowserPageLive = Layer.effect(
+  BrowserPage,
+  Effect.acquireRelease(openPage, (page) => page.close()),
+);
+
+const whenUserClicks = Bdd.when`the user clicks submit`(() =>
+  Effect.gen(function* () {
+    const page = yield* BrowserPage;
+    return page;
+  }),
+);
+
+const submitsForm = Bdd.scenario("Submits form").pipe(whenUserClicks, Bdd.provide(BrowserPageLive));
+```
+
+Scenario-owned resources are intentionally not Cucumber-style `Before` / `After` hooks.
+If a resource should live across the whole feature run, provide it around `Bdd.run` with
+normal Effect APIs instead of acquiring it inside a step.
+
 ### Backgrounds
 
 Backgrounds are explicit leading steps in the chain. There is intentionally no
@@ -399,7 +457,9 @@ scenario chain independently.
 
 - `ParseError`: invalid Gherkin.
 - `MatchError`: feature/scenario/step verification or argument decoding failed.
+- `ScenarioSetupError`: scenario-level provider setup failed before steps ran.
 - `StepError`: a matched step implementation failed or exceeded its configured timeout.
+- `ScenarioTeardownError`: scenario scope finalization failed after steps finished.
 
 ### Public API
 
@@ -407,13 +467,15 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 
 - constructors: `Bdd.capture`, `Bdd.table`, `Bdd.docString`, `Bdd.feature`, `Bdd.scenario`
 - steps: `Bdd.given`, `Bdd.when`, `Bdd.then`, `Bdd.step`
+- scenario wiring: `Bdd.provide`
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
 - guards: `Bdd.isFeature`, `Bdd.isStepTimeoutError`
 - models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`,
   `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`,
-  `Bdd.StepTimeoutError`
+  `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`,
+  `Bdd.ScenarioTeardownTimeoutError`, `Bdd.StepTimeoutError`
 
 The error classes are also importable from `effect-bdd/Errors`.
 

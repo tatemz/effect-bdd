@@ -1,7 +1,15 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Duration, Effect, Layer } from "effect";
+import { Context, Duration, Effect, Layer } from "effect";
 import { Bdd } from "effect-bdd";
-import { MatchError, ParseError, StepError, StepTimeoutError } from "effect-bdd/Errors";
+import {
+  MatchError,
+  ParseError,
+  ScenarioSetupError,
+  ScenarioTeardownError,
+  ScenarioTeardownTimeoutError,
+  StepError,
+  StepTimeoutError,
+} from "effect-bdd/Errors";
 
 describe("public API", () => {
   describe("model titles", () => {
@@ -138,6 +146,32 @@ describe("public API", () => {
     });
   });
 
+  describe("scenario providers", () => {
+    class Greeting extends Context.Service<
+      Greeting,
+      {
+        readonly message: string;
+      }
+    >()("Greeting") {}
+
+    it("exposes a pipeable scenario provider helper", () => {
+      const provider = Layer.succeed(Greeting, { message: "hello" });
+      const scenario = Bdd.scenario("Uses provider").pipe(Bdd.provide(provider));
+
+      assert.strictEqual(scenario.title, "Uses provider");
+      assert.deepStrictEqual(scenario.providers, [provider]);
+      assert.strictEqual(Object.isFrozen(scenario), true);
+    });
+
+    it("exposes a data-first scenario provider helper", () => {
+      const provider = Layer.succeed(Greeting, { message: "hello" });
+      const scenario = Bdd.provide(Bdd.scenario("Uses provider"), provider);
+
+      assert.strictEqual(scenario.title, "Uses provider");
+      assert.deepStrictEqual(scenario.providers, [provider]);
+    });
+  });
+
   describe("effect-bdd/Errors subpath", () => {
     it("exposes constructable tagged errors", () => {
       const parse = new ParseError({ message: "boom", line: 1, column: 2 });
@@ -155,6 +189,22 @@ describe("public API", () => {
         line: 4,
         cause: "expected 1, got 0",
       });
+      const setup = new ScenarioSetupError({
+        message: "setup failed",
+        scenario: "S",
+        line: 2,
+        cause: "browser failed",
+      });
+      const teardown = new ScenarioTeardownError({
+        message: "teardown failed",
+        scenario: "S",
+        line: 2,
+        cause: "browser failed",
+      });
+      const teardownTimeout = new ScenarioTeardownTimeoutError({
+        message: "Timed out after 1s",
+        timeout: Duration.seconds(1),
+      });
       const timeout = new StepTimeoutError({
         message: "Timed out after 1s",
         timeout: Duration.seconds(1),
@@ -163,6 +213,9 @@ describe("public API", () => {
       assert.strictEqual(parse._tag, "ParseError");
       assert.strictEqual(match._tag, "MatchError");
       assert.strictEqual(step._tag, "StepError");
+      assert.strictEqual(setup._tag, "ScenarioSetupError");
+      assert.strictEqual(teardown._tag, "ScenarioTeardownError");
+      assert.strictEqual(teardownTimeout._tag, "ScenarioTeardownTimeoutError");
       assert.strictEqual(timeout._tag, "StepTimeoutError");
       assert.instanceOf(parse, Error);
     });
