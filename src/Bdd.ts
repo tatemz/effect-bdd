@@ -286,7 +286,7 @@ const capture_: <const Name extends string, A>(
  * @category constructors
  * @since 0.1.0
  */
-const table_ = <S extends Schema.Decoder<unknown, never>>(
+const table_ = <S extends Schema.ConstraintDecoder<unknown, never>>(
   row: S,
 ): TableArg<ReadonlyArray<S["Type"]>> => ({
   _tag: "TableArg",
@@ -299,7 +299,7 @@ const table_ = <S extends Schema.Decoder<unknown, never>>(
  * @category constructors
  * @since 0.1.0
  */
-const docString_ = <S extends Schema.Decoder<unknown, never>>(
+const docString_ = <S extends Schema.ConstraintDecoder<unknown, never>>(
   schema: S,
 ): DocStringArg<S["Type"]> => ({
   _tag: "DocStringArg",

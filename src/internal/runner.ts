@@ -103,7 +103,7 @@ export interface ScenarioReport {
 }
 
 /** @internal */
-export const decodeTable = <S extends Schema.Decoder<unknown, never>>(row: S) => {
+export const decodeTable = <S extends Schema.ConstraintDecoder<unknown, never>>(row: S) => {
   const decode = Schema.decodeUnknownEffect(row);
   return (table: DataTableInput): Effect.Effect<ReadonlyArray<S["Type"]>, unknown> =>
     Fn.pipe(
@@ -118,7 +118,7 @@ export const decodeTable = <S extends Schema.Decoder<unknown, never>>(row: S) =>
 };
 
 /** @internal */
-export const decodeDocString = <S extends Schema.Decoder<unknown, never>>(schema: S) => {
+export const decodeDocString = <S extends Schema.ConstraintDecoder<unknown, never>>(schema: S) => {
   const decode = Schema.decodeUnknownEffect(schema);
   return (docString: DocStringInput): Effect.Effect<S["Type"], unknown> =>
     decode(docString.content);
