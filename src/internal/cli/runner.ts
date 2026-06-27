@@ -21,6 +21,7 @@ import type {
   CliRunResult,
   DiscoverySummary,
   FeatureSource,
+  RunPhaseDurations,
   RunEvent,
   RunSummary,
   ScenarioResult,
@@ -33,6 +34,10 @@ interface BuiltScenarios {
   readonly tasks: ReadonlyArray<ScenarioTask>;
   readonly diagnostics: ReadonlyArray<CliDiagnostic>;
   readonly matchedFeatureTitles: ReadonlyArray<string>;
+}
+
+interface FeatureDefinitionIndex {
+  readonly byTitle: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>>;
 }
 
 interface RunEvents {
@@ -49,16 +54,24 @@ export const run: (
   FileSystem.FileSystem | GlobResolver | ModuleLoader | Path.Path | Parser.GherkinCompiler
 > = Effect.fnUntraced(function* (options: CliOptions, events?: RunEvents) {
   const startedAt = yield* Clock.currentTimeMillis;
-  const sources = yield* loadFeatureSources(options.features);
-  const loadedDefinitions = yield* loadFeatureDefinitions(options.steps);
+  const sourcesTimed = yield* timed(loadFeatureSources(options.features));
+  const sources = sourcesTimed.value;
+  const loadedDefinitionsTimed = yield* timed(loadFeatureDefinitions(options.steps));
+  const loadedDefinitions = loadedDefinitionsTimed.value;
   const definitions = loadedDefinitions.definitions;
-  const built = yield* Fn.pipe(
-    sources,
-    Effect.forEach((source) => buildScenarioTasks(source, definitions)),
-    Effect.map(combineBuiltScenarios),
+  const definitionIndex = featureDefinitionIndex(definitions);
+  const builtTimed = yield* timed(
+    Fn.pipe(
+      sources,
+      Effect.forEach((source) => buildScenarioTasks(source, definitionIndex)),
+      Effect.map(combineBuiltScenarios),
+    ),
   );
-  const filteredTasks = yield* filterTasks(options, built.tasks);
-  const results = yield* runScenarios(options, filteredTasks, events);
+  const built = builtTimed.value;
+  const filteredTimed = yield* timed(filterTasks(options, built.tasks));
+  const filteredTasks = filteredTimed.value;
+  const resultsTimed = yield* timed(runScenarios(options, filteredTasks, events));
+  const results = resultsTimed.value;
   const finishedAt = yield* Clock.currentTimeMillis;
   const diagnostics: ReadonlyArray<CliDiagnostic> = Fn.pipe(
     built.diagnostics,
@@ -67,7 +80,13 @@ export const run: (
   return {
     results,
     diagnostics,
-    summary: summarize(sources.length, results, finishedAt - startedAt),
+    summary: summarize(sources.length, results, finishedAt - startedAt, {
+      featureDiscoveryMillis: sourcesTimed.durationMillis,
+      stepModuleLoadMillis: loadedDefinitionsTimed.durationMillis,
+      taskBuildMillis: builtTimed.durationMillis,
+      filteringMillis: filteredTimed.durationMillis,
+      executionMillis: resultsTimed.durationMillis,
+    }),
     discovery: summarizeDiscovery(
       options,
       sources,
@@ -79,16 +98,29 @@ export const run: (
   } satisfies CliRunResult;
 });
 
+interface Timed<A> {
+  readonly value: A;
+  readonly durationMillis: number;
+}
+
+const timed: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<Timed<A>, E, R> =
+  Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {
+    const startedAt = yield* Clock.currentTimeMillis;
+    const value = yield* effect;
+    const finishedAt = yield* Clock.currentTimeMillis;
+    return { value, durationMillis: finishedAt - startedAt };
+  });
+
 const buildScenarioTasks: (
   source: FeatureSource,
-  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
+  definitions: FeatureDefinitionIndex,
 ) => Effect.Effect<BuiltScenarios, DiscoveryError | ParseError, Parser.GherkinCompiler> =
-  Effect.fnUntraced(function* (
-    source: FeatureSource,
-    definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
-  ) {
+  Effect.fnUntraced(function* (source: FeatureSource, definitions: FeatureDefinitionIndex) {
     const parsed = yield* Parser.parse(source.source, source.path);
-    const matches = Arr.filter(definitions, (definition) => definition.title === parsed.name);
+    const matches = Fn.pipe(
+      Record.get(definitions.byTitle, parsed.name),
+      Option.getOrElse((): ReadonlyArray<Bdd.Feature<unknown, never>> => []),
+    );
     if (matches.length > 1) {
       return yield* Effect.fail(
         new DiscoveryError({
@@ -127,14 +159,8 @@ const buildScenarioTasks: (
         matchedFeatureTitles: [],
       };
     }
-    const duplicateScenario = duplicateScenarioDefinition(definition);
-    if (duplicateScenario !== undefined) {
-      return yield* Effect.fail(
-        new DiscoveryError({
-          message: `Duplicate scenario chain title in "${definition.title}": ${duplicateScenario}`,
-        }),
-      );
-    }
+    yield* validateDuplicateScenarioDefinition(definition);
+    yield* validateDuplicateSourceScenario(parsed);
 
     const scenarioDefinitions = Fn.pipe(
       definition.scenarios,
@@ -170,6 +196,76 @@ const buildScenarioTasks: (
       matchedFeatureTitles: [definition.title],
     };
   });
+
+const featureDefinitionIndex = (
+  definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
+): FeatureDefinitionIndex => {
+  const emptyIndex: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>> = {};
+  const byTitle = Arr.reduce(definitions, emptyIndex, (index, definition) =>
+    Record.set(index, definition.title, appendDefinition(index, definition)),
+  );
+  return { byTitle };
+};
+
+const appendDefinition = (
+  index: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>>,
+  definition: Bdd.Feature<unknown, never>,
+): ReadonlyArray<Bdd.Feature<unknown, never>> =>
+  Fn.pipe(
+    Record.get(index, definition.title),
+    Option.match({
+      onNone: () => [definition],
+      onSome: Arr.append(definition),
+    }),
+  );
+
+const validateDuplicateScenarioDefinition = (
+  definition: Bdd.Feature<unknown, never>,
+): Effect.Effect<void, DiscoveryError> => {
+  const duplicateScenario = duplicateScenarioDefinition(definition);
+  return duplicateScenario === undefined
+    ? Effect.void
+    : Effect.fail(
+        new DiscoveryError({
+          message: `Duplicate scenario chain title in "${definition.title}": ${duplicateScenario}`,
+        }),
+      );
+};
+
+const validateDuplicateSourceScenario = (
+  parsed: Parser.CompiledFeature,
+): Effect.Effect<void, DiscoveryError> => {
+  const duplicateSourceScenario = duplicateSourceScenarioTitle(parsed);
+  return duplicateSourceScenario === undefined
+    ? Effect.void
+    : Effect.fail(
+        new DiscoveryError({
+          message: `Duplicate scenario title in Gherkin feature "${parsed.name}": ${duplicateSourceScenario}`,
+        }),
+      );
+};
+
+const duplicateSourceScenarioTitle = (parsed: Parser.CompiledFeature): string | undefined =>
+  Fn.pipe(
+    CoreRunner.firstDuplicateSourceScenarioTitle(
+      Arr.map(parsed.pickles, (pickle) => {
+        const sourceScenario = Parser.findScenario(pickle, parsed.source);
+        return {
+          scenarioTitle: Fn.pipe(
+            sourceScenario,
+            Option.map(({ scenario }) => scenario.name),
+            Option.getOrElse(() => pickle.name),
+          ),
+          sourceScenarioId: Fn.pipe(
+            sourceScenario,
+            Option.map(({ scenario }) => scenario.id),
+            Option.getOrElse(() => pickle.id),
+          ),
+        };
+      }),
+    ),
+    Option.getOrUndefined,
+  );
 
 type BuiltScenario =
   | { readonly _tag: "Task"; readonly task: ScenarioTask }
@@ -352,6 +448,7 @@ const summarize = (
   features: number,
   results: ReadonlyArray<ScenarioResult>,
   durationMillis: number,
+  phases: RunPhaseDurations,
 ): RunSummary => {
   const failed = Arr.filter(results, (result) => result.outcome._tag === "Failed").length;
   return {
@@ -360,6 +457,7 @@ const summarize = (
     passed: results.length - failed,
     failed,
     durationMillis,
+    phases,
   };
 };
 

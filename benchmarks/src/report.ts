@@ -47,9 +47,11 @@ const renderMarkdown = (result: BenchmarkResult): string => {
     "",
     `Environment: ${result.environment.node}, ${result.environment.platform}/${result.environment.arch}, ${result.environment.cpuCount} x ${result.environment.cpuModel}`,
     "",
-    `Config: ${result.config.warmups} warmup run(s), ${result.config.iterations} measured run(s), parallel=${result.config.parallel}`,
+    `Config: ${result.config.warmups} warmup run(s), ${result.config.iterations} measured run(s), parallel=${result.config.parallel}, profile=${result.config.profile}`,
     "",
-    "Performance data answers runner overhead on this corpus. The broader value proposition for `effect-bdd` is typed scenario chains and avoiding Cucumber's mutable `World` model.",
+    `Git commit: ${result.environment.gitCommit}`,
+    "",
+    "Performance data is split into wall time (CLI user experience) and execution time (runner-reported work). The broader value proposition for `effect-bdd` is typed scenario chains and avoiding Cucumber's mutable `World` model.",
     "",
     "## Headline",
     "",
@@ -65,10 +67,15 @@ const renderMarkdown = (result: BenchmarkResult): string => {
 const renderMarkdownHeadline = (suite: SuiteResult): ReadonlyArray<string> => {
   const effect = statsFor(suite, "effect-bdd-cli");
   const cucumber = statsFor(suite, "cucumber-js");
-  const delta = percentDelta(cucumber.medianMillis, effect.medianMillis);
+  const delta = percentDelta(cucumber.wall.medianMillis, effect.wall.medianMillis);
   const direction = delta <= 0 ? "faster" : "slower";
+  if (effect.confidence === "low" || cucumber.confidence === "low") {
+    return [
+      `- ${suite.name}: low-confidence smoke result. Wall median: \`effect-bdd\` CLI ${formatMillis(effect.wall.medianMillis)} vs cucumber-js ${formatMillis(cucumber.wall.medianMillis)}. Do not publish a speed claim from this run.`,
+    ];
+  }
   return [
-    `- ${suite.name}: \`effect-bdd\` CLI median ${formatMillis(effect.medianMillis)} vs cucumber-js ${formatMillis(cucumber.medianMillis)} (${round(Math.abs(delta))}% ${direction}).`,
+    `- ${suite.name}: \`effect-bdd\` CLI wall median ${formatMillis(effect.wall.medianMillis)} vs cucumber-js ${formatMillis(cucumber.wall.medianMillis)} (${round(Math.abs(delta))}% ${direction}, ${effect.confidence} confidence).`,
   ];
 };
 
@@ -77,14 +84,34 @@ const renderMarkdownSuite = (suite: SuiteResult): ReadonlyArray<string> => [
   "",
   suite.description,
   "",
-  "| Runner | Median | Mean | Min | Max | Scenarios/sec | Runs |",
-  "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  "| Runner | Confidence | Wall median | Wall p95 | Wall CV | Exec median | Wall scenarios/sec | Exec scenarios/sec | Runs |",
+  "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
   ...suite.stats.map(
     (stats) =>
-      `| ${stats.runner} | ${formatMillis(stats.medianMillis)} | ${formatMillis(stats.meanMillis)} | ${formatMillis(stats.minMillis)} | ${formatMillis(stats.maxMillis)} | ${round(stats.scenariosPerSecond)} | ${stats.runs} |`,
+      `| ${stats.runner} | ${stats.confidence} | ${formatMillis(stats.wall.medianMillis)} | ${formatMillis(stats.wall.p95Millis)} | ${round(stats.wall.coefficientOfVariation, 3)} | ${formatOptionalMillis(stats.execution?.medianMillis)} | ${round(stats.wallScenariosPerSecond)} | ${formatOptionalNumber(stats.executionScenariosPerSecond)} | ${stats.runs} |`,
   ),
   "",
+  ...renderMarkdownPhases(suite),
 ];
+
+const renderMarkdownPhases = (suite: SuiteResult): ReadonlyArray<string> => {
+  const phases = suite.runs.find(
+    (run) => run.runner === "effect-bdd-cli" && run.phase === "measured",
+  )?.summary.phases;
+  if (phases === undefined) {
+    return [];
+  }
+  return [
+    "effect-bdd CLI phase timing from first measured run:",
+    "",
+    `- Feature discovery: ${formatMillis(phases.featureDiscoveryMillis)}`,
+    `- Step module load: ${formatMillis(phases.stepModuleLoadMillis)}`,
+    `- Task build: ${formatMillis(phases.taskBuildMillis)}`,
+    `- Filtering: ${formatMillis(phases.filteringMillis)}`,
+    `- Execution: ${formatMillis(phases.executionMillis)}`,
+    "",
+  ];
+};
 
 const renderHtml = (result: BenchmarkResult): string => `<!doctype html>
 <html lang="en">
@@ -103,8 +130,9 @@ const renderHtml = (result: BenchmarkResult): string => `<!doctype html>
     <h1>effect-bdd vs Cucumber Benchmark</h1>
     <p>Generated: ${escapeHtml(result.generatedAt)}</p>
     <p>Environment: ${escapeHtml(`${result.environment.node}, ${result.environment.platform}/${result.environment.arch}, ${result.environment.cpuCount} x ${result.environment.cpuModel}`)}</p>
-    <p>Config: ${result.config.warmups} warmup run(s), ${result.config.iterations} measured run(s), parallel=${result.config.parallel}</p>
-    <p class="note">Performance data answers runner overhead on this corpus. The broader value proposition for <code>effect-bdd</code> is typed scenario chains and avoiding Cucumber's mutable <code>World</code> model.</p>
+    <p>Config: ${result.config.warmups} warmup run(s), ${result.config.iterations} measured run(s), parallel=${result.config.parallel}, profile=${escapeHtml(result.config.profile)}</p>
+    <p>Git commit: ${escapeHtml(result.environment.gitCommit)}</p>
+    <p class="note">Performance data is split into wall time (CLI user experience) and execution time (runner-reported work). The broader value proposition for <code>effect-bdd</code> is typed scenario chains and avoiding Cucumber's mutable <code>World</code> model.</p>
 ${result.suites.map(renderHtmlSuite).join("\n")}
   </body>
 </html>
@@ -114,22 +142,41 @@ const renderHtmlSuite = (suite: SuiteResult): string => `    <h2>${escapeHtml(su
     <p>${escapeHtml(suite.description)}</p>
     <table>
       <thead>
-        <tr><th>Runner</th><th>Median</th><th>Mean</th><th>Min</th><th>Max</th><th>Scenarios/sec</th><th>Runs</th></tr>
+        <tr><th>Runner</th><th>Confidence</th><th>Wall median</th><th>Wall p95</th><th>Wall CV</th><th>Exec median</th><th>Wall scenarios/sec</th><th>Exec scenarios/sec</th><th>Runs</th></tr>
       </thead>
       <tbody>
 ${suite.stats.map(renderHtmlStats).join("\n")}
       </tbody>
-    </table>`;
+    </table>
+${renderHtmlPhases(suite)}`;
 
 const renderHtmlStats = (stats: RunnerStats): string => `        <tr>
           <td>${escapeHtml(stats.runner)}</td>
-          <td>${formatMillis(stats.medianMillis)}</td>
-          <td>${formatMillis(stats.meanMillis)}</td>
-          <td>${formatMillis(stats.minMillis)}</td>
-          <td>${formatMillis(stats.maxMillis)}</td>
-          <td>${round(stats.scenariosPerSecond)}</td>
+          <td>${stats.confidence}</td>
+          <td>${formatMillis(stats.wall.medianMillis)}</td>
+          <td>${formatMillis(stats.wall.p95Millis)}</td>
+          <td>${round(stats.wall.coefficientOfVariation, 3)}</td>
+          <td>${formatOptionalMillis(stats.execution?.medianMillis)}</td>
+          <td>${round(stats.wallScenariosPerSecond)}</td>
+          <td>${formatOptionalNumber(stats.executionScenariosPerSecond)}</td>
           <td>${stats.runs}</td>
         </tr>`;
+
+const renderHtmlPhases = (suite: SuiteResult): string => {
+  const phases = suite.runs.find(
+    (run) => run.runner === "effect-bdd-cli" && run.phase === "measured",
+  )?.summary.phases;
+  if (phases === undefined) {
+    return "";
+  }
+  return `    <p>effect-bdd CLI phase timing from first measured run: feature discovery ${formatMillis(
+    phases.featureDiscoveryMillis,
+  )}, step module load ${formatMillis(phases.stepModuleLoadMillis)}, task build ${formatMillis(
+    phases.taskBuildMillis,
+  )}, filtering ${formatMillis(phases.filteringMillis)}, execution ${formatMillis(
+    phases.executionMillis,
+  )}.</p>`;
+};
 
 const statsFor = (suite: SuiteResult, runner: RunnerStats["runner"]): RunnerStats => {
   const stats = suite.stats.find((candidate) => candidate.runner === runner);
@@ -140,6 +187,12 @@ const statsFor = (suite: SuiteResult, runner: RunnerStats["runner"]): RunnerStat
 };
 
 const formatMillis = (value: number): string => `${round(value)}ms`;
+
+const formatOptionalMillis = (value: number | undefined): string =>
+  value === undefined ? "n/a" : formatMillis(value);
+
+const formatOptionalNumber = (value: number | undefined): string =>
+  value === undefined ? "n/a" : String(round(value));
 
 const escapeHtml = (text: string): string =>
   text

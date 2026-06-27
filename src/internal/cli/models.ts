@@ -50,6 +50,17 @@ export interface RunSummary {
   readonly passed: number;
   readonly failed: number;
   readonly durationMillis: number;
+  readonly phases: RunPhaseDurations;
+}
+
+/** @internal */
+export interface RunPhaseDurations {
+  readonly featureDiscoveryMillis: number;
+  readonly stepModuleLoadMillis: number;
+  readonly taskBuildMillis: number;
+  readonly filteringMillis: number;
+  readonly executionMillis: number;
+  readonly reportEmissionMillis?: number;
 }
 
 /** @internal */

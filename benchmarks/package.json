@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "bench": "pnpm run compare && pnpm run report",
+    "build:compiled": "tsc -p tsconfig.build.json --noCheck",
     "check": "tsc -p tsconfig.json --noEmit",
+    "smoke": "tsx src/compare.ts --iterations 1 --warmups 0 && pnpm run report",
+    "compare:compiled": "pnpm run build:compiled && tsx src/compare.ts --profile compiled",
     "compare": "tsx src/compare.ts",
     "report": "tsx src/report.ts"
   },

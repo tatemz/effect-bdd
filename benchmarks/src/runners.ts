@@ -8,6 +8,7 @@ import { assertSuccessful, runCommand } from "./process.ts";
 import { benchmarkRoot, displayPath, fromBenchmarkRoot } from "./paths.ts";
 import type {
   BenchmarkRun,
+  BenchmarkProfile,
   CommandResult,
   RunSummary,
   RunnerId,
@@ -52,15 +53,18 @@ export const runEffectBddCli = async (
   phase: Phase,
   iteration: number,
   parallel: number,
+  profile: BenchmarkProfile,
 ): Promise<BenchmarkRun> => {
   const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "effect-bdd-cli-"));
   const outputFile = path.join(outputDir, "report.json");
   const args = [
-    "--import",
-    "tsx",
+    ...nodeLoaderArgs(profile),
     fromBenchmarkRoot("node_modules", "effect-bdd", "dist", "bin.js"),
     ...suite.featurePaths.flatMap((featurePath) => ["--features", featurePath]),
-    ...suite.effectBddStepModules.flatMap((stepModule) => ["--steps", stepModule]),
+    ...suite.effectBddStepModules.flatMap((stepModule) => [
+      "--steps",
+      modulePathForProfile(stepModule, profile),
+    ]),
     "--reporter",
     "json",
     "--output-file.json",
@@ -74,6 +78,9 @@ export const runEffectBddCli = async (
   await fs.rm(outputDir, { recursive: true, force: true });
   return subprocessRun("effect-bdd-cli", suite, phase, iteration, result, {
     summary: report.summary,
+    ...(report.summary.durationMillis === undefined
+      ? {}
+      : { executionDurationMillis: report.summary.durationMillis }),
     scenarios: report.scenarios.map((scenario) => ({
       feature: scenario.feature,
       scenario: scenario.scenario,
@@ -87,18 +94,21 @@ export const runCucumberJs = async (
   phase: Phase,
   iteration: number,
   parallel: number,
+  profile: BenchmarkProfile,
 ): Promise<BenchmarkRun> => {
   const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "cucumber-js-"));
   const outputFile = path.join(outputDir, "report.json");
   const args = [
-    "--import",
-    "tsx",
+    ...nodeLoaderArgs(profile),
     fromBenchmarkRoot("node_modules", "@cucumber", "cucumber", "bin", "cucumber.js"),
     "--parallel",
     String(parallel),
     "--format",
     `json:${outputFile}`,
-    ...suite.cucumberStepModules.flatMap((stepModule) => ["--import", stepModule]),
+    ...suite.cucumberStepModules.flatMap((stepModule) => [
+      "--import",
+      modulePathForProfile(stepModule, profile),
+    ]),
     ...suite.featurePaths,
   ];
   const result = await runCommand(process.execPath, args, { cwd: benchmarkRoot });
@@ -115,7 +125,8 @@ export const runEffectBddApi = async (
 ): Promise<BenchmarkRun> => {
   const started = performance.now();
   const featureDefinitions = await loadEffectBddFeatures(suite.effectBddFeatureModules);
-  const counts = await suite.featurePaths.reduce<
+  const apiFeaturePaths = suite.apiFeaturePaths ?? suite.featurePaths;
+  const counts = await apiFeaturePaths.reduce<
     Promise<{
       readonly featureCount: number;
       readonly scenarioCount: number;
@@ -133,10 +144,11 @@ export const runEffectBddApi = async (
     phase,
     iteration,
     command: "in-process",
-    args: suite.featurePaths.map(displayPath),
+    args: apiFeaturePaths.map(displayPath),
     cwd: benchmarkRoot,
     exitCode: 0,
     wallDurationMillis,
+    executionDurationMillis: wallDurationMillis,
     summary: {
       features: counts.featureCount,
       total: counts.scenarioCount,
@@ -182,6 +194,7 @@ const subprocessRun = (
   result: CommandResult,
   parsed: {
     readonly summary: RunSummary;
+    readonly executionDurationMillis?: number;
     readonly scenarios: ReadonlyArray<ScenarioTiming>;
   },
 ): BenchmarkRun => ({
@@ -194,14 +207,29 @@ const subprocessRun = (
   cwd: result.cwd,
   exitCode: result.exitCode,
   wallDurationMillis: result.wallDurationMillis,
+  ...(parsed.executionDurationMillis === undefined
+    ? {}
+    : { executionDurationMillis: parsed.executionDurationMillis }),
   summary: parsed.summary,
   scenarios: parsed.scenarios,
 });
+
+const nodeLoaderArgs = (profile: BenchmarkProfile): ReadonlyArray<string> =>
+  profile === "tsx" ? ["--import", "tsx"] : [];
+
+const modulePathForProfile = (modulePath: string, profile: BenchmarkProfile): string => {
+  if (profile === "tsx" || !modulePath.startsWith(benchmarkRoot)) {
+    return modulePath;
+  }
+  const relative = path.relative(benchmarkRoot, modulePath);
+  return path.join(benchmarkRoot, "dist", relative).replace(/\.ts$/, ".js");
+};
 
 const cucumberSummary = (
   features: ReadonlyArray<CucumberJsonFeature>,
 ): {
   readonly summary: RunSummary;
+  readonly executionDurationMillis: number;
   readonly scenarios: ReadonlyArray<ScenarioTiming>;
 } => {
   const scenarios = features.flatMap((feature) =>
@@ -210,14 +238,16 @@ const cucumberSummary = (
       .map((element) => cucumberScenario(feature, element)),
   );
   const failed = scenarios.filter((scenario) => scenario.failed).length;
+  const durationMillis = scenarios.reduce((sum, scenario) => sum + scenario.durationMillis, 0);
   return {
     summary: {
       features: features.length,
       total: scenarios.length,
       passed: scenarios.length - failed,
       failed,
-      durationMillis: scenarios.reduce((sum, scenario) => sum + scenario.durationMillis, 0),
+      durationMillis,
     },
+    executionDurationMillis: durationMillis,
     scenarios: scenarios.map(({ feature, scenario, durationMillis }) => ({
       feature,
       scenario,
@@ -339,12 +369,28 @@ const parseRunSummary = (value: unknown): RunSummary => {
     throw new Error("Run summary must be an object");
   }
   const durationMillis = optionalNumber(value.durationMillis);
+  const phases = parseRunPhases(value.phases);
   return {
     features: numberProperty(value, "features"),
     total: numberProperty(value, "total"),
     passed: numberProperty(value, "passed"),
     failed: numberProperty(value, "failed"),
     ...(durationMillis === undefined ? {} : { durationMillis }),
+    ...(phases === undefined ? {} : { phases }),
+  };
+};
+
+const parseRunPhases = (value: unknown): RunSummary["phases"] | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  return {
+    featureDiscoveryMillis: numberProperty(value, "featureDiscoveryMillis"),
+    stepModuleLoadMillis: numberProperty(value, "stepModuleLoadMillis"),
+    taskBuildMillis: numberProperty(value, "taskBuildMillis"),
+    filteringMillis: numberProperty(value, "filteringMillis"),
+    executionMillis: numberProperty(value, "executionMillis"),
+    ...optionalNumberProperty(value, "reportEmissionMillis"),
   };
 };
 

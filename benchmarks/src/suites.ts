@@ -1,4 +1,5 @@
 import { fromBenchmarkRoot, fromRepoRoot } from "./paths.ts";
+import { generatedSuites } from "./generatedSuites.ts";
 import type { SuiteDefinition } from "./types.ts";
 
 const fixtureFeature = (name: string): string => fromRepoRoot("test", "fixtures", name);
@@ -17,11 +18,14 @@ const gherkinGoodFeatures = [
 ].map(fixtureFeature);
 
 const gherkinGoodEffectModules = [
-  fromRepoRoot("test", "fixtures", "gherkin-good.step.ts"),
-  fromRepoRoot("test", "fixtures", "kitchen-sink.step.ts"),
+  fromBenchmarkRoot("effect-bdd", "gherkin-good.steps.ts"),
+  fromBenchmarkRoot("effect-bdd", "kitchen-sink.steps.ts"),
 ];
 
-const cucumberStepModule = fromBenchmarkRoot("cucumber", "steps.ts");
+const cucumberGherkinGoodModules = [
+  fromBenchmarkRoot("cucumber", "gherkin-good.steps.ts"),
+  fromBenchmarkRoot("cucumber", "kitchen-sink.steps.ts"),
+];
 
 export const suites: ReadonlyArray<SuiteDefinition> = [
   {
@@ -32,7 +36,7 @@ export const suites: ReadonlyArray<SuiteDefinition> = [
     featurePaths: gherkinGoodFeatures,
     effectBddStepModules: gherkinGoodEffectModules,
     effectBddFeatureModules: gherkinGoodEffectModules,
-    cucumberStepModules: [cucumberStepModule],
+    cucumberStepModules: cucumberGherkinGoodModules,
   },
   {
     id: "kitchen-sink",
@@ -40,19 +44,20 @@ export const suites: ReadonlyArray<SuiteDefinition> = [
     description:
       "Effect-specific fixture covering captures, tables, docstrings, rules, services, and outlines.",
     featurePaths: [fixtureFeature("kitchen-sink.feature")],
-    effectBddStepModules: [fromRepoRoot("test", "fixtures", "kitchen-sink.step.ts")],
-    effectBddFeatureModules: [fromRepoRoot("test", "fixtures", "kitchen-sink.step.ts")],
-    cucumberStepModules: [cucumberStepModule],
+    effectBddStepModules: [fromBenchmarkRoot("effect-bdd", "kitchen-sink.steps.ts")],
+    effectBddFeatureModules: [fromBenchmarkRoot("effect-bdd", "kitchen-sink.steps.ts")],
+    cucumberStepModules: [fromBenchmarkRoot("cucumber", "kitchen-sink.steps.ts")],
   },
   {
     id: "counter-example",
     name: "Counter example",
     description: "The package's user-facing counter example with real domain behavior.",
     featurePaths: [exampleFeature("counter.feature")],
-    effectBddStepModules: [fromRepoRoot("examples", "counter.steps.ts")],
-    effectBddFeatureModules: [fromRepoRoot("examples", "counter.steps.ts")],
-    cucumberStepModules: [cucumberStepModule],
+    effectBddStepModules: [fromBenchmarkRoot("effect-bdd", "counter.steps.ts")],
+    effectBddFeatureModules: [fromBenchmarkRoot("effect-bdd", "counter.steps.ts")],
+    cucumberStepModules: [fromBenchmarkRoot("cucumber", "counter.steps.ts")],
   },
+  ...generatedSuites,
 ];
 
 export const suiteById = (id: string): SuiteDefinition | undefined =>

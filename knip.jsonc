@@ -27,8 +27,8 @@
       "project": ["*.ts"],
     },
     "benchmarks": {
-      "entry": ["cucumber/*.ts"],
-      "project": ["src/**/*.ts", "cucumber/**/*.ts"],
+      "entry": ["cucumber/*.ts", "effect-bdd/*.ts"],
+      "project": ["src/**/*.ts", "cucumber/**/*.ts", "effect-bdd/**/*.ts"],
     },
   },
 }

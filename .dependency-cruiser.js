@@ -99,7 +99,7 @@ const config = {
       path: "node_modules",
     },
     exclude: {
-      path: "(^|/)(?:coverage|dist|node_modules|benchmarks/results|\\.examples|\\.effect-bdd-[^/]+)(/|$)",
+      path: "(^|/)(?:coverage|dist|node_modules|benchmarks/(?:dist|generated|results)|\\.examples|\\.effect-bdd-[^/]+)(/|$)",
     },
     tsConfig: {
       fileName: "tsconfig.json",

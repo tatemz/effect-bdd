@@ -1,4 +1,4 @@
-import type { BenchmarkRun, RunnerId, RunnerStats } from "./types.ts";
+import type { BenchmarkRun, Confidence, DurationStats, RunnerId, RunnerStats } from "./types.ts";
 
 const mean = (values: ReadonlyArray<number>): number =>
   values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -11,6 +11,17 @@ const median = (values: ReadonlyArray<number>): number => {
     : sorted[midpoint]!;
 };
 
+const percentile = (values: ReadonlyArray<number>, percentileValue: number): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, Math.min(sorted.length - 1, index))]!;
+};
+
+const standardDeviation = (values: ReadonlyArray<number>): number => {
+  const average = mean(values);
+  return Math.sqrt(mean(values.map((value) => (value - average) ** 2)));
+};
+
 export const round = (value: number, digits = 2): number => {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -19,20 +30,69 @@ export const round = (value: number, digits = 2): number => {
 export const percentDelta = (baseline: number, actual: number): number =>
   ((actual - baseline) / baseline) * 100;
 
+const durationStats = (durations: ReadonlyArray<number>): DurationStats => {
+  const average = mean(durations);
+  const deviation = standardDeviation(durations);
+  return {
+    medianMillis: median(durations),
+    meanMillis: average,
+    minMillis: Math.min(...durations),
+    maxMillis: Math.max(...durations),
+    p95Millis: percentile(durations, 95),
+    standardDeviationMillis: deviation,
+    coefficientOfVariation: average === 0 ? 0 : deviation / average,
+  };
+};
+
+const confidence = (runs: number, wall: DurationStats): Confidence => {
+  if (isLowConfidence(runs, wall)) {
+    return "low";
+  }
+  return isMediumConfidence(runs, wall) ? "medium" : "high";
+};
+
+const isLowConfidence = (runs: number, wall: DurationStats): boolean =>
+  runs < 5 || wall.coefficientOfVariation > 0.2;
+
+const isMediumConfidence = (runs: number, wall: DurationStats): boolean =>
+  runs < 10 || wall.coefficientOfVariation > 0.1;
+
 export const summarizeRunner = (
   runner: RunnerId,
   runs: ReadonlyArray<BenchmarkRun>,
 ): RunnerStats => {
-  const durations = runs.map((run) => run.wallDurationMillis);
+  const wall = durationStats(runs.map((run) => run.wallDurationMillis));
+  const execution = executionStats(runs);
   const scenarioTotal = runs[0]?.summary.total ?? 0;
-  const medianMillis = median(durations);
   return {
     runner,
     runs: runs.length,
-    medianMillis,
-    meanMillis: mean(durations),
-    minMillis: Math.min(...durations),
-    maxMillis: Math.max(...durations),
-    scenariosPerSecond: scenarioTotal === 0 ? 0 : scenarioTotal / (medianMillis / 1000),
+    confidence: confidence(runs.length, wall),
+    wall,
+    ...optionalExecutionStats(execution),
+    wallScenariosPerSecond: scenariosPerSecond(scenarioTotal, wall),
+    ...optionalExecutionRate(scenarioTotal, execution),
   };
 };
+
+const executionStats = (runs: ReadonlyArray<BenchmarkRun>): DurationStats | undefined => {
+  const durations = runs.flatMap((run) =>
+    run.executionDurationMillis === undefined ? [] : [run.executionDurationMillis],
+  );
+  return durations.length === 0 ? undefined : durationStats(durations);
+};
+
+const optionalExecutionStats = (
+  execution: DurationStats | undefined,
+): Pick<RunnerStats, "execution"> | {} => (execution === undefined ? {} : { execution });
+
+const optionalExecutionRate = (
+  scenarioTotal: number,
+  execution: DurationStats | undefined,
+): Pick<RunnerStats, "executionScenariosPerSecond"> | {} =>
+  execution === undefined
+    ? {}
+    : { executionScenariosPerSecond: scenariosPerSecond(scenarioTotal, execution) };
+
+const scenariosPerSecond = (scenarioTotal: number, stats: DurationStats): number =>
+  scenarioTotal === 0 ? 0 : scenarioTotal / (stats.medianMillis / 1000);

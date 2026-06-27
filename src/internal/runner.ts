@@ -209,17 +209,52 @@ const resolveRule = (
     Option.getOrUndefined,
   );
 
-const duplicateSourceScenario = (
-  resolved: ReadonlyArray<ResolvedPickle>,
-  entry: ResolvedPickle,
-): boolean =>
+/** @internal */
+export const firstDuplicateSourceScenarioTitle = (
+  resolved: ReadonlyArray<{
+    readonly scenarioTitle: string;
+    readonly sourceScenarioId: string;
+  }>,
+): Option.Option<string> =>
   Fn.pipe(
-    Arr.take(resolved, entry.scenarioIndex),
-    Arr.some(
-      (previous) =>
-        previous.scenarioTitle === entry.scenarioTitle &&
-        previous.sourceScenarioId !== entry.sourceScenarioId,
+    resolved,
+    Arr.reduce(
+      {
+        seen: emptySourceScenarioIndex,
+        duplicate: Option.none<string>(),
+      },
+      (state, entry) =>
+        Option.isSome(state.duplicate) ? state : nextDuplicateSourceScenarioState(state, entry),
     ),
+    (state) => state.duplicate,
+  );
+
+interface DuplicateSourceScenarioState {
+  readonly seen: Record.ReadonlyRecord<string, string>;
+  readonly duplicate: Option.Option<string>;
+}
+
+const emptySourceScenarioIndex: Record.ReadonlyRecord<string, string> = {};
+
+const nextDuplicateSourceScenarioState = (
+  state: DuplicateSourceScenarioState,
+  entry: {
+    readonly scenarioTitle: string;
+    readonly sourceScenarioId: string;
+  },
+): DuplicateSourceScenarioState =>
+  Fn.pipe(
+    Record.get(state.seen, entry.scenarioTitle),
+    Option.match({
+      onNone: () => ({
+        seen: Record.set(state.seen, entry.scenarioTitle, entry.sourceScenarioId),
+        duplicate: Option.none(),
+      }),
+      onSome: (previousSourceId) =>
+        previousSourceId === entry.sourceScenarioId
+          ? state
+          : { ...state, duplicate: Option.some(entry.scenarioTitle) },
+    }),
   );
 
 /** @internal */
@@ -233,19 +268,20 @@ const buildScenarioTasks = <E, R>(
 
     const scenarioDefinitions = scenarioDefinitionMap(featureDefinition);
     const resolved = Arr.map(feature.pickles, resolvePickle(feature));
+    const duplicateSourceTitle = firstDuplicateSourceScenarioTitle(resolved);
+    if (Option.isSome(duplicateSourceTitle)) {
+      return yield* matchErrorEffect({
+        message: `Duplicate scenario title in Gherkin feature: ${duplicateSourceTitle.value}`,
+        scenario: duplicateSourceTitle.value,
+        step: duplicateSourceTitle.value,
+        line: feature.line,
+        candidates: [duplicateSourceTitle.value],
+      });
+    }
 
     const tasks = yield* Effect.forEach(
       resolved,
       (entry): Effect.Effect<ScenarioTask<E, R>, MatchError> => {
-        if (duplicateSourceScenario(resolved, entry)) {
-          return matchErrorEffect({
-            message: `Duplicate scenario title in Gherkin feature: ${entry.scenarioTitle}`,
-            scenario: entry.scenarioTitle,
-            step: entry.scenarioTitle,
-            line: entry.scenarioLine,
-            candidates: [entry.scenarioTitle],
-          });
-        }
         const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
         if (Option.isNone(scenarioDefinition)) {
           return matchErrorEffect({

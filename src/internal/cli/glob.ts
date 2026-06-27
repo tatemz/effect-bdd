@@ -76,6 +76,9 @@ const matchWildcards = Effect.fnUntraced(function* (
   base: string,
   segments: ReadonlyArray<string>,
 ) {
+  if (!Arr.contains("**")(segments)) {
+    return yield* matchSegments(fs, base, segments);
+  }
   const matcher = compileMatcher(segments);
   const entries = yield* Fn.pipe(
     fs.readDirectory(base, { recursive: true }),
@@ -84,6 +87,47 @@ const matchWildcards = Effect.fnUntraced(function* (
   const matched = Arr.filter(entries, (entry) => matcher.test(entry));
   const files = yield* Effect.forEach(matched, (entry) => fileOrEmpty(fs, `${base}/${entry}`));
   return Arr.flatten(files);
+});
+
+const matchSegments: (
+  fs: FileSystem.FileSystem,
+  base: string,
+  segments: ReadonlyArray<string>,
+) => Effect.Effect<ReadonlyArray<string>> = Effect.fnUntraced(function* (
+  fs: FileSystem.FileSystem,
+  base: string,
+  segments: ReadonlyArray<string>,
+) {
+  if (segments.length === 0) {
+    return yield* fileOrEmpty(fs, base);
+  }
+  const [segment, ...rest] = segments;
+  return yield* hasWildcard(segment)
+    ? matchWildcardSegment(fs, base, segment, rest)
+    : matchSegments(fs, `${base}/${segment}`, rest);
+});
+
+const matchWildcardSegment: (
+  fs: FileSystem.FileSystem,
+  base: string,
+  segment: string,
+  rest: ReadonlyArray<string>,
+) => Effect.Effect<ReadonlyArray<string>> = Effect.fnUntraced(function* (
+  fs: FileSystem.FileSystem,
+  base: string,
+  segment: string,
+  rest: ReadonlyArray<string>,
+) {
+  const entries = yield* Fn.pipe(
+    fs.readDirectory(base),
+    Effect.orElseSucceed((): Array<string> => []),
+  );
+  const matcher = new RegExp(`^${segmentToRegExp(segment)}$`);
+  const nested = yield* Effect.forEach(
+    Arr.filter(entries, (entry) => matcher.test(entry)),
+    (entry) => matchSegments(fs, `${base}/${entry}`, rest),
+  );
+  return Arr.flatten(nested);
 });
 
 const hasWildcard = (segment: string): boolean =>
