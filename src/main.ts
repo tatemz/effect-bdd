@@ -1,5 +1,6 @@
 /** @internal */
 import * as Arr from "effect/Array";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Fn from "effect/Function";
@@ -168,8 +169,12 @@ export const cli = Command.make(
       onEvent: (event) =>
         Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
     }).pipe(Effect.mapError(toUserError));
-    yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError));
-    const failure = resultFailure(result, options.strict);
+    const emitted = yield* timed(Reporter.emitAll(reporters, result)).pipe(
+      Effect.mapError(toUserError),
+    );
+    const timedResult = withReportEmission(result, emitted.durationMillis);
+    yield* emitTimedJsonOutput(options, timedResult).pipe(Effect.mapError(toUserError));
+    const failure = resultFailure(timedResult, options.strict);
     if (Option.isSome(failure)) {
       return yield* Effect.fail(failure.value);
     }
@@ -188,6 +193,35 @@ export const run = Command.run(cli, {
 
 const toUserError = (error: { readonly message: string }): CliError.UserError =>
   new CliError.UserError({ cause: error.message });
+
+interface Timed<A> {
+  readonly value: A;
+  readonly durationMillis: number;
+}
+
+const timed: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<Timed<A>, E, R> =
+  Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {
+    const startedAt = yield* Clock.currentTimeMillis;
+    const value = yield* effect;
+    const finishedAt = yield* Clock.currentTimeMillis;
+    return { value, durationMillis: finishedAt - startedAt };
+  });
+
+const withReportEmission = (result: CliRunResult, reportEmissionMillis: number): CliRunResult => ({
+  ...result,
+  summary: {
+    ...result.summary,
+    phases: {
+      ...result.summary.phases,
+      reportEmissionMillis,
+    },
+  },
+});
+
+const emitTimedJsonOutput = (options: CliOptions, result: CliRunResult) =>
+  options.outputFiles.json === undefined || !Arr.contains("json")(options.reporters)
+    ? Effect.void
+    : Reporter.emitJsonReport(options.outputFiles.json, result);
 
 interface CliArgs {
   readonly features: ReadonlyArray<string>;

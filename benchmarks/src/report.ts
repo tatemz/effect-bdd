@@ -109,6 +109,7 @@ const renderMarkdownPhases = (suite: SuiteResult): ReadonlyArray<string> => {
     `- Task build: ${formatMillis(phases.taskBuildMillis)}`,
     `- Filtering: ${formatMillis(phases.filteringMillis)}`,
     `- Execution: ${formatMillis(phases.executionMillis)}`,
+    ...optionalPhaseLine("Report emission", phases.reportEmissionMillis),
     "",
   ];
 };
@@ -175,7 +176,7 @@ const renderHtmlPhases = (suite: SuiteResult): string => {
     phases.taskBuildMillis,
   )}, filtering ${formatMillis(phases.filteringMillis)}, execution ${formatMillis(
     phases.executionMillis,
-  )}.</p>`;
+  )}${optionalHtmlPhase(", report emission", phases.reportEmissionMillis)}.</p>`;
 };
 
 const statsFor = (suite: SuiteResult, runner: RunnerStats["runner"]): RunnerStats => {
@@ -193,6 +194,12 @@ const formatOptionalMillis = (value: number | undefined): string =>
 
 const formatOptionalNumber = (value: number | undefined): string =>
   value === undefined ? "n/a" : String(round(value));
+
+const optionalPhaseLine = (label: string, value: number | undefined): ReadonlyArray<string> =>
+  value === undefined ? [] : [`- ${label}: ${formatMillis(value)}`];
+
+const optionalHtmlPhase = (label: string, value: number | undefined): string =>
+  value === undefined ? "" : `${label} ${formatMillis(value)}`;
 
 const escapeHtml = (text: string): string =>
   text

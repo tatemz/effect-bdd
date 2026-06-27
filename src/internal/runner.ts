@@ -220,7 +220,7 @@ export const firstDuplicateSourceScenarioTitle = (
     resolved,
     Arr.reduce(
       {
-        seen: emptySourceScenarioIndex,
+        seen: emptySourceScenarioIndex(),
         duplicate: Option.none<string>(),
       },
       (state, entry) =>
@@ -230,11 +230,15 @@ export const firstDuplicateSourceScenarioTitle = (
   );
 
 interface DuplicateSourceScenarioState {
-  readonly seen: Record.ReadonlyRecord<string, string>;
+  readonly seen: SourceScenarioIndex;
   readonly duplicate: Option.Option<string>;
 }
 
-const emptySourceScenarioIndex: Record.ReadonlyRecord<string, string> = {};
+interface SourceScenarioIndex {
+  [scenarioTitle: string]: string | undefined;
+}
+
+const emptySourceScenarioIndex = (): SourceScenarioIndex => Object.create(null);
 
 const nextDuplicateSourceScenarioState = (
   state: DuplicateSourceScenarioState,
@@ -243,19 +247,28 @@ const nextDuplicateSourceScenarioState = (
     readonly sourceScenarioId: string;
   },
 ): DuplicateSourceScenarioState =>
-  Fn.pipe(
-    Record.get(state.seen, entry.scenarioTitle),
-    Option.match({
-      onNone: () => ({
-        seen: Record.set(state.seen, entry.scenarioTitle, entry.sourceScenarioId),
+  previousSourceScenarioId(state.seen, entry.scenarioTitle) === undefined
+    ? {
+        seen: indexSourceScenario(state.seen, entry),
         duplicate: Option.none(),
-      }),
-      onSome: (previousSourceId) =>
-        previousSourceId === entry.sourceScenarioId
-          ? state
-          : { ...state, duplicate: Option.some(entry.scenarioTitle) },
-    }),
-  );
+      }
+    : previousSourceScenarioId(state.seen, entry.scenarioTitle) === entry.sourceScenarioId
+      ? state
+      : { ...state, duplicate: Option.some(entry.scenarioTitle) };
+
+const previousSourceScenarioId = (index: SourceScenarioIndex, title: string): string | undefined =>
+  index[title];
+
+const indexSourceScenario = (
+  index: SourceScenarioIndex,
+  entry: {
+    readonly scenarioTitle: string;
+    readonly sourceScenarioId: string;
+  },
+): SourceScenarioIndex => {
+  index[entry.scenarioTitle] = entry.sourceScenarioId;
+  return index;
+};
 
 /** @internal */
 const buildScenarioTasks = <E, R>(
@@ -313,10 +326,10 @@ const buildScenarioTasks = <E, R>(
       },
     );
 
-    const usedScenarioTitles = Arr.map(resolved, (entry) => entry.scenarioTitle);
+    const hasUsedScenarioTitle = titleMatcher(Arr.map(resolved, (entry) => entry.scenarioTitle));
     const unused = Arr.filter(
       featureDefinition.scenarios,
-      (scenario) => !Arr.contains(scenario.title)(usedScenarioTitles),
+      (scenario) => !hasUsedScenarioTitle(scenario.title),
     );
     return yield* Fn.pipe(
       Arr.head(unused),
@@ -643,8 +656,57 @@ const validateFeatureDefinition = <E, R>(
 export const firstDuplicateTitle = (titles: ReadonlyArray<string>): Option.Option<string> =>
   Fn.pipe(
     titles,
-    Arr.findFirst((title, index) => Arr.contains(title)(Arr.take(titles, index))),
+    Arr.reduce(
+      {
+        seen: emptyTitleIndex(),
+        duplicate: Option.none<string>(),
+      },
+      (state, title) =>
+        Option.isSome(state.duplicate) ? state : nextDuplicateTitleState(state, title),
+    ),
+    (state) => state.duplicate,
   );
+
+interface DuplicateTitleState {
+  readonly seen: TitleIndex;
+  readonly duplicate: Option.Option<string>;
+}
+
+interface TitleIndex {
+  [title: string]: true | undefined;
+}
+
+type TitleMatcher = (title: string) => boolean;
+
+const indexedTitleThreshold = 64;
+
+const emptyTitleIndex = (): TitleIndex => Object.create(null);
+
+const nextDuplicateTitleState = (state: DuplicateTitleState, title: string): DuplicateTitleState =>
+  hasTitle(state.seen, title)
+    ? { ...state, duplicate: Option.some(title) }
+    : { seen: indexTitle(state.seen, title), duplicate: Option.none() };
+
+const titleIndex = (titles: ReadonlyArray<string>): TitleIndex =>
+  Fn.pipe(
+    titles,
+    Arr.reduce(emptyTitleIndex(), (index, title) => indexTitle(index, title)),
+  );
+
+const titleMatcher = (titles: ReadonlyArray<string>): TitleMatcher => {
+  if (titles.length < indexedTitleThreshold) {
+    return (title) => Arr.contains(title)(titles);
+  }
+  const index = titleIndex(titles);
+  return (title) => hasTitle(index, title);
+};
+
+const hasTitle = (index: TitleIndex, title: string): boolean => index[title] === true;
+
+const indexTitle = (index: TitleIndex, title: string): TitleIndex => {
+  index[title] = true;
+  return index;
+};
 
 const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefinition<E, R>) =>
   Fn.pipe(

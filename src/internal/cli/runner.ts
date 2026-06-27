@@ -160,26 +160,29 @@ const buildScenarioTasks: (
       };
     }
     yield* validateDuplicateScenarioDefinition(definition);
-    yield* validateDuplicateSourceScenario(parsed);
+    const resolved = Arr.map(parsed.pickles, resolvePickle(parsed));
+    yield* validateDuplicateSourceScenario(parsed, resolved);
 
     const scenarioDefinitions = Fn.pipe(
       definition.scenarios,
       Arr.map((scenario) => [scenario.title, scenario] as const),
       Record.fromEntries,
     );
-    const built = Arr.map(parsed.pickles, (pickle, scenarioIndex) =>
-      buildScenarioTask(source, parsed, definition, scenarioDefinitions, pickle, scenarioIndex),
+    const built = Arr.map(resolved, (entry) =>
+      buildScenarioTask(source, parsed, definition, scenarioDefinitions, entry),
     );
     const tasks = Arr.filterMap(built, (item) =>
       item._tag === "Task" ? Result.succeed(item.task) : Result.fail(undefined),
     );
-    const usedScenarioTitles = Arr.map(tasks, (task) => task.core.sourceScenarioTitle);
+    const hasUsedScenarioTitle = titleMatcher(
+      Arr.map(tasks, (task) => task.core.sourceScenarioTitle),
+    );
     const unmatched = Arr.filterMap(built, (item) =>
       item._tag === "Diagnostic" ? Result.succeed(item.diagnostic) : Result.fail(undefined),
     );
     const unused = Fn.pipe(
       definition.scenarios,
-      Arr.filter((scenario) => !Arr.contains(scenario.title)(usedScenarioTitles)),
+      Arr.filter((scenario) => !hasUsedScenarioTitle(scenario.title)),
       Arr.map(
         (scenario): CliDiagnostic => ({
           _tag: "UnusedScenarioDefinition",
@@ -234,8 +237,9 @@ const validateDuplicateScenarioDefinition = (
 
 const validateDuplicateSourceScenario = (
   parsed: Parser.CompiledFeature,
+  resolved: ReadonlyArray<ResolvedPickle>,
 ): Effect.Effect<void, DiscoveryError> => {
-  const duplicateSourceScenario = duplicateSourceScenarioTitle(parsed);
+  const duplicateSourceScenario = duplicateSourceScenarioTitle(resolved);
   return duplicateSourceScenario === undefined
     ? Effect.void
     : Effect.fail(
@@ -245,24 +249,15 @@ const validateDuplicateSourceScenario = (
       );
 };
 
-const duplicateSourceScenarioTitle = (parsed: Parser.CompiledFeature): string | undefined =>
+const duplicateSourceScenarioTitle = (
+  resolved: ReadonlyArray<ResolvedPickle>,
+): string | undefined =>
   Fn.pipe(
     CoreRunner.firstDuplicateSourceScenarioTitle(
-      Arr.map(parsed.pickles, (pickle) => {
-        const sourceScenario = Parser.findScenario(pickle, parsed.source);
-        return {
-          scenarioTitle: Fn.pipe(
-            sourceScenario,
-            Option.map(({ scenario }) => scenario.name),
-            Option.getOrElse(() => pickle.name),
-          ),
-          sourceScenarioId: Fn.pipe(
-            sourceScenario,
-            Option.map(({ scenario }) => scenario.id),
-            Option.getOrElse(() => pickle.id),
-          ),
-        };
-      }),
+      Arr.map(resolved, ({ scenarioTitle, sourceScenarioId }) => ({
+        scenarioTitle,
+        sourceScenarioId,
+      })),
     ),
     Option.getOrUndefined,
   );
@@ -270,6 +265,37 @@ const duplicateSourceScenarioTitle = (parsed: Parser.CompiledFeature): string | 
 type BuiltScenario =
   | { readonly _tag: "Task"; readonly task: ScenarioTask }
   | { readonly _tag: "Diagnostic"; readonly diagnostic: CliDiagnostic };
+
+interface ResolvedPickle {
+  readonly pickle: Parser.CompiledFeature["pickles"][number];
+  readonly scenarioIndex: number;
+  readonly sourceScenario: ReturnType<typeof Parser.findScenario>;
+  readonly scenarioTitle: string;
+  readonly scenarioLine: number;
+  readonly sourceScenarioId: string;
+}
+
+const resolvePickle =
+  (parsed: Parser.CompiledFeature) =>
+  (pickle: Parser.CompiledFeature["pickles"][number], scenarioIndex: number): ResolvedPickle => {
+    const sourceScenario = Parser.findScenario(pickle, parsed.source);
+    return {
+      pickle,
+      scenarioIndex,
+      sourceScenario,
+      scenarioTitle: Fn.pipe(
+        sourceScenario,
+        Option.map(({ scenario }) => scenario.name),
+        Option.getOrElse(() => pickle.name),
+      ),
+      scenarioLine: sourceScenarioLine(pickle, sourceScenario, parsed.line),
+      sourceScenarioId: Fn.pipe(
+        sourceScenario,
+        Option.map(({ scenario }) => scenario.id),
+        Option.getOrElse(() => pickle.id),
+      ),
+    };
+  };
 
 const buildScenarioTask = (
   source: FeatureSource,
@@ -279,17 +305,9 @@ const buildScenarioTask = (
     string,
     Bdd.Feature<unknown, never>["scenarios"][number]
   >,
-  pickle: Parser.CompiledFeature["pickles"][number],
-  scenarioIndex: number,
+  entry: ResolvedPickle,
 ): BuiltScenario => {
-  const sourceScenario = Parser.findScenario(pickle, parsed.source);
-  const scenarioTitle = Fn.pipe(
-    sourceScenario,
-    Option.map(({ scenario }) => scenario.name),
-    Option.getOrElse(() => pickle.name),
-  );
-  const scenarioLine = sourceScenarioLine(pickle, sourceScenario, parsed.line);
-  const scenarioDefinition = Record.get(scenarioDefinitions, scenarioTitle);
+  const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
   if (Option.isNone(scenarioDefinition)) {
     return {
       _tag: "Diagnostic",
@@ -297,9 +315,9 @@ const buildScenarioTask = (
         _tag: "UnmatchedScenario",
         featurePath: source.path,
         featureTitle: parsed.name,
-        scenarioTitle,
-        scenarioLine,
-        message: `Scenario has no matching Bdd.scenario chain: ${scenarioTitle}`,
+        scenarioTitle: entry.scenarioTitle,
+        scenarioLine: entry.scenarioLine,
+        message: `Scenario has no matching Bdd.scenario chain: ${entry.scenarioTitle}`,
       },
     };
   }
@@ -311,13 +329,13 @@ const buildScenarioTask = (
         featureDefinition: definition,
         scenarioDefinition: scenarioDefinition.value,
         featureTitle: parsed.name,
-        scenarioTitle: pickle.name,
-        sourceScenarioTitle: scenarioTitle,
-        scenarioIndex,
-        scenarioLine,
-        ...sourceScenarioRuleFields(sourceScenario),
-        tags: Arr.map(pickle.tags, (tag) => tag.name),
-        pickle,
+        scenarioTitle: entry.pickle.name,
+        sourceScenarioTitle: entry.scenarioTitle,
+        scenarioIndex: entry.scenarioIndex,
+        scenarioLine: entry.scenarioLine,
+        ...sourceScenarioRuleFields(entry.sourceScenario),
+        tags: Arr.map(entry.pickle.tags, (tag) => tag.name),
+        pickle: entry.pickle,
         source: parsed.source,
       },
     },
@@ -524,6 +542,37 @@ const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): s
     CoreRunner.firstDuplicateTitle,
     Option.getOrUndefined,
   );
+
+interface TitleIndex {
+  [title: string]: true | undefined;
+}
+
+type TitleMatcher = (title: string) => boolean;
+
+const indexedTitleThreshold = 64;
+
+const titleMatcher = (titles: ReadonlyArray<string>): TitleMatcher => {
+  if (titles.length < indexedTitleThreshold) {
+    return (title) => Arr.contains(title)(titles);
+  }
+  const index = titleIndex(titles);
+  return (title) => hasTitle(index, title);
+};
+
+const emptyTitleIndex = (): TitleIndex => Object.create(null);
+
+const titleIndex = (titles: ReadonlyArray<string>): TitleIndex =>
+  Fn.pipe(
+    titles,
+    Arr.reduce(emptyTitleIndex(), (index, title) => indexTitle(index, title)),
+  );
+
+const hasTitle = (index: TitleIndex, title: string): boolean => index[title] === true;
+
+const indexTitle = (index: TitleIndex, title: string): TitleIndex => {
+  index[title] = true;
+  return index;
+};
 
 /** @internal */
 export type CliRunError = DiscoveryError | ModuleLoadError | ParseError;

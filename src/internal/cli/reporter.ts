@@ -115,6 +115,13 @@ export const emitAll: (
   });
 
 /** @internal */
+export const emitJsonReport = (
+  outputFile: string,
+  result: CliRunResult,
+): Effect.Effect<void, ReporterError, FileSystem.FileSystem | Path.Path> =>
+  writeFile(outputFile, renderJson(result));
+
+/** @internal */
 export const emitEventAll: (
   reporters: ReadonlyArray<Reporter>,
   event: RunEvent,
