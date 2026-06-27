@@ -15,7 +15,6 @@ import {
   ParseError,
   ScenarioSetupError,
   ScenarioTeardownError,
-  ScenarioTeardownTimeoutError,
   StepError,
   StepTimeoutError,
 } from "../Errors.ts";
@@ -90,7 +89,6 @@ interface Report {
 /** @internal */
 export interface RunOptions {
   readonly stepTimeout?: Duration.Duration;
-  readonly teardownTimeout?: Duration.Duration;
 }
 
 /** @internal */
@@ -336,31 +334,11 @@ const provideScenarioProviders =
   };
 
 const closeScenarioScope = <A, E>(
-  task: ScenarioTask<unknown, unknown>,
+  _task: ScenarioTask<unknown, unknown>,
   scope: Scope.Closeable,
   exit: Exit.Exit<A, E>,
-  options: RunOptions,
-): Effect.Effect<void, ScenarioTeardownError> => {
-  const close = Scope.close(scope, exit);
-  const timeout = options.teardownTimeout;
-  return timeout === undefined
-    ? close
-    : Effect.timeoutOrElse({
-        duration: timeout,
-        orElse: () =>
-          Effect.fail(
-            new ScenarioTeardownError({
-              message: `Scenario teardown timed out after ${formatDuration(timeout)}: ${task.sourceScenarioTitle}`,
-              scenario: task.sourceScenarioTitle,
-              line: task.scenarioLine,
-              cause: new ScenarioTeardownTimeoutError({
-                message: `Timed out after ${formatDuration(timeout)}`,
-                timeout,
-              }),
-            }),
-          ),
-      })(close);
-};
+  _options: RunOptions,
+): Effect.Effect<void, ScenarioTeardownError> => Scope.close(scope, exit);
 
 const isRunError = (u: unknown): u is RunError => isDiscoveryRunError(u) || isExecutionRunError(u);
 

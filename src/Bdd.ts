@@ -17,7 +17,6 @@ import {
   ParseError,
   ScenarioSetupError,
   ScenarioTeardownError,
-  ScenarioTeardownTimeoutError,
   StepError,
   StepTimeoutError,
 } from "./Errors.ts";
@@ -283,7 +282,6 @@ type RunOptionsType = RunOptions;
 type StepTimeoutErrorType = StepTimeoutError;
 type ScenarioSetupErrorType = ScenarioSetupError;
 type ScenarioTeardownErrorType = ScenarioTeardownError;
-type ScenarioTeardownTimeoutErrorType = ScenarioTeardownTimeoutError;
 
 /**
  * Options that control `Bdd.run` execution policy.
@@ -293,7 +291,6 @@ type ScenarioTeardownTimeoutErrorType = ScenarioTeardownTimeoutError;
  */
 export interface RunOptions {
   readonly stepTimeout?: Duration.Duration;
-  readonly teardownTimeout?: Duration.Duration;
 }
 
 /**
@@ -509,7 +506,6 @@ export const Bdd = {
   StepError,
   ScenarioSetupError,
   ScenarioTeardownError,
-  ScenarioTeardownTimeoutError,
   StepTimeoutError,
   GherkinCompiler,
   layerCucumber,
@@ -615,14 +611,6 @@ export declare namespace Bdd {
    * @since 0.5.0
    */
   export type ScenarioTeardownError = ScenarioTeardownErrorType;
-
-  /**
-   * Structured cause used when scenario teardown exceeds its configured timeout.
-   *
-   * @category errors
-   * @since 0.5.0
-   */
-  export type ScenarioTeardownTimeoutError = ScenarioTeardownTimeoutErrorType;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.

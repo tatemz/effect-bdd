@@ -146,20 +146,6 @@ export class ScenarioTeardownError extends Schema.TaggedErrorClass<ScenarioTeard
 ) {}
 
 /**
- * A structured cause used when scenario teardown exceeds its configured timeout.
- *
- * @category errors
- * @since 0.5.0
- */
-export class ScenarioTeardownTimeoutError extends Schema.TaggedErrorClass<ScenarioTeardownTimeoutError>()(
-  "ScenarioTeardownTimeoutError",
-  {
-    message: Schema.String,
-    timeout: Schema.Duration,
-  },
-) {}
-
-/**
  * A structured cause used when a matched step exceeds its configured timeout.
  *
  * **Details**

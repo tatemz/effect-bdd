@@ -118,12 +118,6 @@ describe("Bdd", () => {
     expect(Bdd.run(feature, "Feature: Counter", { stepTimeout: Duration.seconds(1) })).type.toBe<
       Effect.Effect<Bdd.Report, Bdd.RunError, Inventory | Bdd.GherkinCompiler>
     >();
-    expect(
-      Bdd.run(feature, "Feature: Counter", {
-        stepTimeout: Duration.seconds(1),
-        teardownTimeout: Duration.seconds(1),
-      }),
-    ).type.toBe<Effect.Effect<Bdd.Report, Bdd.RunError, Inventory | Bdd.GherkinCompiler>>();
     expect(Bdd.run).type.not.toBeCallableWith(feature, "Feature: Counter", {
       stepTimeout: "1 second",
     });

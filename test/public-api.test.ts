@@ -6,7 +6,6 @@ import {
   ParseError,
   ScenarioSetupError,
   ScenarioTeardownError,
-  ScenarioTeardownTimeoutError,
   StepError,
   StepTimeoutError,
 } from "effect-bdd/Errors";
@@ -201,10 +200,6 @@ describe("public API", () => {
         line: 2,
         cause: "browser failed",
       });
-      const teardownTimeout = new ScenarioTeardownTimeoutError({
-        message: "Timed out after 1s",
-        timeout: Duration.seconds(1),
-      });
       const timeout = new StepTimeoutError({
         message: "Timed out after 1s",
         timeout: Duration.seconds(1),
@@ -215,7 +210,6 @@ describe("public API", () => {
       assert.strictEqual(step._tag, "StepError");
       assert.strictEqual(setup._tag, "ScenarioSetupError");
       assert.strictEqual(teardown._tag, "ScenarioTeardownError");
-      assert.strictEqual(teardownTimeout._tag, "ScenarioTeardownTimeoutError");
       assert.strictEqual(timeout._tag, "StepTimeoutError");
       assert.instanceOf(parse, Error);
     });

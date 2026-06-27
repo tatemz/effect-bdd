@@ -474,8 +474,7 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - guards: `Bdd.isFeature`, `Bdd.isStepTimeoutError`
 - models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`,
   `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`,
-  `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`,
-  `Bdd.ScenarioTeardownTimeoutError`, `Bdd.StepTimeoutError`
+  `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`, `Bdd.StepTimeoutError`
 
 The error classes are also importable from `effect-bdd/Errors`.
 

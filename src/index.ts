@@ -19,7 +19,6 @@ import type {
 import type {
   ScenarioSetupError as ScenarioSetupError_,
   ScenarioTeardownError as ScenarioTeardownError_,
-  ScenarioTeardownTimeoutError as ScenarioTeardownTimeoutError_,
   StepTimeoutError as StepTimeoutError_,
 } from "./Errors.ts";
 
@@ -28,7 +27,6 @@ export {
   ParseError,
   ScenarioSetupError,
   ScenarioTeardownError,
-  ScenarioTeardownTimeoutError,
   StepError,
   StepTimeoutError,
 } from "./Errors.ts";
@@ -126,14 +124,6 @@ export declare namespace Bdd {
    * @since 0.5.0
    */
   export type ScenarioTeardownError = ScenarioTeardownError_;
-
-  /**
-   * Structured cause used when scenario teardown exceeds its configured timeout.
-   *
-   * @category errors
-   * @since 0.5.0
-   */
-  export type ScenarioTeardownTimeoutError = ScenarioTeardownTimeoutError_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.
