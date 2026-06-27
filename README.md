@@ -24,7 +24,7 @@ running the steps.
 train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform packages.
 
 ```sh
-pnpm add effect-bdd effect@4.0.0-beta.78
+pnpm add effect-bdd effect@4.0.0-beta.90
 pnpm add -D tsx
 ```
 
