@@ -1,8 +1,8 @@
 /**
  * @since 0.1.0
  */
-import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
+import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
@@ -25,9 +25,20 @@ import * as expression from "./internal/expression.ts";
 import * as parser from "./internal/parser.ts";
 import * as runner from "./internal/runner.ts";
 
-const FeatureTypeId = "~effect-bdd/Bdd/Feature";
-const ScenarioTypeId = "~effect-bdd/Bdd/Scenario";
-const StepTypeId = "~effect-bdd/Bdd/Step";
+const FeatureTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Feature");
+const ScenarioTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Scenario");
+const StepTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Step");
+const StepArgTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/StepArg");
+
+const hideTypeId = (self: object, typeId: symbol): void => {
+  // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
+  Object.defineProperty(self, typeId, {
+    enumerable: false,
+  });
+};
+
+const hasTypeId = <const TypeId extends symbol>(u: unknown, typeId: TypeId): boolean =>
+  Predicate.hasProperty(u, typeId) && u[typeId] === typeId;
 
 /**
  * Error type returned by `Bdd.run`.
@@ -141,6 +152,7 @@ export interface DocString {
  * @since 0.1.0
  */
 export interface TableArg<A> {
+  readonly [StepArgTypeId]: typeof StepArgTypeId;
   readonly _tag: "TableArg";
   readonly decode: (table: DataTable) => Effect.Effect<A, unknown>;
 }
@@ -152,6 +164,7 @@ export interface TableArg<A> {
  * @since 0.1.0
  */
 export interface DocStringArg<A> {
+  readonly [StepArgTypeId]: typeof StepArgTypeId;
   readonly _tag: "DocStringArg";
   readonly decode: (docString: DocString) => Effect.Effect<A, unknown>;
 }
@@ -242,7 +255,68 @@ export interface Feature<E = never, R = never> extends Pipeable {
  * @since 0.2.0
  */
 export const isFeature = (u: unknown): u is Feature<unknown, unknown> =>
-  Predicate.hasProperty(u, FeatureTypeId);
+  hasTypeId(u, FeatureTypeId) && hasStringProperty(u, "title") && hasScenarios(u);
+
+/**
+ * Checks whether a value is a {@link Scenario} definition.
+ *
+ * @category guards
+ * @since 0.6.0
+ */
+export const isScenario = (u: unknown): u is Scenario<unknown, unknown, unknown> =>
+  hasTypeId(u, ScenarioTypeId) && hasStringProperty(u, "title") && hasSteps(u) && hasProviders(u);
+
+/**
+ * Checks whether a value is a {@link Step} definition.
+ *
+ * @category guards
+ * @since 0.6.0
+ */
+// oxlint-disable-next-line complexity
+export const isStep = (u: unknown): u is AnyStep =>
+  hasTypeId(u, StepTypeId) &&
+  hasStepKind(u) &&
+  hasExpression(u) &&
+  hasFunctionProperty(u, "run") &&
+  hasValidArgument(u);
+
+const hasStringProperty = <Key extends string>(
+  u: unknown,
+  key: Key,
+): u is { readonly [K in Key]: string } =>
+  Predicate.hasProperty(u, key) && typeof u[key] === "string";
+
+const hasFunctionProperty = <Key extends string>(
+  u: unknown,
+  key: Key,
+): u is { readonly [K in Key]: (...args: ReadonlyArray<never>) => unknown } =>
+  Predicate.hasProperty(u, key) && typeof u[key] === "function";
+
+const isReadonlyArray = (u: unknown): u is ReadonlyArray<unknown> => Arr.Array.isArray(u);
+
+const hasScenarios = (u: unknown): boolean =>
+  Predicate.hasProperty(u, "scenarios") &&
+  isReadonlyArray(u.scenarios) &&
+  Arr.every(u.scenarios, isScenario);
+
+const hasSteps = (u: unknown): boolean =>
+  Predicate.hasProperty(u, "steps") && isReadonlyArray(u.steps) && Arr.every(u.steps, isStep);
+
+const hasProviders = (u: unknown): boolean =>
+  Predicate.hasProperty(u, "providers") && isReadonlyArray(u.providers);
+
+const hasStepKind = (u: unknown): boolean => Predicate.hasProperty(u, "kind") && isStepKind(u.kind);
+
+// oxlint-disable-next-line complexity
+const hasExpression = (u: unknown): boolean =>
+  Predicate.hasProperty(u, "expression") &&
+  typeof u.expression === "object" &&
+  u.expression !== null &&
+  hasStringProperty(u.expression, "source") &&
+  hasFunctionProperty(u.expression, "match");
+
+const hasValidArgument = (u: unknown): boolean =>
+  !Predicate.hasProperty(u, "argument") || isStepArg(u.argument);
 
 /**
  * Result returned after all scenarios pass.
@@ -312,10 +386,15 @@ const capture_: <const Name extends string, A>(
  */
 const table_ = <S extends Schema.ConstraintDecoder<unknown, never>>(
   row: S,
-): TableArg<ReadonlyArray<S["Type"]>> => ({
-  _tag: "TableArg",
-  decode: runner.decodeTable(row),
-});
+): TableArg<ReadonlyArray<S["Type"]>> => {
+  const argument: TableArg<ReadonlyArray<S["Type"]>> = {
+    [StepArgTypeId]: StepArgTypeId,
+    _tag: "TableArg",
+    decode: runner.decodeTable(row),
+  };
+  hideTypeId(argument, StepArgTypeId);
+  return argument;
+};
 
 /**
  * Creates a DocString decoder from a Schema.
@@ -325,10 +404,15 @@ const table_ = <S extends Schema.ConstraintDecoder<unknown, never>>(
  */
 const docString_ = <S extends Schema.ConstraintDecoder<unknown, never>>(
   schema: S,
-): DocStringArg<S["Type"]> => ({
-  _tag: "DocStringArg",
-  decode: runner.decodeDocString(schema),
-});
+): DocStringArg<S["Type"]> => {
+  const argument: DocStringArg<S["Type"]> = {
+    [StepArgTypeId]: StepArgTypeId,
+    _tag: "DocStringArg",
+    decode: runner.decodeDocString(schema),
+  };
+  hideTypeId(argument, StepArgTypeId);
+  return argument;
+};
 
 /**
  * Creates a feature definition.
@@ -510,6 +594,8 @@ export const Bdd = {
   GherkinCompiler,
   layerCucumber,
   isFeature,
+  isScenario,
+  isStep,
   isStepTimeoutError: isStepTimeoutError_,
   capture: capture_,
   table: table_,
@@ -713,15 +799,18 @@ interface CapturedStepFactory<Captures, Kind extends StepKind> {
 const makeFeature = <E, R>(
   title: string,
   scenarios: ReadonlyArray<Scenario<any, any, any>>,
-): Feature<E, R> =>
-  Object.freeze({
+): Feature<E, R> => {
+  const feature: Feature<E, R> = {
     [FeatureTypeId]: FeatureTypeId,
     title,
     scenarios,
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
-  });
+  };
+  hideTypeId(feature, FeatureTypeId);
+  return Object.freeze(feature);
+};
 
 const makeScenario = <State, E, R>(
   title: string,
@@ -729,6 +818,10 @@ const makeScenario = <State, E, R>(
   providers: ReadonlyArray<AnyProvider> = [],
 ): Scenario<State, E, R> => {
   function appendScenario<E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0> {
+    if (!isFeature(self)) {
+      // oxlint-disable-next-line effect-bdd/no-throw-statements
+      throw new TypeError("Expected a Bdd.Feature when appending a scenario.");
+    }
     return makeFeature(self.title, [...self.scenarios, scenario]);
   }
   const properties: Pick<
@@ -745,6 +838,7 @@ const makeScenario = <State, E, R>(
   };
   // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
   const scenario: Scenario<State, E, R> = Object.assign(appendScenario, properties);
+  hideTypeId(scenario, ScenarioTypeId);
   return Object.freeze(scenario);
 };
 
@@ -762,6 +856,10 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   function appendStep<State extends In, E0, R0>(
     self: Scenario<State, E0, R0>,
   ): Scenario<Out, E | E0, R | R0> {
+    if (!isScenario(self)) {
+      // oxlint-disable-next-line effect-bdd/no-throw-statements
+      throw new TypeError("Expected a Bdd.Scenario when appending a step.");
+    }
     return makeScenario(self.title, [...self.steps, step], self.providers);
   }
   const properties: Pick<
@@ -783,6 +881,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   };
   // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
   const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(appendStep, properties);
+  hideTypeId(step, StepTypeId);
   return Object.freeze(step);
 };
 
@@ -798,6 +897,12 @@ function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
     strings: TemplateStringsArray,
     ...captures: ReadonlyArray<Capture<string, unknown>>
   ) {
+    if (!isTemplateStringsArray(strings)) {
+      // oxlint-disable-next-line effect-bdd/no-throw-statements
+      throw new TypeError(
+        `${stepTagName(kind)} is a tagged-template step factory, not a Promise thenable.`,
+      );
+    }
     return captures.length === 0
       ? makeStepFactory(kind, expression.makeMatcher(strings, captures), false)
       : makeStepFactory(kind, expression.makeMatcher(strings, captures), true);
@@ -846,16 +951,7 @@ function makeStepFactory<Kind extends StepKind, Captures>(
       expression: matcher,
       ...(argument === undefined ? {} : { argument }),
       run: (captures: Captures, decodedArgument: unknown, state: unknown) =>
-        impl(
-          ...handlerArgs(
-            impl,
-            hasCaptures,
-            argument !== undefined,
-            captures,
-            decodedArgument,
-            state,
-          ),
-        ),
+        impl(...handlerArgs(hasCaptures, argument !== undefined, captures, decodedArgument, state)),
     });
   }
   // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
@@ -865,20 +961,19 @@ function makeStepFactory<Kind extends StepKind, Captures>(
   });
 }
 
-type StepImplementation = (
-  ...args: ReadonlyArray<unknown>
-) => Effect.Effect<unknown, unknown, unknown>;
-
-const invalidStepImplementation: StepImplementation = () =>
-  Effect.fail(new TypeError("Expected a step implementation function."));
+type StepImplementation = (...args: ReadonlyArray<unknown>) => Effect.Effect<unknown, unknown>;
 
 const isStepImplementation = (u: unknown): u is StepImplementation => typeof u === "function";
 
-const stepImplementation = (u: unknown): StepImplementation =>
-  isStepImplementation(u) ? u : invalidStepImplementation;
+const stepImplementation = (u: unknown): StepImplementation => {
+  if (isStepImplementation(u)) {
+    return u;
+  }
+  // oxlint-disable-next-line effect-bdd/no-throw-statements
+  throw new TypeError("Expected a step implementation function.");
+};
 
 const handlerArgs = (
-  impl: (...args: ReadonlyArray<unknown>) => unknown,
   hasCaptures: boolean,
   hasArgument: boolean,
   captures: unknown,
@@ -889,11 +984,42 @@ const handlerArgs = (
     ...(hasCaptures ? [captures] : []),
     ...(hasArgument ? [argument] : []),
   ];
-  return impl.length > args.length ? Arr.append(args, state) : args;
+  return [...args, state];
 };
 
+// oxlint-disable-next-line complexity
+const isStepKind = (u: unknown): u is StepKind =>
+  u === "Step" || u === "Given" || u === "When" || u === "Then";
+
+// oxlint-disable-next-line complexity
+const stepTagName = (kind: StepKind): string => {
+  switch (kind) {
+    case "Step": {
+      return "Bdd.step";
+    }
+    case "Given": {
+      return "Bdd.given";
+    }
+    case "When": {
+      return "Bdd.when";
+    }
+    case "Then": {
+      return "Bdd.then";
+    }
+  }
+};
+
+const isTemplateStringsArray = (u: unknown): u is TemplateStringsArray =>
+  Arr.Array.isArray(u) && Predicate.hasProperty(u, "raw") && Arr.Array.isArray(u.raw);
+
+// oxlint-disable-next-line complexity
 const isStepArgTag = (tag: unknown): tag is StepArg<unknown>["_tag"] =>
   tag === "TableArg" || tag === "DocStringArg";
 
+// oxlint-disable-next-line complexity
 const isStepArg = (u: unknown): u is StepArg<unknown> =>
-  typeof u === "object" && u !== null && "_tag" in u && isStepArgTag(u._tag);
+  hasTypeId(u, StepArgTypeId) &&
+  Predicate.hasProperty(u, "_tag") &&
+  isStepArgTag(u._tag) &&
+  Predicate.hasProperty(u, "decode") &&
+  typeof u.decode === "function";

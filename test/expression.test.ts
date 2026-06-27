@@ -29,6 +29,29 @@ describe("expressions", () => {
     assert.strictEqual(Option.isNone(transition.expression.match("many items are added")), true);
   });
 
+  it("preserves capture decode failure details for the runner", () => {
+    const qty = Bdd.capture("qty", Schema.Literal("2"));
+    const transition = Bdd.when`${qty} items are added`;
+
+    const matchDetailed = Reflect.get(transition.expression, "matchDetailed");
+
+    assert.strictEqual(typeof matchDetailed, "function");
+    if (typeof matchDetailed !== "function") {
+      return;
+    }
+    const result = matchDetailed("many items are added");
+    assert.notStrictEqual(result, undefined);
+    if (result === undefined) {
+      return;
+    }
+    assert.strictEqual(result._tag, "DecodeMismatch");
+    if (result._tag === "DecodeMismatch") {
+      assert.strictEqual(result.capture, "qty");
+      assert.strictEqual(result.raw, "many");
+      assert.notStrictEqual(result.cause, undefined);
+    }
+  });
+
   it("escapes regular expression syntax in literal text", () => {
     const transition = Bdd.then`the total is $5.00?`;
 

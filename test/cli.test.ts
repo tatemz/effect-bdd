@@ -805,6 +805,49 @@ Feature: Counter
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("fails when a feature file has duplicate scenario titles", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Duplicate
+    Then the counter is 0
+
+  Scenario: Duplicate
+    Then the counter is 0
+`,
+          steps: counterStepsFor(`
+  Bdd.scenario("Duplicate").pipe(thenCounterIs)
+`),
+        });
+
+        const exit = yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("*.mjs"),
+            "--reporter",
+            "text",
+            "--output-file.text",
+            fixture.path("duplicate-source.txt"),
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+        if (Exit.isFailure(exit)) {
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+          assert.strictEqual(error instanceof CliError.UserError, true);
+          if (error instanceof CliError.UserError) {
+            assert.match(String(error.cause), /Duplicate scenario title in Gherkin feature/);
+          }
+        }
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("surfaces the underlying reason when a step module fails to load", () =>
     Effect.scoped(
       Effect.gen(function* () {

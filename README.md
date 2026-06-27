@@ -258,7 +258,8 @@ const whenRequestBodyIs = Bdd.when`the request body is:`(
 );
 ```
 
-Schema decode failures are preserved on `MatchError.cause`.
+Schema decode failures for captures, DataTables, and DocStrings are preserved on
+`MatchError.cause`.
 
 ### Services
 
@@ -471,10 +472,14 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
-- guards: `Bdd.isFeature`, `Bdd.isStepTimeoutError`
+- guards: `Bdd.isFeature`, `Bdd.isScenario`, `Bdd.isStep`, `Bdd.isStepTimeoutError`
 - models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`,
   `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`,
   `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`, `Bdd.StepTimeoutError`
+
+`Bdd.then` is a tagged-template step constructor. Because the namespace has a `then`
+property, do not pass `Bdd` itself to promise APIs or `await` it; use
+`Bdd.then\`...\`` to define Then steps.
 
 The error classes are also importable from `effect-bdd/Errors`.
 

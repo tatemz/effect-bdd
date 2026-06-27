@@ -2,6 +2,7 @@ import * as Arr from "effect/Array";
 import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Str from "effect/String";
 
@@ -16,7 +17,23 @@ export interface Capture<Name extends string, A> {
 export interface Matcher<_A> {
   readonly source: string;
   readonly match: (text: string) => Option.Option<unknown>;
+  readonly matchDetailed: (text: string) => MatchResult<unknown>;
 }
+
+type MatchResult<A> =
+  | {
+      readonly _tag: "Matched";
+      readonly value: A;
+    }
+  | {
+      readonly _tag: "TextMismatch";
+    }
+  | {
+      readonly _tag: "DecodeMismatch";
+      readonly capture: string;
+      readonly raw: string;
+      readonly cause: unknown;
+    };
 
 interface MatcherState {
   readonly names: ReadonlyArray<string>;
@@ -47,17 +64,22 @@ export const makeMatcher = (
     ),
   );
   const regex = new globalThis.RegExp(`${state.pattern}$`);
-  const decoders = Arr.map(state.captures, (capture) => Schema.decodeUnknownOption(capture.schema));
+  const decoders = Arr.map(state.captures, (capture) => ({
+    name: capture.name,
+    decode: Schema.decodeUnknownResult(capture.schema),
+  }));
+  const matchDetailed = (text: string): MatchResult<unknown> => {
+    const match = regex.exec(text);
+    if (match === null) {
+      return { _tag: "TextMismatch" };
+    }
+    return decodeCaptures(decoders, match);
+  };
 
   return {
     source: state.source,
-    match(text) {
-      const match = regex.exec(text);
-      if (match === null) {
-        return Option.none();
-      }
-      return decodeCaptures(state.names, decoders, match);
-    },
+    match: (text) => matchResultOption(matchDetailed(text)),
+    matchDetailed,
   };
 };
 
@@ -86,22 +108,56 @@ const appendTemplatePart = (
   };
 };
 
+interface CaptureDecoder {
+  readonly name: string;
+  readonly decode: (input: unknown) => Result.Result<unknown, unknown>;
+}
+
+// oxlint-disable-next-line complexity
 const decodeCaptures = (
-  names: ReadonlyArray<string>,
-  decoders: ReadonlyArray<(input: unknown) => Option.Option<unknown>>,
+  decoders: ReadonlyArray<CaptureDecoder>,
   match: RegExpExecArray,
   index = 0,
   out: Record<string, unknown> = Record.empty(),
-): Option.Option<Record<string, unknown>> => {
-  if (index >= names.length) {
-    return Option.some(out);
+): MatchResult<Record<string, unknown>> => {
+  if (index >= decoders.length) {
+    return { _tag: "Matched", value: out };
   }
-  return Fn.pipe(
-    decoders[index](match[index + 1]),
-    Option.flatMap((value) =>
-      decodeCaptures(names, decoders, match, index + 1, Record.set(out, names[index], value)),
+  const decoder = decoders[index];
+  const raw = match[index + 1] ?? "";
+  const decoded = decodeCapture(decoder, raw);
+  if (Result.isFailure(decoded)) {
+    return decoded.failure;
+  }
+  return decodeCaptures(decoders, match, index + 1, Record.set(out, decoder.name, decoded.success));
+};
+
+const decodeCapture = (
+  decoder: CaptureDecoder,
+  raw: string,
+): Result.Result<unknown, MatchResult<never>> =>
+  Fn.pipe(
+    decoder.decode(raw),
+    Result.mapError(
+      (cause): MatchResult<never> => ({
+        _tag: "DecodeMismatch",
+        capture: decoder.name,
+        raw,
+        cause,
+      }),
     ),
   );
+
+const matchResultOption = (result: MatchResult<unknown>): Option.Option<unknown> => {
+  switch (result._tag) {
+    case "Matched": {
+      return Option.some(result.value);
+    }
+    case "TextMismatch":
+    case "DecodeMismatch": {
+      return Option.none();
+    }
+  }
 };
 
 const escapeRegExp = Str.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
