@@ -694,6 +694,11 @@ Feature: Counter
         assert.match(json, /"summary"/);
         assert.match(json, /"discovery"/);
         assert.match(json, /"status": "passed"/);
+        assert.match(json, /"featureDiscoveryMillis": \d+/);
+        assert.match(json, /"stepModuleLoadMillis": \d+/);
+        assert.match(json, /"taskBuildMillis": \d+/);
+        assert.match(json, /"filteringMillis": \d+/);
+        assert.match(json, /"executionMillis": \d+/);
         assert.match(junit, /<testsuite name="effect-bdd"/);
         assert.match(junit, /<testcase classname="Counter"/);
       }),

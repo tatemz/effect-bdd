@@ -67,9 +67,16 @@ export function generatedSuitesFor(scale: GeneratedScale): ReadonlyArray<SuiteDe
 export const ensureGeneratedSuites = async (
   scale: GeneratedScale = defaultGeneratedScale,
 ): Promise<void> => {
-  await fs.mkdir(generatedFeatureRoot, { recursive: true });
-  await fs.mkdir(generatedEffectRoot, { recursive: true });
-  await fs.mkdir(generatedCucumberRoot, { recursive: true });
+  await Promise.all(
+    [generatedFeatureRoot, generatedEffectRoot, generatedCucumberRoot].map((directory) =>
+      fs.rm(directory, { recursive: true, force: true }),
+    ),
+  );
+  await Promise.all(
+    [generatedFeatureRoot, generatedEffectRoot, generatedCucumberRoot].map((directory) =>
+      fs.mkdir(directory, { recursive: true }),
+    ),
+  );
   await Promise.all([
     writeParseScale(scale),
     writeOutlineScale(scale),
@@ -240,7 +247,6 @@ const writeGeneratedCucumberSteps = (
     path.join(generatedCucumberRoot, `${id}.steps.ts`),
     [
       'import { Given } from "@cucumber/cucumber";',
-      'import "../../cucumber/world.ts";',
       "",
       `Given("${pattern}", function (${captureArguments(captureCount)}) {`,
       "  return undefined;",

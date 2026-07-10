@@ -58,7 +58,7 @@ export interface RunSummary {
   readonly phases?: RunPhaseDurations;
 }
 
-interface RunPhaseDurations {
+export interface RunPhaseDurations {
   readonly featureDiscoveryMillis: number;
   readonly stepModuleLoadMillis: number;
   readonly taskBuildMillis: number;
@@ -102,12 +102,12 @@ export interface DurationStats {
   readonly coefficientOfVariation: number;
 }
 
-export type Confidence = "high" | "medium" | "low";
+export type Stability = "high" | "medium" | "low";
 
 export interface RunnerStats {
   readonly runner: RunnerId;
   readonly runs: number;
-  readonly confidence: Confidence;
+  readonly stability: Stability;
   readonly wall: DurationStats;
   readonly execution?: DurationStats;
   readonly wallScenariosPerSecond: number;

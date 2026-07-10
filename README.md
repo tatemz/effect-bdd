@@ -17,6 +17,7 @@ running the steps.
 - [Writing Step Modules](#writing-step-modules)
 - [Step Patterns](#step-patterns)
 - [Reference](#reference)
+- [Development Benchmarks](#development-benchmarks)
 - [Non-Goals](#non-goals)
 
 ## Install
@@ -497,6 +498,12 @@ property, do not pass `Bdd` itself to promise APIs or `await` it; use
 `Bdd.then\`...\`` to define Then steps.
 
 The error classes are also importable from `effect-bdd/Errors`.
+
+## Development Benchmarks
+
+After `pnpm build`, run `pnpm bench` for the fast counter-example smoke profile.
+Full, compiled, and pressure workflows plus interpretation rules are documented in
+[`benchmarks/README.md`](benchmarks/README.md).
 
 ## Non-Goals
 
