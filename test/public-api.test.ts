@@ -38,6 +38,64 @@ describe("public API", () => {
         Object.defineProperty(step, "timeout", { value: Duration.seconds(1) });
       }, TypeError);
     });
+
+    it("exposes model guards backed by non-enumerable symbol brands", () => {
+      const step = Bdd.then`the value is stable`(() => Effect.succeed(1));
+      const scenario = Bdd.scenario("Stable value").pipe(step);
+      const feature = Bdd.feature("Counter").pipe(scenario);
+
+      assert.strictEqual(Bdd.isStep(step), true);
+      assert.strictEqual(Bdd.isScenario(scenario), true);
+      assert.strictEqual(Bdd.isFeature(feature), true);
+      assert.strictEqual(Bdd.isStep({ ...step }), false);
+      assert.strictEqual(Bdd.isScenario({ ...scenario }), false);
+      assert.strictEqual(Bdd.isFeature({ ...feature }), false);
+      assert.deepStrictEqual(Object.keys(feature), ["title", "scenarios", "pipe"]);
+      assert.strictEqual(Object.getOwnPropertySymbols(feature).length, 1);
+    });
+
+    it("rejects forged append receivers immediately", () => {
+      const scenario = Bdd.scenario("Bad receiver");
+      const step = Bdd.then`bad receiver`(() => Effect.void);
+
+      assert.throws(
+        () => Reflect.apply(scenario, undefined, [{ title: "Counter", scenarios: [] }]),
+        TypeError,
+      );
+      assert.throws(
+        () => Reflect.apply(step, undefined, [{ title: "Scenario", steps: [], providers: [] }]),
+        TypeError,
+      );
+    });
+
+    it("rejects tag-only step argument descriptors", () => {
+      const forged = {
+        _tag: "TableArg",
+        decode: () => Effect.succeed([]),
+      };
+
+      assert.throws(
+        () => Reflect.apply(Bdd.when`uses a table`, undefined, [forged, () => Effect.void]),
+        TypeError,
+      );
+    });
+
+    it("rejects invalid step implementations at definition time", () => {
+      assert.throws(
+        () => Reflect.apply(Bdd.when`has no implementation`, undefined, [null]),
+        /Expected a step implementation function/,
+      );
+    });
+
+    it("rejects accidental thenable assimilation with a clear error", async () => {
+      let error: unknown;
+      try {
+        await Promise.resolve(Bdd);
+      } catch (cause) {
+        error = cause;
+      }
+      assert.match(String(error), /Bdd\.then is a tagged-template step factory/);
+    });
   });
 
   describe("custom GherkinCompiler layer", () => {

@@ -1,11 +1,12 @@
-import type { Pickle, PickleStep } from "@cucumber/messages";
+import type { PickleStep } from "@cucumber/messages";
 import * as Arr from "effect/Array";
 import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import type * as Exit from "effect/Exit";
 import * as Fn from "effect/Function";
-import type * as Layer from "effect/Layer";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
@@ -18,68 +19,26 @@ import {
   StepError,
   StepTimeoutError,
 } from "../Errors.ts";
+import * as Discovery from "./discovery.ts";
+import type * as Expression from "./expression.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
-export interface DataTableInput {
-  readonly rows: ReadonlyArray<{
-    readonly cells: ReadonlyArray<{
-      readonly value: string;
-    }>;
-  }>;
-}
+export type DataTableInput = Discovery.DataTableInput;
 
 /** @internal */
-export interface DocStringInput {
-  readonly content: string;
-}
+export type DocStringInput = Discovery.DocStringInput;
 
 /** @internal */
-type ConcreteStepKind = "Given" | "When" | "Then";
+type ConcreteStepKind = Discovery.ConcreteStepKind;
 
 type RunError = ParseError | MatchError | ScenarioSetupError | StepError | ScenarioTeardownError;
 
-interface Expression<A> {
-  readonly source: string;
-  readonly match: (text: string) => Option.Option<A>;
-}
-
-interface TableArg<A> {
-  readonly _tag: "TableArg";
-  readonly decode: (table: DataTableInput) => Effect.Effect<A, unknown>;
-}
-
-interface DocStringArg<A> {
-  readonly _tag: "DocStringArg";
-  readonly decode: (docString: DocStringInput) => Effect.Effect<A, unknown>;
-}
-
-type StepArg<A> = TableArg<A> | DocStringArg<A>;
-
-interface AnyStep<R = unknown> {
-  readonly kind: "Step" | ConcreteStepKind;
-  readonly expression: Expression<unknown>;
-  readonly argument?: StepArg<unknown>;
-  readonly timeout?: Duration.Duration;
-  readonly run: (
-    captures: unknown,
-    argument: unknown,
-    state: unknown,
-  ) => Effect.Effect<unknown, unknown, R>;
-}
-
-interface ScenarioDefinition<R = unknown> {
-  readonly title: string;
-  readonly steps: ReadonlyArray<AnyStep<R>>;
-  readonly providers: ReadonlyArray<Layer.Layer<unknown, unknown, R>>;
-}
-
-interface FeatureDefinition<E, R> {
-  readonly title: string;
-  readonly scenarios: ReadonlyArray<ScenarioDefinition<R>>;
-  readonly _E?: E;
-  readonly _R?: R;
-}
+type TableArg<A> = Discovery.TableArg<A>;
+type DocStringArg<A> = Discovery.DocStringArg<A>;
+type StepArg<A> = Discovery.StepArg<A>;
+type AnyStep<R = unknown> = Discovery.AnyStep<R>;
+type FeatureDefinition<E, R> = Discovery.FeatureDefinition<E, R>;
 
 interface Report {
   readonly feature: string;
@@ -92,20 +51,7 @@ export interface RunOptions {
 }
 
 /** @internal */
-export interface ScenarioTask<E, R> {
-  readonly featureDefinition: FeatureDefinition<E, R>;
-  readonly scenarioDefinition: ScenarioDefinition<R>;
-  readonly featureTitle: string;
-  readonly scenarioTitle: string;
-  readonly sourceScenarioTitle: string;
-  readonly scenarioIndex: number;
-  readonly scenarioLine: number;
-  readonly ruleTitle?: string;
-  readonly ruleLine?: number;
-  readonly tags: ReadonlyArray<string>;
-  readonly pickle: Pickle;
-  readonly source: Parser.SourceIndex;
-}
+export type ScenarioTask<E, R> = Discovery.ScenarioTask<E, R>;
 
 /** @internal */
 export interface ScenarioReport {
@@ -159,180 +105,19 @@ export const run = <E, R>(
   );
 
 /** @internal */
-interface ResolvedPickle {
-  readonly pickle: Pickle;
-  readonly scenarioIndex: number;
-  readonly scenarioTitle: string;
-  readonly scenarioLine: number;
-  readonly sourceScenarioId: string;
-  readonly rule: ReturnType<typeof resolveRule>;
-}
-
-const resolvePickle =
-  (feature: Parser.CompiledFeature) =>
-  (pickle: Pickle, scenarioIndex: number): ResolvedPickle => {
-    const source = Parser.findScenario(pickle, feature.source);
-    return {
-      pickle,
-      scenarioIndex,
-      scenarioTitle: Fn.pipe(
-        source,
-        Option.map(({ scenario }) => scenario.name),
-        Option.getOrElse(() => pickle.name),
-      ),
-      scenarioLine:
-        pickle.location?.line ??
-        Fn.pipe(
-          source,
-          Option.map(({ scenario }) => scenario.location.line),
-          Option.getOrElse(() => feature.line),
-        ),
-      sourceScenarioId: Fn.pipe(
-        source,
-        Option.map(({ scenario }) => scenario.id),
-        Option.getOrElse(() => pickle.id),
-      ),
-      rule: resolveRule(source),
-    };
-  };
-
-const resolveRule = (
-  source: Option.Option<{
-    readonly rule:
-      | { readonly name: string; readonly location: { readonly line: number } }
-      | undefined;
-  }>,
-) =>
-  Fn.pipe(
-    source,
-    Option.map(({ rule }) => rule),
-    Option.getOrUndefined,
-  );
-
-/** @internal */
-export const firstDuplicateSourceScenarioTitle = (
-  resolved: ReadonlyArray<{
-    readonly scenarioTitle: string;
-    readonly sourceScenarioId: string;
-  }>,
-): Option.Option<string> =>
-  Fn.pipe(
-    resolved,
-    Arr.reduce(
-      {
-        seen: emptySourceScenarioIndex,
-        duplicate: Option.none<string>(),
-      },
-      (state, entry) =>
-        Option.isSome(state.duplicate) ? state : nextDuplicateSourceScenarioState(state, entry),
-    ),
-    (state) => state.duplicate,
-  );
-
-interface DuplicateSourceScenarioState {
-  readonly seen: Record.ReadonlyRecord<string, string>;
-  readonly duplicate: Option.Option<string>;
-}
-
-const emptySourceScenarioIndex: Record.ReadonlyRecord<string, string> = {};
-
-const nextDuplicateSourceScenarioState = (
-  state: DuplicateSourceScenarioState,
-  entry: {
-    readonly scenarioTitle: string;
-    readonly sourceScenarioId: string;
-  },
-): DuplicateSourceScenarioState =>
-  Fn.pipe(
-    Record.get(state.seen, entry.scenarioTitle),
-    Option.match({
-      onNone: () => ({
-        seen: Record.set(state.seen, entry.scenarioTitle, entry.sourceScenarioId),
-        duplicate: Option.none(),
-      }),
-      onSome: (previousSourceId) =>
-        previousSourceId === entry.sourceScenarioId
-          ? state
-          : { ...state, duplicate: Option.some(entry.scenarioTitle) },
-    }),
-  );
-
-/** @internal */
 const buildScenarioTasks = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
 ): Effect.Effect<ReadonlyArray<ScenarioTask<E, R>>, MatchError> =>
-  Effect.gen(function* () {
-    yield* validateFeatureDefinition(featureDefinition, feature);
-    yield* validateUniqueScenarioDefinitions(featureDefinition);
-
-    const scenarioDefinitions = scenarioDefinitionMap(featureDefinition);
-    const resolved = Arr.map(feature.pickles, resolvePickle(feature));
-    const duplicateSourceTitle = firstDuplicateSourceScenarioTitle(resolved);
-    if (Option.isSome(duplicateSourceTitle)) {
-      return yield* matchErrorEffect({
-        message: `Duplicate scenario title in Gherkin feature: ${duplicateSourceTitle.value}`,
-        scenario: duplicateSourceTitle.value,
-        step: duplicateSourceTitle.value,
-        line: feature.line,
-        candidates: [duplicateSourceTitle.value],
-      });
-    }
-
-    const tasks = yield* Effect.forEach(
-      resolved,
-      (entry): Effect.Effect<ScenarioTask<E, R>, MatchError> => {
-        const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
-        if (Option.isNone(scenarioDefinition)) {
-          return matchErrorEffect({
-            message: `No scenario chain matched source scenario "${entry.scenarioTitle}"`,
-            scenario: entry.scenarioTitle,
-            step: entry.scenarioTitle,
-            line: entry.scenarioLine,
-            candidates: Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
-          });
-        }
-        return Effect.succeed({
-          featureDefinition,
-          scenarioDefinition: scenarioDefinition.value,
-          featureTitle: feature.name,
-          scenarioTitle: entry.pickle.name,
-          sourceScenarioTitle: entry.scenarioTitle,
-          scenarioIndex: entry.scenarioIndex,
-          scenarioLine: entry.scenarioLine,
-          ...(entry.rule === undefined
-            ? {}
-            : {
-                ruleTitle: entry.rule.name,
-                ruleLine: entry.rule.location.line,
-              }),
-          tags: Arr.map(entry.pickle.tags, (tag) => tag.name),
-          pickle: entry.pickle,
-          source: feature.source,
-        });
-      },
-    );
-
-    const usedScenarioTitles = Arr.map(resolved, (entry) => entry.scenarioTitle);
-    const unused = Arr.filter(
-      featureDefinition.scenarios,
-      (scenario) => !Arr.contains(scenario.title)(usedScenarioTitles),
-    );
-    return yield* Fn.pipe(
-      Arr.head(unused),
+  Fn.pipe(Discovery.buildScenarioTasks(featureDefinition, feature), (result) =>
+    Fn.pipe(
+      Arr.head(result.issues),
       Option.match({
-        onNone: () => Effect.succeed(tasks),
-        onSome: (scenario) =>
-          matchErrorEffect({
-            message: `Scenario chain has no matching source scenario: ${scenario.title}`,
-            scenario: scenario.title,
-            step: scenario.title,
-            line: feature.line,
-            candidates: Arr.map(resolved, (entry) => entry.scenarioTitle),
-          }),
+        onNone: () => Effect.succeed(result.tasks),
+        onSome: (issue) => matchErrorFromDiscoveryIssue(issue, feature),
       }),
-    );
-  });
+    ),
+  );
 
 /** @internal */
 export const runScenarioTask = <E, R>(
@@ -341,16 +126,21 @@ export const runScenarioTask = <E, R>(
 ): Effect.Effect<ScenarioReport, RunError, Exclude<R, Scope.Scope>> =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
+    const context = yield* Fn.pipe(
+      buildScenarioProviders(task, scope),
+      Scope.provide(scope),
+      Effect.mapError((error) => scenarioSetupError(task, error)),
+    );
     const program = Fn.pipe(
       runSteps(task, options),
-      provideScenarioProviders(task),
+      provideScenarioContext(context),
       Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
       Scope.provide(scope),
     );
     const stepExit = yield* Effect.exit(program);
     const closeExit = yield* Effect.exit(closeScenarioScope(task, scope, stepExit, options));
     if (closeExit._tag === "Failure") {
-      return yield* Effect.fail(scenarioTeardownErrorFromCause(task, closeExit.cause));
+      return yield* Effect.fail(scenarioTeardownErrorFromCause(task, stepExit, closeExit.cause));
     }
     yield* stepExit;
     return {
@@ -360,14 +150,35 @@ export const runScenarioTask = <E, R>(
     };
   });
 
-const provideScenarioProviders =
-  <R>(task: ScenarioTask<unknown, R>) =>
-  <A, E>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | unknown, R> => {
-    const initial: Effect.Effect<A, E | unknown, R> = effect;
-    return Arr.reduce(task.scenarioDefinition.providers, initial, (current, provider) =>
-      Effect.provide(current, provider),
-    );
-  };
+const buildScenarioProviders = <R>(
+  task: ScenarioTask<unknown, R>,
+  scope: Scope.Scope,
+): Effect.Effect<Option.Option<Context.Context<unknown>>, unknown, R> =>
+  Arr.matchLeft(task.scenarioDefinition.providers, {
+    onEmpty: () => Effect.succeed(Option.none()),
+    onNonEmpty: (first, rest) =>
+      Fn.pipe(
+        Layer.buildWithScope(first, scope),
+        Effect.flatMap((context) => {
+          const initial: Effect.Effect<Context.Context<unknown>, unknown, R> = Effect.succeed(
+            context,
+          );
+          return Arr.reduce(rest, initial, (current, provider) =>
+            Effect.flatMap(current, (context) =>
+              Effect.map(Layer.buildWithScope(provider, scope), (provided) =>
+                Context.merge(context, provided),
+              ),
+            ),
+          );
+        }),
+        Effect.map(Option.some),
+      ),
+  });
+
+const provideScenarioContext =
+  (context: Option.Option<Context.Context<unknown>>) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    Option.isSome(context) ? Effect.provide(effect, context.value) : effect;
 
 const closeScenarioScope = <A, E>(
   _task: ScenarioTask<unknown, unknown>,
@@ -397,23 +208,32 @@ const scenarioSetupError = (
 
 const scenarioTeardownErrorFromCause = (
   task: ScenarioTask<unknown, unknown>,
+  stepExit: Exit.Exit<unknown, unknown>,
   cause: Cause.Cause<ScenarioTeardownError>,
 ): ScenarioTeardownError =>
-  Fn.pipe(
-    Cause.findErrorOption(cause),
-    Option.filter(
-      (error): error is ScenarioTeardownError => error instanceof ScenarioTeardownError,
-    ),
-    Option.getOrElse(
-      () =>
-        new ScenarioTeardownError({
-          message: `Scenario teardown failed: ${task.sourceScenarioTitle}`,
-          scenario: task.sourceScenarioTitle,
-          line: task.scenarioLine,
-          cause,
-        }),
+  Fn.pipe(combineStepAndTeardownCause(stepExit, cause), (cause) =>
+    Fn.pipe(
+      Cause.findErrorOption(cause),
+      Option.filter(
+        (error): error is ScenarioTeardownError => error instanceof ScenarioTeardownError,
+      ),
+      Option.getOrElse(
+        () =>
+          new ScenarioTeardownError({
+            message: `Scenario teardown failed: ${task.sourceScenarioTitle}`,
+            scenario: task.sourceScenarioTitle,
+            line: task.scenarioLine,
+            cause,
+          }),
+      ),
     ),
   );
+
+const combineStepAndTeardownCause = (
+  stepExit: Exit.Exit<unknown, unknown>,
+  teardownCause: Cause.Cause<ScenarioTeardownError>,
+): Cause.Cause<unknown> =>
+  stepExit._tag === "Failure" ? Cause.combine(stepExit.cause, teardownCause) : teardownCause;
 
 const runSteps: <E, R>(
   task: ScenarioTask<E, R>,
@@ -526,6 +346,15 @@ const verifyStep = (
       [stepDefinition.expression.source],
     );
   }
+  if (stepDefinition.expression.matchDetailed !== undefined) {
+    return verifyStepMatchResult(
+      task,
+      stepDefinition.expression.matchDetailed(step.text),
+      stepDefinition.expression.source,
+      step,
+      index,
+    );
+  }
   return Fn.pipe(
     stepDefinition.expression.match(step.text),
     Option.match({
@@ -540,6 +369,39 @@ const verifyStep = (
       onSome: Effect.succeed,
     }),
   );
+};
+
+const verifyStepMatchResult = (
+  task: ScenarioTask<unknown, unknown>,
+  result: Expression.MatchResult<unknown>,
+  expressionSource: string,
+  step: PickleStep,
+  index: number,
+): Effect.Effect<unknown, MatchError> => {
+  switch (result._tag) {
+    case "Matched": {
+      return Effect.succeed(result.value);
+    }
+    case "TextMismatch": {
+      return failStep(
+        `Step ${index + 1} text mismatch: source says "${step.text}", chain expects "${expressionSource}"`,
+        task.sourceScenarioTitle,
+        step,
+        task.source,
+        [expressionSource],
+      );
+    }
+    case "DecodeMismatch": {
+      return failStep(
+        `Could not decode capture "${result.capture}" from "${result.raw}" for step "${step.text}"`,
+        task.sourceScenarioTitle,
+        step,
+        task.source,
+        [expressionSource],
+        result.cause,
+      );
+    }
+  }
 };
 
 const decodeArgument = (
@@ -625,52 +487,59 @@ const mapArgumentDecodeError = (
     Effect.mapError((cause) => matchError(message, scenario, step, source, candidates, cause)),
   );
 
-const validateFeatureDefinition = <E, R>(
-  featureDefinition: FeatureDefinition<E, R>,
+// oxlint-disable-next-line complexity
+const matchErrorFromDiscoveryIssue = (
+  issue: Discovery.DiscoveryIssue,
   feature: Parser.CompiledFeature,
-): Effect.Effect<void, MatchError> =>
-  featureDefinition.title === feature.name
-    ? Effect.void
-    : matchErrorEffect({
-        message: `Feature definition "${featureDefinition.title}" does not match Gherkin feature "${feature.name}"`,
+): Effect.Effect<never, MatchError> => {
+  switch (issue._tag) {
+    case "FeatureTitleMismatch": {
+      return matchErrorEffect({
+        message: `Feature definition "${issue.definitionTitle}" does not match Gherkin feature "${issue.featureTitle}"`,
         scenario: "",
-        step: feature.name,
-        line: feature.line,
-        candidates: [featureDefinition.title],
+        step: issue.featureTitle,
+        line: issue.line,
+        candidates: [issue.definitionTitle],
       });
-
-/** @internal */
-export const firstDuplicateTitle = (titles: ReadonlyArray<string>): Option.Option<string> =>
-  Fn.pipe(
-    titles,
-    Arr.findFirst((title, index) => Arr.contains(title)(Arr.take(titles, index))),
-  );
-
-const validateUniqueScenarioDefinitions = <E, R>(featureDefinition: FeatureDefinition<E, R>) =>
-  Fn.pipe(
-    Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
-    firstDuplicateTitle,
-    Option.match({
-      onNone: () => Effect.void,
-      onSome: (title) =>
-        matchErrorEffect({
-          message: `Duplicate scenario chain title: ${title}`,
-          scenario: title,
-          step: title,
-          line: 1,
-          candidates: [title],
-        }),
-    }),
-  );
-
-const scenarioDefinitionMap = <E, R>(
-  featureDefinition: FeatureDefinition<E, R>,
-): Record.ReadonlyRecord<string, ScenarioDefinition<R>> =>
-  Fn.pipe(
-    featureDefinition.scenarios,
-    Arr.map((scenario) => [scenario.title, scenario] as const),
-    Record.fromEntries,
-  );
+    }
+    case "DuplicateScenarioDefinition": {
+      return matchErrorEffect({
+        message: `Duplicate scenario chain title: ${issue.scenarioTitle}`,
+        scenario: issue.scenarioTitle,
+        step: issue.scenarioTitle,
+        line: 1,
+        candidates: [issue.scenarioTitle],
+      });
+    }
+    case "DuplicateSourceScenario": {
+      return matchErrorEffect({
+        message: `Duplicate scenario title in Gherkin feature: ${issue.scenarioTitle}`,
+        scenario: issue.scenarioTitle,
+        step: issue.scenarioTitle,
+        line: issue.scenarioLine,
+        candidates: [issue.scenarioTitle],
+      });
+    }
+    case "UnmatchedScenario": {
+      return matchErrorEffect({
+        message: `No scenario chain matched source scenario "${issue.scenarioTitle}"`,
+        scenario: issue.scenarioTitle,
+        step: issue.scenarioTitle,
+        line: issue.scenarioLine,
+        candidates: issue.candidates,
+      });
+    }
+    case "UnusedScenarioDefinition": {
+      return matchErrorEffect({
+        message: `Scenario chain has no matching source scenario: ${issue.scenarioTitle}`,
+        scenario: issue.scenarioTitle,
+        step: issue.scenarioTitle,
+        line: feature.line,
+        candidates: issue.candidates,
+      });
+    }
+  }
+};
 
 /** @internal */
 const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {

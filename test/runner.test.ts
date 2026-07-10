@@ -4,7 +4,7 @@ import { Context, Cause, Duration, Effect, Fiber, Layer, Option, Schema } from "
 import * as Arr from "effect/Array";
 import * as Fn from "effect/Function";
 import { TestClock } from "effect/testing";
-import { assertMatchError, runBdd } from "./helpers.ts";
+import { assertMatchError, runBdd, runError } from "./helpers.ts";
 
 type Cart = {
   readonly items: ReadonlyArray<{
@@ -69,6 +69,121 @@ Feature: Shopping cart
     });
   });
 
+  it.effect("passes state without relying on handler function length", () => {
+    const givenOne = Bdd.given`one`(() => Effect.succeed(1));
+    const whenIncremented = Bdd.when`incremented`((state = 0) => Effect.succeed(state + 1));
+    const thenStateIsPassedToRestHandler = Bdd.then`state is passed to rest handler`(
+      (...args: ReadonlyArray<unknown>) =>
+        Effect.sync(() => {
+          assert.deepStrictEqual(args, [2]);
+          return args[0];
+        }),
+    );
+
+    const feature = Bdd.feature("Handler arity").pipe(
+      Bdd.scenario("State reaches handlers with unstable length").pipe(
+        givenOne,
+        whenIncremented,
+        thenStateIsPassedToRestHandler,
+      ),
+    );
+
+    return runBdd(
+      feature,
+      `
+Feature: Handler arity
+
+  Scenario: State reaches handlers with unstable length
+    Given one
+    When incremented
+    Then state is passed to rest handler
+`,
+    );
+  });
+
+  it.effect("preserves capture decode causes on MatchError", () => {
+    const qty = Bdd.capture("qty", Schema.Literal("2"));
+    const feature = Bdd.feature("Capture diagnostics").pipe(
+      Bdd.scenario("Bad capture").pipe(Bdd.when`${qty} items are added`(() => Effect.void)),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
+Feature: Capture diagnostics
+
+  Scenario: Bad capture
+    When many items are added
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "MatchError");
+      if (error._tag === "MatchError") {
+        assert.match(error.message, /Could not decode capture "qty"/);
+        assert.notStrictEqual(error.cause, undefined);
+      }
+    });
+  });
+
+  it.effect("fails when scenario chain titles are duplicated", () =>
+    assertMatchError(
+      runBdd(
+        Bdd.feature("Counter").pipe(
+          Bdd.scenario("Duplicate").pipe(Bdd.given`zero`(() => Effect.void)),
+          Bdd.scenario("Duplicate").pipe(Bdd.when`one`(() => Effect.void)),
+        ),
+        `
+Feature: Counter
+
+  Scenario: Duplicate
+    Given zero
+`,
+      ),
+      /Duplicate scenario chain title: Duplicate/,
+    ),
+  );
+
+  it.effect("fails when a scenario chain is unused", () =>
+    assertMatchError(
+      runBdd(
+        Bdd.feature("Counter").pipe(
+          Bdd.scenario("Starts clean").pipe(Bdd.given`zero`(() => Effect.void)),
+          Bdd.scenario("Unused chain").pipe(Bdd.when`unused`(() => Effect.void)),
+        ),
+        `
+Feature: Counter
+
+  Scenario: Starts clean
+    Given zero
+`,
+      ),
+      /Scenario chain has no matching source scenario: Unused chain/,
+    ),
+  );
+
+  it.effect("fails when Gherkin scenario titles are duplicated", () =>
+    assertMatchError(
+      runBdd(
+        Bdd.feature("Counter").pipe(
+          Bdd.scenario("Duplicate").pipe(Bdd.given`zero`(() => Effect.void)),
+        ),
+        `
+Feature: Counter
+
+  Scenario: Duplicate
+    Given zero
+
+  Scenario: Duplicate
+    Given zero
+`,
+      ),
+      /Duplicate scenario title in Gherkin feature: Duplicate/,
+    ),
+  );
+
   it.effect("fails when the feature definition name does not match the Gherkin feature", () =>
     assertMatchError(
       runBdd(
@@ -86,7 +201,7 @@ Feature: Counter source
     ),
   );
 
-  it.effect("fails when a source scenario has no chain", () =>
+  it.effect("fails on the first source issue before later unused definitions", () =>
     assertMatchError(
       runBdd(
         Bdd.feature("Shopping cart").pipe(
@@ -621,6 +736,138 @@ Feature: Scenario providers
     Then the greeting is hello
 `,
     );
+  });
+
+  it.effect("wraps failing scenario provider setup", () => {
+    class Greeting extends Context.Service<
+      Greeting,
+      {
+        readonly message: string;
+      }
+    >()("Greeting") {}
+
+    const feature = Bdd.feature("Scenario providers").pipe(
+      Bdd.scenario("Provider setup fails").pipe(
+        Bdd.when`the greeting is read`(() => Greeting),
+        Bdd.provide(Layer.effect(Greeting, Effect.fail("setup failed" as const))),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
+Feature: Scenario providers
+
+  Scenario: Provider setup fails
+    When the greeting is read
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "ScenarioSetupError");
+      if (error._tag === "ScenarioSetupError") {
+        assert.strictEqual(error.cause, "setup failed");
+      }
+    });
+  });
+
+  it.effect("reports scenario provider finalizer failures as teardown errors", () => {
+    class Greeting extends Context.Service<
+      Greeting,
+      {
+        readonly message: string;
+      }
+    >()("Greeting") {}
+
+    const provider = Layer.effect(
+      Greeting,
+      Effect.acquireRelease(Effect.succeed({ message: "hello" }), () =>
+        Effect.fail("teardown failed" as const),
+      ),
+    );
+    const feature = Bdd.feature("Scenario providers").pipe(
+      Bdd.scenario("Provider teardown fails").pipe(
+        Bdd.when`the greeting is read`(() => Greeting),
+        Bdd.provide(provider),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
+Feature: Scenario providers
+
+  Scenario: Provider teardown fails
+    When the greeting is read
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "ScenarioTeardownError");
+      if (error._tag === "ScenarioTeardownError") {
+        const cause = error.cause;
+        assert.strictEqual(Cause.isCause(cause), true);
+        if (Cause.isCause(cause)) {
+          assert.match(Cause.pretty(cause), /teardown failed/);
+        }
+      }
+    });
+  });
+
+  it.effect("keeps step and teardown failures in the teardown cause", () => {
+    class Greeting extends Context.Service<
+      Greeting,
+      {
+        readonly message: string;
+      }
+    >()("Greeting") {}
+
+    const provider = Layer.effect(
+      Greeting,
+      Effect.acquireRelease(Effect.succeed({ message: "hello" }), () =>
+        Effect.fail("teardown failed" as const),
+      ),
+    );
+    const feature = Bdd.feature("Scenario providers").pipe(
+      Bdd.scenario("Step and provider teardown fail").pipe(
+        Bdd.when`the action fails`(() =>
+          Effect.gen(function* () {
+            yield* Greeting;
+            return yield* Effect.fail("step failed" as const);
+          }),
+        ),
+        Bdd.provide(provider),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
+Feature: Scenario providers
+
+  Scenario: Step and provider teardown fail
+    When the action fails
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "ScenarioTeardownError");
+      if (error._tag === "ScenarioTeardownError") {
+        const cause = error.cause;
+        assert.strictEqual(Cause.isCause(cause), true);
+        if (Cause.isCause(cause)) {
+          const rendered = Cause.pretty(cause);
+          assert.match(rendered, /step failed/);
+          assert.match(rendered, /teardown failed/);
+        }
+      }
+    });
   });
 
   it.effect("runs feature and rule backgrounds as explicit leading chain steps", () => {

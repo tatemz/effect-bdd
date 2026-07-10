@@ -4,12 +4,13 @@ import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Option from "effect/Option";
-import * as Record from "effect/Record";
 import type * as Path from "effect/Path";
+import * as Record from "effect/Record";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
 import type * as Bdd from "../../Bdd.ts";
 import type { ParseError } from "../../Errors.ts";
+import * as Discovery from "../discovery.ts";
 import * as Parser from "../parser.ts";
 import * as CoreRunner from "../runner.ts";
 import { DiscoveryError, type ModuleLoadError } from "./errors.ts";
@@ -159,40 +160,25 @@ const buildScenarioTasks: (
         matchedFeatureTitles: [],
       };
     }
-    yield* validateDuplicateScenarioDefinition(definition);
-    yield* validateDuplicateSourceScenario(parsed);
-
-    const scenarioDefinitions = Fn.pipe(
-      definition.scenarios,
-      Arr.map((scenario) => [scenario.title, scenario] as const),
-      Record.fromEntries,
-    );
-    const built = Arr.map(parsed.pickles, (pickle, scenarioIndex) =>
-      buildScenarioTask(source, parsed, definition, scenarioDefinitions, pickle, scenarioIndex),
-    );
-    const tasks = Arr.filterMap(built, (item) =>
-      item._tag === "Task" ? Result.succeed(item.task) : Result.fail(undefined),
-    );
-    const usedScenarioTitles = Arr.map(tasks, (task) => task.core.sourceScenarioTitle);
-    const unmatched = Arr.filterMap(built, (item) =>
-      item._tag === "Diagnostic" ? Result.succeed(item.diagnostic) : Result.fail(undefined),
-    );
-    const unused = Fn.pipe(
-      definition.scenarios,
-      Arr.filter((scenario) => !Arr.contains(scenario.title)(usedScenarioTitles)),
-      Arr.map(
-        (scenario): CliDiagnostic => ({
-          _tag: "UnusedScenarioDefinition",
-          featureTitle: definition.title,
-          scenarioTitle: scenario.title,
-          message: `Scenario chain exported but no source scenario matched: ${definition.title} / ${scenario.title}`,
+    const discovered = Discovery.buildScenarioTasks(definition, parsed);
+    const fatalIssue = Arr.findFirst(discovered.issues, isFatalDiscoveryIssue);
+    if (fatalIssue._tag === "Some") {
+      return yield* Effect.fail(
+        new DiscoveryError({
+          message: discoveryIssueMessage(fatalIssue.value, definition.title),
         }),
-      ),
+      );
+    }
+    const diagnostics = Arr.filterMap(discovered.issues, (issue) =>
+      discoveryIssueDiagnostic(source, parsed, definition, issue),
     );
 
     return {
-      tasks,
-      diagnostics: Arr.appendAll(unmatched, unused),
+      tasks: Arr.map(
+        discovered.tasks,
+        (task): ScenarioTask => ({ featurePath: source.path, core: task }),
+      ),
+      diagnostics,
       matchedFeatureTitles: [definition.title],
     };
   });
@@ -219,145 +205,65 @@ const appendDefinition = (
     }),
   );
 
-const validateDuplicateScenarioDefinition = (
-  definition: Bdd.Feature<unknown, never>,
-): Effect.Effect<void, DiscoveryError> => {
-  const duplicateScenario = duplicateScenarioDefinition(definition);
-  return duplicateScenario === undefined
-    ? Effect.void
-    : Effect.fail(
-        new DiscoveryError({
-          message: `Duplicate scenario chain title in "${definition.title}": ${duplicateScenario}`,
-        }),
-      );
+const isFatalDiscoveryIssue = (issue: Discovery.DiscoveryIssue): boolean =>
+  issue._tag === "FeatureTitleMismatch" ||
+  issue._tag === "DuplicateScenarioDefinition" ||
+  issue._tag === "DuplicateSourceScenario";
+
+// oxlint-disable-next-line complexity
+const discoveryIssueMessage = (issue: Discovery.DiscoveryIssue, featureTitle: string): string => {
+  switch (issue._tag) {
+    case "FeatureTitleMismatch": {
+      return `Feature definition "${issue.definitionTitle}" does not match Gherkin feature "${issue.featureTitle}"`;
+    }
+    case "DuplicateScenarioDefinition": {
+      return `Duplicate scenario chain title in "${featureTitle}": ${issue.scenarioTitle}`;
+    }
+    case "DuplicateSourceScenario": {
+      return `Duplicate scenario title in Gherkin feature "${featureTitle}": ${issue.scenarioTitle}`;
+    }
+    case "UnmatchedScenario": {
+      return `Scenario has no matching Bdd.scenario chain: ${issue.scenarioTitle}`;
+    }
+    case "UnusedScenarioDefinition": {
+      return `Scenario chain exported but no source scenario matched: ${featureTitle} / ${issue.scenarioTitle}`;
+    }
+  }
 };
 
-const validateDuplicateSourceScenario = (
-  parsed: Parser.CompiledFeature,
-): Effect.Effect<void, DiscoveryError> => {
-  const duplicateSourceScenario = duplicateSourceScenarioTitle(parsed);
-  return duplicateSourceScenario === undefined
-    ? Effect.void
-    : Effect.fail(
-        new DiscoveryError({
-          message: `Duplicate scenario title in Gherkin feature "${parsed.name}": ${duplicateSourceScenario}`,
-        }),
-      );
-};
-
-const duplicateSourceScenarioTitle = (parsed: Parser.CompiledFeature): string | undefined =>
-  Fn.pipe(
-    CoreRunner.firstDuplicateSourceScenarioTitle(
-      Arr.map(parsed.pickles, (pickle) => {
-        const sourceScenario = Parser.findScenario(pickle, parsed.source);
-        return {
-          scenarioTitle: Fn.pipe(
-            sourceScenario,
-            Option.map(({ scenario }) => scenario.name),
-            Option.getOrElse(() => pickle.name),
-          ),
-          sourceScenarioId: Fn.pipe(
-            sourceScenario,
-            Option.map(({ scenario }) => scenario.id),
-            Option.getOrElse(() => pickle.id),
-          ),
-        };
-      }),
-    ),
-    Option.getOrUndefined,
-  );
-
-type BuiltScenario =
-  | { readonly _tag: "Task"; readonly task: ScenarioTask }
-  | { readonly _tag: "Diagnostic"; readonly diagnostic: CliDiagnostic };
-
-const buildScenarioTask = (
+// oxlint-disable-next-line complexity
+const discoveryIssueDiagnostic = (
   source: FeatureSource,
   parsed: Parser.CompiledFeature,
   definition: Bdd.Feature<unknown, never>,
-  scenarioDefinitions: Record.ReadonlyRecord<
-    string,
-    Bdd.Feature<unknown, never>["scenarios"][number]
-  >,
-  pickle: Parser.CompiledFeature["pickles"][number],
-  scenarioIndex: number,
-): BuiltScenario => {
-  const sourceScenario = Parser.findScenario(pickle, parsed.source);
-  const scenarioTitle = Fn.pipe(
-    sourceScenario,
-    Option.map(({ scenario }) => scenario.name),
-    Option.getOrElse(() => pickle.name),
-  );
-  const scenarioLine = sourceScenarioLine(pickle, sourceScenario, parsed.line);
-  const scenarioDefinition = Record.get(scenarioDefinitions, scenarioTitle);
-  if (Option.isNone(scenarioDefinition)) {
-    return {
-      _tag: "Diagnostic",
-      diagnostic: {
+  issue: Discovery.DiscoveryIssue,
+): Result.Result<CliDiagnostic, undefined> => {
+  switch (issue._tag) {
+    case "UnmatchedScenario": {
+      return Result.succeed({
         _tag: "UnmatchedScenario",
         featurePath: source.path,
         featureTitle: parsed.name,
-        scenarioTitle,
-        scenarioLine,
-        message: `Scenario has no matching Bdd.scenario chain: ${scenarioTitle}`,
-      },
-    };
+        scenarioTitle: issue.scenarioTitle,
+        scenarioLine: issue.scenarioLine,
+        message: discoveryIssueMessage(issue, definition.title),
+      });
+    }
+    case "UnusedScenarioDefinition": {
+      return Result.succeed({
+        _tag: "UnusedScenarioDefinition",
+        featureTitle: definition.title,
+        scenarioTitle: issue.scenarioTitle,
+        message: discoveryIssueMessage(issue, definition.title),
+      });
+    }
+    case "FeatureTitleMismatch":
+    case "DuplicateScenarioDefinition":
+    case "DuplicateSourceScenario": {
+      return Result.fail(undefined);
+    }
   }
-  return {
-    _tag: "Task",
-    task: {
-      featurePath: source.path,
-      core: {
-        featureDefinition: definition,
-        scenarioDefinition: scenarioDefinition.value,
-        featureTitle: parsed.name,
-        scenarioTitle: pickle.name,
-        sourceScenarioTitle: scenarioTitle,
-        scenarioIndex,
-        scenarioLine,
-        ...sourceScenarioRuleFields(sourceScenario),
-        tags: Arr.map(pickle.tags, (tag) => tag.name),
-        pickle,
-        source: parsed.source,
-      },
-    },
-  };
 };
-
-const sourceScenarioLine = (
-  pickle: Parser.CompiledFeature["pickles"][number],
-  sourceScenario: ReturnType<typeof Parser.findScenario>,
-  fallbackLine: number,
-): number =>
-  pickle.location?.line ??
-  Fn.pipe(
-    sourceScenario,
-    Option.map(({ scenario }) => scenario.location.line),
-    Option.getOrElse(() => fallbackLine),
-  );
-
-const sourceScenarioRuleFields = (
-  sourceScenario: ReturnType<typeof Parser.findScenario>,
-): { readonly ruleTitle: string; readonly ruleLine: number } | {} =>
-  Fn.pipe(
-    sourceScenario,
-    Option.map(({ rule }) => ruleFields(rule)),
-    Option.getOrElse(() => ({})),
-  );
-
-type SourceScenarioEntry = Parser.SourceIndex["scenarios"][string];
-
-type SourceScenarioRule = SourceScenarioEntry extends { readonly rule: infer Rule } ? Rule : never;
-
-const ruleFields = (
-  rule: SourceScenarioRule,
-): { readonly ruleTitle: string; readonly ruleLine: number } | {} =>
-  rule === undefined
-    ? {}
-    : {
-        ruleTitle: rule.name,
-        ruleLine: rule.location.line,
-      };
 
 const runScenario = Effect.fnUntraced(function* (
   options: CliOptions,
@@ -516,13 +422,6 @@ const unusedFeatureDefinitions = (
         message: `Feature definition exported but no feature file matched: ${definition.title}`,
       }),
     ),
-  );
-
-const duplicateScenarioDefinition = (definition: Bdd.Feature<unknown, never>): string | undefined =>
-  Fn.pipe(
-    Arr.map(definition.scenarios, (scenario) => scenario.title),
-    CoreRunner.firstDuplicateTitle,
-    Option.getOrUndefined,
   );
 
 /** @internal */
