@@ -10,12 +10,14 @@ running the steps.
 ## Contents
 
 - [Install](#install)
+- [Upgrading to 0.6.0](#upgrading-to-060)
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
 - [CLI Workflows](#cli-workflows)
 - [Writing Step Modules](#writing-step-modules)
 - [Step Patterns](#step-patterns)
 - [Reference](#reference)
+- [Development Benchmarks](#development-benchmarks)
 - [Non-Goals](#non-goals)
 
 ## Install
@@ -27,6 +29,20 @@ train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform pack
 pnpm add effect-bdd effect@4.0.0-beta.90
 pnpm add -D tsx
 ```
+
+## Upgrading to 0.6.0
+
+Version 0.6.0 tightens runtime boundaries before the public API stabilizes:
+
+- Every step implementation receives the current scenario state as its final
+  argument. This no longer depends on `Function.length`, so default and rest
+  parameters behave consistently. Existing handlers that ignore state continue
+  to ignore the extra JavaScript argument.
+- Passing a non-function step implementation now throws a `TypeError` when the
+  step is defined instead of producing a failing Effect when the scenario runs.
+- `Bdd.isFeature`, `Bdd.isScenario`, and `Bdd.isStep` are strict structural
+  guards backed by symbol brands. Spreading a model into a plain object does not
+  preserve its identity.
 
 ## Quick Start
 
@@ -258,7 +274,8 @@ const whenRequestBodyIs = Bdd.when`the request body is:`(
 );
 ```
 
-Schema decode failures are preserved on `MatchError.cause`.
+Schema decode failures for captures, DataTables, and DocStrings are preserved on
+`MatchError.cause`.
 
 ### Services
 
@@ -471,12 +488,22 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
-- guards: `Bdd.isFeature`, `Bdd.isStepTimeoutError`
+- guards: `Bdd.isFeature`, `Bdd.isScenario`, `Bdd.isStep`, `Bdd.isStepTimeoutError`
 - models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`,
   `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`,
   `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`, `Bdd.StepTimeoutError`
 
+`Bdd.then` is a tagged-template step constructor. Because the namespace has a `then`
+property, do not pass `Bdd` itself to promise APIs or `await` it; use
+`Bdd.then\`...\`` to define Then steps.
+
 The error classes are also importable from `effect-bdd/Errors`.
+
+## Development Benchmarks
+
+After `pnpm build`, run `pnpm bench` for the fast counter-example smoke profile.
+Full, compiled, and pressure workflows plus interpretation rules are documented in
+[`benchmarks/README.md`](benchmarks/README.md).
 
 ## Non-Goals
 

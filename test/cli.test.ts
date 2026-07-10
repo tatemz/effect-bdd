@@ -694,6 +694,11 @@ Feature: Counter
         assert.match(json, /"summary"/);
         assert.match(json, /"discovery"/);
         assert.match(json, /"status": "passed"/);
+        assert.match(json, /"featureDiscoveryMillis": \d+/);
+        assert.match(json, /"stepModuleLoadMillis": \d+/);
+        assert.match(json, /"taskBuildMillis": \d+/);
+        assert.match(json, /"filteringMillis": \d+/);
+        assert.match(json, /"executionMillis": \d+/);
         assert.match(junit, /<testsuite name="effect-bdd"/);
         assert.match(junit, /<testcase classname="Counter"/);
       }),
@@ -799,6 +804,49 @@ Feature: Counter
           assert.strictEqual(error instanceof CliError.UserError, true);
           if (error instanceof CliError.UserError) {
             assert.match(String(error.cause), /Multiple feature definitions matched/);
+          }
+        }
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("fails when a feature file has duplicate scenario titles", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Duplicate
+    Then the counter is 0
+
+  Scenario: Duplicate
+    Then the counter is 0
+`,
+          steps: counterStepsFor(`
+  Bdd.scenario("Duplicate").pipe(thenCounterIs)
+`),
+        });
+
+        const exit = yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("*.mjs"),
+            "--reporter",
+            "text",
+            "--output-file.text",
+            fixture.path("duplicate-source.txt"),
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+        if (Exit.isFailure(exit)) {
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+          assert.strictEqual(error instanceof CliError.UserError, true);
+          if (error instanceof CliError.UserError) {
+            assert.match(String(error.cause), /Duplicate scenario title in Gherkin feature/);
           }
         }
       }),

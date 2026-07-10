@@ -78,9 +78,9 @@ export const runEffectBddCli = async (
   await fs.rm(outputDir, { recursive: true, force: true });
   return subprocessRun("effect-bdd-cli", suite, phase, iteration, result, {
     summary: report.summary,
-    ...(report.summary.durationMillis === undefined
+    ...(report.summary.phases?.executionMillis === undefined
       ? {}
-      : { executionDurationMillis: report.summary.durationMillis }),
+      : { executionDurationMillis: report.summary.phases.executionMillis }),
     scenarios: report.scenarios.map((scenario) => ({
       feature: scenario.feature,
       scenario: scenario.scenario,
@@ -148,7 +148,6 @@ export const runEffectBddApi = async (
     cwd: benchmarkRoot,
     exitCode: 0,
     wallDurationMillis,
-    executionDurationMillis: wallDurationMillis,
     summary: {
       features: counts.featureCount,
       total: counts.scenarioCount,

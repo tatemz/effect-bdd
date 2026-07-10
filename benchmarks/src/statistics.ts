@@ -1,4 +1,4 @@
-import type { BenchmarkRun, Confidence, DurationStats, RunnerId, RunnerStats } from "./types.ts";
+import type { BenchmarkRun, DurationStats, RunnerId, RunnerStats, Stability } from "./types.ts";
 
 const mean = (values: ReadonlyArray<number>): number =>
   values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -30,7 +30,10 @@ export const round = (value: number, digits = 2): number => {
 export const percentDelta = (baseline: number, actual: number): number =>
   ((actual - baseline) / baseline) * 100;
 
-const durationStats = (durations: ReadonlyArray<number>): DurationStats => {
+export const durationStats = (durations: ReadonlyArray<number>): DurationStats => {
+  if (durations.length === 0) {
+    throw new Error("Cannot summarize an empty duration sample");
+  }
   const average = mean(durations);
   const deviation = standardDeviation(durations);
   return {
@@ -44,17 +47,17 @@ const durationStats = (durations: ReadonlyArray<number>): DurationStats => {
   };
 };
 
-const confidence = (runs: number, wall: DurationStats): Confidence => {
-  if (isLowConfidence(runs, wall)) {
+export const measurementStability = (runs: number, wall: DurationStats): Stability => {
+  if (hasLowStability(runs, wall)) {
     return "low";
   }
-  return isMediumConfidence(runs, wall) ? "medium" : "high";
+  return hasMediumStability(runs, wall) ? "medium" : "high";
 };
 
-const isLowConfidence = (runs: number, wall: DurationStats): boolean =>
+const hasLowStability = (runs: number, wall: DurationStats): boolean =>
   runs < 5 || wall.coefficientOfVariation > 0.2;
 
-const isMediumConfidence = (runs: number, wall: DurationStats): boolean =>
+const hasMediumStability = (runs: number, wall: DurationStats): boolean =>
   runs < 10 || wall.coefficientOfVariation > 0.1;
 
 export const summarizeRunner = (
@@ -67,7 +70,7 @@ export const summarizeRunner = (
   return {
     runner,
     runs: runs.length,
-    confidence: confidence(runs.length, wall),
+    stability: measurementStability(runs.length, wall),
     wall,
     ...optionalExecutionStats(execution),
     wallScenariosPerSecond: scenariosPerSecond(scenarioTotal, wall),

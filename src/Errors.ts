@@ -38,8 +38,8 @@ export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseErro
  * **Details**
  *
  * The `candidates` field contains the registered step expressions considered
- * for the failing source step. When a DataTable or DocString decode fails,
- * `cause` contains the underlying Schema error.
+ * for the failing source step. When a capture, DataTable, or DocString decode
+ * fails, `cause` contains the underlying Schema error.
  *
  * @example
  * ```ts
@@ -50,7 +50,8 @@ export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseErro
  *   scenario: "Increment",
  *   step: "increment",
  *   line: 4,
- *   candidates: ["decrement"]
+ *   candidates: ["decrement"],
+ *   cause: new Error("Expected a number")
  * })
  *
  * console.log(error._tag) // "MatchError"

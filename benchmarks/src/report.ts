@@ -1,9 +1,16 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { percentDelta, round } from "./statistics.ts";
+import { durationStats, percentDelta, round } from "./statistics.ts";
 import { resultsRoot } from "./paths.ts";
-import type { BenchmarkResult, RunnerStats, SuiteResult } from "./types.ts";
+import type {
+  BenchmarkResult,
+  DurationStats,
+  RunPhaseDurations,
+  RunnerStats,
+  SuiteResult,
+} from "./types.ts";
 
 const main = async (): Promise<void> => {
   const { inputFile, markdownFile, htmlFile } = parseCli();
@@ -39,7 +46,7 @@ const parseCli = (): {
 const normalizedArgs = (): ReadonlyArray<string> =>
   process.argv.slice(2).filter((arg) => arg !== "--");
 
-const renderMarkdown = (result: BenchmarkResult): string => {
+export const renderMarkdown = (result: BenchmarkResult): string => {
   const lines = [
     "# effect-bdd vs Cucumber Benchmark",
     "",
@@ -51,7 +58,7 @@ const renderMarkdown = (result: BenchmarkResult): string => {
     "",
     `Git commit: ${result.environment.gitCommit}`,
     "",
-    "Performance data is split into wall time (CLI user experience) and execution time (runner-reported work). The broader value proposition for `effect-bdd` is typed scenario chains and avoiding Cucumber's mutable `World` model.",
+    "CLI wall time is the cross-runner comparison. Runner work is diagnostic only: effect-bdd reports its execution phase, while cucumber-js reports summed step duration. The in-process effect-bdd API is shown separately as a non-CLI baseline.",
     "",
     "## Headline",
     "",
@@ -69,13 +76,13 @@ const renderMarkdownHeadline = (suite: SuiteResult): ReadonlyArray<string> => {
   const cucumber = statsFor(suite, "cucumber-js");
   const delta = percentDelta(cucumber.wall.medianMillis, effect.wall.medianMillis);
   const direction = delta <= 0 ? "faster" : "slower";
-  if (effect.confidence === "low" || cucumber.confidence === "low") {
+  if (effect.stability === "low" || cucumber.stability === "low") {
     return [
-      `- ${suite.name}: low-confidence smoke result. Wall median: \`effect-bdd\` CLI ${formatMillis(effect.wall.medianMillis)} vs cucumber-js ${formatMillis(cucumber.wall.medianMillis)}. Do not publish a speed claim from this run.`,
+      `- ${suite.name}: low-stability smoke result. Wall median: \`effect-bdd\` CLI ${formatMillis(effect.wall.medianMillis)} vs cucumber-js ${formatMillis(cucumber.wall.medianMillis)}. Do not publish a speed claim from this run.`,
     ];
   }
   return [
-    `- ${suite.name}: \`effect-bdd\` CLI wall median ${formatMillis(effect.wall.medianMillis)} vs cucumber-js ${formatMillis(cucumber.wall.medianMillis)} (${round(Math.abs(delta))}% ${direction}, ${effect.confidence} confidence).`,
+    `- ${suite.name}: \`effect-bdd\` CLI wall median ${formatMillis(effect.wall.medianMillis)} vs cucumber-js ${formatMillis(cucumber.wall.medianMillis)} (${round(Math.abs(delta))}% ${direction}, ${effect.stability} measurement stability).`,
   ];
 };
 
@@ -84,37 +91,46 @@ const renderMarkdownSuite = (suite: SuiteResult): ReadonlyArray<string> => [
   "",
   suite.description,
   "",
-  "| Runner | Confidence | Wall median | Wall p95 | Wall CV | Exec median | Wall scenarios/sec | Exec scenarios/sec | Runs |",
-  "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-  ...suite.stats.map(
+  "| CLI runner | Stability | Runner work metric | Wall median | Wall p95 | Wall CV | Work median | Wall scenarios/sec | Work scenarios/sec | Runs |",
+  "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ...cliStats(suite).map(
     (stats) =>
-      `| ${stats.runner} | ${stats.confidence} | ${formatMillis(stats.wall.medianMillis)} | ${formatMillis(stats.wall.p95Millis)} | ${round(stats.wall.coefficientOfVariation, 3)} | ${formatOptionalMillis(stats.execution?.medianMillis)} | ${round(stats.wallScenariosPerSecond)} | ${formatOptionalNumber(stats.executionScenariosPerSecond)} | ${stats.runs} |`,
+      `| ${stats.runner} | ${stats.stability} | ${runnerWorkLabel(stats.runner)} | ${formatMillis(stats.wall.medianMillis)} | ${formatMillis(stats.wall.p95Millis)} | ${round(stats.wall.coefficientOfVariation, 3)} | ${formatOptionalMillis(stats.execution?.medianMillis)} | ${round(stats.wallScenariosPerSecond)} | ${formatOptionalNumber(stats.executionScenariosPerSecond)} | ${stats.runs} |`,
   ),
   "",
+  ...renderMarkdownApiBaseline(suite),
   ...renderMarkdownPhases(suite),
 ];
 
-const renderMarkdownPhases = (suite: SuiteResult): ReadonlyArray<string> => {
-  const phases = suite.runs.find(
-    (run) => run.runner === "effect-bdd-cli" && run.phase === "measured",
-  )?.summary.phases;
-  if (phases === undefined) {
-    return [];
-  }
+const renderMarkdownApiBaseline = (suite: SuiteResult): ReadonlyArray<string> => {
+  const api = statsFor(suite, "effect-bdd-api");
   return [
-    "effect-bdd CLI phase timing from first measured run:",
+    "In-process effect-bdd API baseline (not CLI-comparable):",
     "",
-    `- Feature discovery: ${formatMillis(phases.featureDiscoveryMillis)}`,
-    `- Step module load: ${formatMillis(phases.stepModuleLoadMillis)}`,
-    `- Task build: ${formatMillis(phases.taskBuildMillis)}`,
-    `- Filtering: ${formatMillis(phases.filteringMillis)}`,
-    `- Execution: ${formatMillis(phases.executionMillis)}`,
-    ...optionalPhaseLine("Report emission", phases.reportEmissionMillis),
+    "| Runner | Stability | In-process median | In-process p95 | Scenarios/sec | Runs |",
+    "| --- | --- | ---: | ---: | ---: | ---: |",
+    `| ${api.runner} | ${api.stability} | ${formatMillis(api.wall.medianMillis)} | ${formatMillis(api.wall.p95Millis)} | ${round(api.wallScenariosPerSecond)} | ${api.runs} |`,
     "",
   ];
 };
 
-const renderHtml = (result: BenchmarkResult): string => `<!doctype html>
+const renderMarkdownPhases = (suite: SuiteResult): ReadonlyArray<string> => {
+  const phases = measuredPhaseStats(suite);
+  if (phases.length === 0) {
+    return [];
+  }
+  return [
+    "effect-bdd CLI phase timing across measured runs:",
+    "",
+    ...phases.map(
+      (phase) =>
+        `- ${phase.label}: median ${formatMillis(phase.stats.medianMillis)}, p95 ${formatMillis(phase.stats.p95Millis)}`,
+    ),
+    "",
+  ];
+};
+
+export const renderHtml = (result: BenchmarkResult): string => `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -133,7 +149,7 @@ const renderHtml = (result: BenchmarkResult): string => `<!doctype html>
     <p>Environment: ${escapeHtml(`${result.environment.node}, ${result.environment.platform}/${result.environment.arch}, ${result.environment.cpuCount} x ${result.environment.cpuModel}`)}</p>
     <p>Config: ${result.config.warmups} warmup run(s), ${result.config.iterations} measured run(s), parallel=${result.config.parallel}, profile=${escapeHtml(result.config.profile)}</p>
     <p>Git commit: ${escapeHtml(result.environment.gitCommit)}</p>
-    <p class="note">Performance data is split into wall time (CLI user experience) and execution time (runner-reported work). The broader value proposition for <code>effect-bdd</code> is typed scenario chains and avoiding Cucumber's mutable <code>World</code> model.</p>
+    <p class="note">CLI wall time is the cross-runner comparison. Runner work is diagnostic only: effect-bdd reports its execution phase, while cucumber-js reports summed step duration. The in-process effect-bdd API is shown separately as a non-CLI baseline.</p>
 ${result.suites.map(renderHtmlSuite).join("\n")}
   </body>
 </html>
@@ -143,17 +159,19 @@ const renderHtmlSuite = (suite: SuiteResult): string => `    <h2>${escapeHtml(su
     <p>${escapeHtml(suite.description)}</p>
     <table>
       <thead>
-        <tr><th>Runner</th><th>Confidence</th><th>Wall median</th><th>Wall p95</th><th>Wall CV</th><th>Exec median</th><th>Wall scenarios/sec</th><th>Exec scenarios/sec</th><th>Runs</th></tr>
+        <tr><th>CLI runner</th><th>Stability</th><th>Runner work metric</th><th>Wall median</th><th>Wall p95</th><th>Wall CV</th><th>Work median</th><th>Wall scenarios/sec</th><th>Work scenarios/sec</th><th>Runs</th></tr>
       </thead>
       <tbody>
-${suite.stats.map(renderHtmlStats).join("\n")}
+${cliStats(suite).map(renderHtmlStats).join("\n")}
       </tbody>
     </table>
+${renderHtmlApiBaseline(suite)}
 ${renderHtmlPhases(suite)}`;
 
 const renderHtmlStats = (stats: RunnerStats): string => `        <tr>
           <td>${escapeHtml(stats.runner)}</td>
-          <td>${stats.confidence}</td>
+          <td>${stats.stability}</td>
+          <td>${escapeHtml(runnerWorkLabel(stats.runner))}</td>
           <td>${formatMillis(stats.wall.medianMillis)}</td>
           <td>${formatMillis(stats.wall.p95Millis)}</td>
           <td>${round(stats.wall.coefficientOfVariation, 3)}</td>
@@ -163,20 +181,79 @@ const renderHtmlStats = (stats: RunnerStats): string => `        <tr>
           <td>${stats.runs}</td>
         </tr>`;
 
+const renderHtmlApiBaseline = (suite: SuiteResult): string => {
+  const api = statsFor(suite, "effect-bdd-api");
+  return `    <h3>In-process effect-bdd API baseline</h3>
+    <p class="note">This baseline avoids subprocess startup, CLI discovery, and reporter work. It is not directly comparable to either CLI runner.</p>
+    <table>
+      <thead>
+        <tr><th>Runner</th><th>Stability</th><th>In-process median</th><th>In-process p95</th><th>Scenarios/sec</th><th>Runs</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>${escapeHtml(api.runner)}</td><td>${api.stability}</td><td>${formatMillis(api.wall.medianMillis)}</td><td>${formatMillis(api.wall.p95Millis)}</td><td>${round(api.wallScenariosPerSecond)}</td><td>${api.runs}</td></tr>
+      </tbody>
+    </table>`;
+};
+
 const renderHtmlPhases = (suite: SuiteResult): string => {
-  const phases = suite.runs.find(
-    (run) => run.runner === "effect-bdd-cli" && run.phase === "measured",
-  )?.summary.phases;
-  if (phases === undefined) {
+  const phases = measuredPhaseStats(suite);
+  if (phases.length === 0) {
     return "";
   }
-  return `    <p>effect-bdd CLI phase timing from first measured run: feature discovery ${formatMillis(
-    phases.featureDiscoveryMillis,
-  )}, step module load ${formatMillis(phases.stepModuleLoadMillis)}, task build ${formatMillis(
-    phases.taskBuildMillis,
-  )}, filtering ${formatMillis(phases.filteringMillis)}, execution ${formatMillis(
-    phases.executionMillis,
-  )}${optionalHtmlPhase(", report emission", phases.reportEmissionMillis)}.</p>`;
+  return `    <p>effect-bdd CLI phase timing across measured runs: ${phases
+    .map(
+      (phase) =>
+        `${escapeHtml(phase.label)} median ${formatMillis(phase.stats.medianMillis)}, p95 ${formatMillis(phase.stats.p95Millis)}`,
+    )
+    .join("; ")}.</p>`;
+};
+
+const cliStats = (suite: SuiteResult): ReadonlyArray<RunnerStats> =>
+  suite.stats.filter((stats) => stats.runner !== "effect-bdd-api");
+
+const runnerWorkLabel = (runner: RunnerStats["runner"]): string => {
+  switch (runner) {
+    case "effect-bdd-cli": {
+      return "execution phase";
+    }
+    case "cucumber-js": {
+      return "summed step duration";
+    }
+    case "effect-bdd-api": {
+      return "not reported";
+    }
+  }
+};
+
+const phaseDefinitions: ReadonlyArray<{
+  readonly key: keyof RunPhaseDurations;
+  readonly label: string;
+}> = [
+  { key: "featureDiscoveryMillis", label: "Feature discovery" },
+  { key: "stepModuleLoadMillis", label: "Step module load" },
+  { key: "taskBuildMillis", label: "Task build" },
+  { key: "filteringMillis", label: "Filtering" },
+  { key: "executionMillis", label: "Execution" },
+];
+
+const measuredPhaseStats = (
+  suite: SuiteResult,
+): ReadonlyArray<{ readonly label: string; readonly stats: DurationStats }> => {
+  const samples = suite.runs.flatMap((run) =>
+    run.runner === "effect-bdd-cli" && run.phase === "measured" && run.summary.phases !== undefined
+      ? [run.summary.phases]
+      : [],
+  );
+  if (samples.length === 0) {
+    return [];
+  }
+  return phaseDefinitions.flatMap(({ key, label }) => {
+    const values = samples.flatMap((sample) => {
+      const value = sample[key];
+      return value === undefined ? [] : [value];
+    });
+    return values.length === 0 ? [] : [{ label, stats: durationStats(values) }];
+  });
 };
 
 const statsFor = (suite: SuiteResult, runner: RunnerStats["runner"]): RunnerStats => {
@@ -194,12 +271,6 @@ const formatOptionalMillis = (value: number | undefined): string =>
 
 const formatOptionalNumber = (value: number | undefined): string =>
   value === undefined ? "n/a" : String(round(value));
-
-const optionalPhaseLine = (label: string, value: number | undefined): ReadonlyArray<string> =>
-  value === undefined ? [] : [`- ${label}: ${formatMillis(value)}`];
-
-const optionalHtmlPhase = (label: string, value: number | undefined): string =>
-  value === undefined ? "" : `${label} ${formatMillis(value)}`;
 
 const escapeHtml = (text: string): string =>
   text
@@ -225,4 +296,9 @@ const hasBenchmarkMetadata = (value: Record<string, unknown>): boolean =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-await main();
+const isMainModule =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMainModule) {
+  await main();
+}

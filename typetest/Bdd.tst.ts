@@ -44,6 +44,23 @@ describe("Bdd", () => {
     expect(Bdd.isFeature).type.toBeCallableWith({});
   });
 
+  test("isScenario and isStep narrow unknown values", () => {
+    const scenarioValue: unknown = Bdd.scenario("Counter");
+    const stepValue: unknown = Bdd.then`the counter is stable`(() => Effect.succeed(1));
+
+    if (Bdd.isScenario(scenarioValue)) {
+      expect(scenarioValue).type.toBe<Bdd.Scenario<unknown, unknown, unknown>>();
+    }
+    if (Bdd.isStep(stepValue)) {
+      expect(stepValue).type.toBe<
+        Bdd.Step<"Step" | "Given" | "When" | "Then", any, any, any, any, any, any>
+      >();
+    }
+
+    expect(Bdd.isScenario).type.toBeCallableWith({});
+    expect(Bdd.isStep).type.toBeCallableWith({});
+  });
+
   test("feature definitions carry the Feature brand", () => {
     const feature = Bdd.feature("Counter");
 
@@ -54,6 +71,16 @@ describe("Bdd", () => {
       readonly title: string;
       readonly scenarios: ReadonlyArray<never>;
     }>().type.not.toBeAssignableTo<Bdd.Feature>();
+    expect<{
+      readonly title: string;
+      readonly steps: ReadonlyArray<never>;
+      readonly providers: ReadonlyArray<never>;
+    }>().type.not.toBeAssignableTo<Bdd.Scenario>();
+    expect<{
+      readonly kind: "Then";
+      readonly expression: unknown;
+      readonly run: unknown;
+    }>().type.not.toBeAssignableTo<Bdd.Step<"Then", unknown, unknown>>();
   });
 
   test("scenario chains evolve state through pipe", () => {
@@ -240,5 +267,44 @@ describe("Bdd", () => {
       (_items: ReadonlyArray<{ readonly sku: string; readonly qty: string }>, state: number) =>
         Effect.succeed(state),
     );
+  });
+
+  test("then preserves step overload parity", () => {
+    const qty = Bdd.capture("qty", Schema.NumberFromString);
+    const Payload = Schema.Struct({
+      sku: Schema.String,
+    });
+    const Item = Schema.Struct({
+      sku: Schema.String,
+      qty: Schema.NumberFromString,
+    });
+
+    const captured = Bdd.then`${qty} item is present`(
+      (captures: { readonly qty: number }, state: number) => {
+        expect(captures.qty).type.toBe<number>();
+        expect(state).type.toBe<number>();
+        return Effect.succeed(state);
+      },
+    );
+    const table = Bdd.then`the following items are present:`(
+      Bdd.table(Item),
+      (items: ReadonlyArray<{ readonly sku: string; readonly qty: number }>, state: number) => {
+        expect(items).type.toBe<ReadonlyArray<{ readonly sku: string; readonly qty: number }>>();
+        expect(state).type.toBe<number>();
+        return Effect.succeed(state);
+      },
+    );
+    const docString = Bdd.then`the response body is:`(
+      Bdd.docString(Schema.fromJsonString(Payload)),
+      (payload: { readonly sku: string }, state: number) => {
+        expect(payload).type.toBe<{ readonly sku: string }>();
+        expect(state).type.toBe<number>();
+        return Effect.succeed(state);
+      },
+    );
+
+    expect(captured.kind).type.toBe<"Then">();
+    expect(table.kind).type.toBe<"Then">();
+    expect(docString.kind).type.toBe<"Then">();
   });
 });
