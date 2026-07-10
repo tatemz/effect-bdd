@@ -80,6 +80,13 @@ describe("public API", () => {
       );
     });
 
+    it("rejects invalid step implementations at definition time", () => {
+      assert.throws(
+        () => Reflect.apply(Bdd.when`has no implementation`, undefined, [null]),
+        /Expected a step implementation function/,
+      );
+    });
+
     it("rejects accidental thenable assimilation with a clear error", async () => {
       let error: unknown;
       try {

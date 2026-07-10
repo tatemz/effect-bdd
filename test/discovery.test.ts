@@ -8,6 +8,34 @@ const parseFeature = (source: string) =>
   Parser.parse(source, "test.feature").pipe(Effect.provide(Bdd.layerCucumber));
 
 describe("discovery", () => {
+  it.effect("reports feature title mismatches before task discovery", () =>
+    Effect.gen(function* () {
+      const feature = Bdd.feature("Counter definition").pipe(
+        Bdd.scenario("Starts clean").pipe(Bdd.given`zero`(() => Effect.void)),
+      );
+      const parsed = yield* parseFeature(`
+Feature: Counter source
+
+  Scenario: Starts clean
+    Given zero
+`);
+
+      const result = Discovery.buildScenarioTasks(feature, parsed);
+
+      assert.deepStrictEqual(result, {
+        tasks: [],
+        issues: [
+          {
+            _tag: "FeatureTitleMismatch",
+            definitionTitle: "Counter definition",
+            featureTitle: "Counter source",
+            line: 2,
+          },
+        ],
+      });
+    }),
+  );
+
   it.effect("builds shared scenario task metadata", () =>
     Effect.gen(function* () {
       const feature = Bdd.feature("Shopping cart").pipe(
@@ -74,6 +102,40 @@ Feature: Counter
     }),
   );
 
+  it.effect("orders source issues before unused definitions", () =>
+    Effect.gen(function* () {
+      const feature = Bdd.feature("Counter").pipe(
+        Bdd.scenario("Starts clean").pipe(Bdd.given`zero`(() => Effect.void)),
+        Bdd.scenario("Unused chain").pipe(Bdd.when`unused`(() => Effect.void)),
+      );
+      const parsed = yield* parseFeature(`
+Feature: Counter
+
+  Scenario: Starts clean
+    Given zero
+
+  Scenario: Increments
+    When increment
+`);
+
+      const result = Discovery.buildScenarioTasks(feature, parsed);
+
+      assert.deepStrictEqual(result.issues, [
+        {
+          _tag: "UnmatchedScenario",
+          scenarioTitle: "Increments",
+          scenarioLine: 7,
+          candidates: ["Starts clean", "Unused chain"],
+        },
+        {
+          _tag: "UnusedScenarioDefinition",
+          scenarioTitle: "Unused chain",
+          candidates: ["Starts clean", "Increments"],
+        },
+      ]);
+    }),
+  );
+
   it.effect("reports unused scenario chains", () =>
     Effect.gen(function* () {
       const feature = Bdd.feature("Counter").pipe(
@@ -123,10 +185,11 @@ Feature: Counter
     }),
   );
 
-  it.effect("reports duplicate Gherkin scenario titles", () =>
+  it.effect("reports duplicate Gherkin titles before unused definitions", () =>
     Effect.gen(function* () {
       const feature = Bdd.feature("Counter").pipe(
         Bdd.scenario("Duplicate").pipe(Bdd.given`zero`(() => Effect.void)),
+        Bdd.scenario("Unused chain").pipe(Bdd.when`unused`(() => Effect.void)),
       );
       const parsed = yield* parseFeature(`
 Feature: Counter
@@ -145,6 +208,11 @@ Feature: Counter
           _tag: "DuplicateSourceScenario",
           scenarioTitle: "Duplicate",
           scenarioLine: 7,
+        },
+        {
+          _tag: "UnusedScenarioDefinition",
+          scenarioTitle: "Unused chain",
+          candidates: ["Duplicate", "Duplicate"],
         },
       ]);
     }),

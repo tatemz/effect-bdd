@@ -251,6 +251,9 @@ export interface Feature<E = never, R = never> extends Pipeable {
 /**
  * Checks whether a value is a {@link Feature} definition.
  *
+ * This is a strict structural guard: it validates the complete nested scenario
+ * and step tree in addition to the feature's symbol brand.
+ *
  * @category guards
  * @since 0.2.0
  */
@@ -559,6 +562,10 @@ const provide_: Provide = Fn.dual(
 
 /**
  * Runs Gherkin source against a feature definition.
+ *
+ * When discovery finds multiple issues, the first issue in deterministic source
+ * order is returned as a {@link MatchError}. Use the CLI to collect all
+ * non-fatal discovery diagnostics in one run.
  *
  * @category execution
  * @since 0.1.0

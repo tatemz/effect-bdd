@@ -10,6 +10,7 @@ running the steps.
 ## Contents
 
 - [Install](#install)
+- [Upgrading to 0.6.0](#upgrading-to-060)
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
 - [CLI Workflows](#cli-workflows)
@@ -27,6 +28,20 @@ train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform pack
 pnpm add effect-bdd effect@4.0.0-beta.90
 pnpm add -D tsx
 ```
+
+## Upgrading to 0.6.0
+
+Version 0.6.0 tightens runtime boundaries before the public API stabilizes:
+
+- Every step implementation receives the current scenario state as its final
+  argument. This no longer depends on `Function.length`, so default and rest
+  parameters behave consistently. Existing handlers that ignore state continue
+  to ignore the extra JavaScript argument.
+- Passing a non-function step implementation now throws a `TypeError` when the
+  step is defined instead of producing a failing Effect when the scenario runs.
+- `Bdd.isFeature`, `Bdd.isScenario`, and `Bdd.isStep` are strict structural
+  guards backed by symbol brands. Spreading a model into a plain object does not
+  preserve its identity.
 
 ## Quick Start
 

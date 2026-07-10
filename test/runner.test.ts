@@ -201,7 +201,7 @@ Feature: Counter source
     ),
   );
 
-  it.effect("fails when a source scenario has no chain", () =>
+  it.effect("fails on the first source issue before later unused definitions", () =>
     assertMatchError(
       runBdd(
         Bdd.feature("Shopping cart").pipe(

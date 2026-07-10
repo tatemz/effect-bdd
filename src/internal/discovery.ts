@@ -7,6 +7,7 @@ import type * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Record from "effect/Record";
 import * as Result from "effect/Result";
+import type { MatchResult } from "./expression.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -17,22 +18,6 @@ interface Expression<A> {
   readonly match: (text: string) => Option.Option<A>;
   readonly matchDetailed?: (text: string) => MatchResult<A>;
 }
-
-/** @internal */
-export type MatchResult<A> =
-  | {
-      readonly _tag: "Matched";
-      readonly value: A;
-    }
-  | {
-      readonly _tag: "TextMismatch";
-    }
-  | {
-      readonly _tag: "DecodeMismatch";
-      readonly capture: string;
-      readonly raw: string;
-      readonly cause: unknown;
-    };
 
 /** @internal */
 export interface DataTableInput {
@@ -150,7 +135,14 @@ export interface DiscoveryResult<E, R> {
   readonly issues: ReadonlyArray<DiscoveryIssue>;
 }
 
-/** @internal */
+/**
+ * Builds scenario tasks and collects discovery issues in deterministic order:
+ * source-scenario issues first, in source order, then unused definitions in
+ * feature-definition order. Structural feature and duplicate-definition issues
+ * short-circuit because no valid task set can be built.
+ *
+ * @internal
+ */
 export const buildScenarioTasks = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
@@ -225,6 +217,7 @@ export const buildScenarioTasks = <E, R>(
   const tasks = Arr.filterMap(built, (entry) =>
     "_tag" in entry ? Result.fail(undefined) : Result.succeed(entry),
   );
+  // A definition is used only when discovery successfully builds at least one task for it.
   const usedScenarioTitles = Arr.map(tasks, (task) => task.sourceScenarioTitle);
   const unused = Fn.pipe(
     featureDefinition.scenarios,

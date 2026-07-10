@@ -20,7 +20,8 @@ export interface Matcher<_A> {
   readonly matchDetailed: (text: string) => MatchResult<unknown>;
 }
 
-type MatchResult<A> =
+/** @internal */
+export type MatchResult<A> =
   | {
       readonly _tag: "Matched";
       readonly value: A;

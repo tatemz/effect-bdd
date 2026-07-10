@@ -20,6 +20,7 @@ import {
   StepTimeoutError,
 } from "../Errors.ts";
 import * as Discovery from "./discovery.ts";
+import type * as Expression from "./expression.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -372,7 +373,7 @@ const verifyStep = (
 
 const verifyStepMatchResult = (
   task: ScenarioTask<unknown, unknown>,
-  result: Discovery.MatchResult<unknown>,
+  result: Expression.MatchResult<unknown>,
   expressionSource: string,
   step: PickleStep,
   index: number,
