@@ -11,6 +11,26 @@ Before writing a custom Gherkin parser, improve the parts of the CLI that happen
 
 These are better first targets because the benchmark already shows they are visible costs, and they are under `effect-bdd`'s control. Cucumber pickle parsing may still matter later, but it should not be the first thing we attack.
 
+## Implementation Status
+
+Completed in the initial ingestion pass:
+
+- `src/internal/discovery.ts` is the single task-building implementation used by
+  both the programmatic runner and CLI adapter.
+- Pickle source metadata is resolved once, scenario and duplicate lookups use
+  per-run null-prototype indexes, and task/issue collection is single-pass.
+- Feature definitions are indexed once by the CLI.
+- Generated benchmark suites remove stale files before regeneration.
+- The benchmark receives exact main-report emission duration through a small
+  timing sidecar. The main JSON report is emitted once.
+
+Still future work:
+
+- Module-loading subphase instrumentation or a manifest.
+- Per-reporter timing; only aggregate main-report emission is currently measured.
+- Task-building subphase timing beyond the aggregate phase.
+- Reporter streaming or allocation changes, if pressure data justifies them.
+
 ## Plain-English Model
 
 The CLI does this:
@@ -93,10 +113,10 @@ Do not replace globbing with a dependency unless the local resolver becomes a ma
 
 Entry points:
 
-- `buildScenarioTasks()` in `src/internal/cli/runner.ts`
+- `buildScenarioTasks()` in `src/internal/discovery.ts`
+- CLI adapter in `src/internal/cli/runner.ts`
+- programmatic adapter in `src/internal/runner.ts`
 - `featureDefinitionIndex()` in `src/internal/cli/runner.ts`
-- `duplicateSourceScenarioTitle()` in `src/internal/cli/runner.ts`
-- `firstDuplicateSourceScenarioTitle()` in `src/internal/runner.ts`
 
 What it does:
 
@@ -106,12 +126,16 @@ Why it matters:
 
 When a feature has many scenarios, task building becomes visible. This is not parsing and not execution. It is the glue layer where `effect-bdd` proves the source file and typed scenario definitions agree.
 
-What to improve:
+Completed:
 
 - Keep feature definitions indexed by title.
 - Add a scenario-definition index per feature title.
 - Avoid recomputing source scenario lookups when building tasks.
 - Make duplicate detection set-based everywhere.
+- Collect tasks, source diagnostics, and used titles in one pass.
+
+Future measurement:
+
 - Track task-build timing by subphase:
   - feature definition lookup
   - scenario definition indexing
@@ -140,11 +164,17 @@ Writes text, JSON, HTML, or JUnit output after the runner finishes.
 
 Why it matters:
 
-Reporting is currently mostly outside phase timing. That means we can see total wall time but not cleanly separate runner time from report emission time.
+The benchmark now receives aggregate main-report emission time through a
+benchmark-only sidecar, so the main JSON report does not need to be rewritten.
+Per-reporter breakdown remains future work.
 
-What to improve:
+Completed:
 
 - Add report emission timing to CLI phase data.
+- Avoid rewriting the JSON report to transport that timing.
+
+Future work:
+
 - Measure each reporter separately.
 - Keep JSON report generation allocation-conscious for large suites.
 - Avoid building large intermediate strings multiple times.
@@ -156,7 +186,7 @@ Do not optimize report formatting blindly. First expose its cost.
 
 ## Recommended Order
 
-### Phase 1: Make Timing More Honest
+### Phase 1: Make Timing More Honest (Completed)
 
 Add timing around report emission.
 
@@ -168,14 +198,17 @@ Current phase timing covers:
 - filtering
 - execution
 
-Add:
+Added:
 
-- reporter emission total
+- main reporter emission total through a benchmark timing sidecar
+
+Still future:
+
 - per-reporter emission time
 
 Acceptance criteria:
 
-- JSON report includes reporter timings.
+- Benchmark results include main-report timing without rewriting the JSON report.
 - Markdown/HTML benchmark report displays reporter timing when present.
 - Existing tests still pass.
 
@@ -196,16 +229,21 @@ Acceptance criteria:
 - Duplicate glob matches do not cause duplicate reads.
 - Discovery phase is stable or lower on generated discovery suites.
 
-## Phase 3: Improve Task Building
+## Phase 3: Improve Task Building (Completed)
 
 Reduce repeated lookup work while keeping diagnostics strict.
 
-Work items:
+Completed:
 
 - Build scenario definition maps once per matched feature definition.
 - Avoid repeated `Parser.findScenario(...)` work when checking duplicates and creating tasks.
-- Add task-build subphase timing.
 - Add tests for duplicate source scenarios and duplicate scenario definitions.
+- Add scale tests for large outlines and unused definitions.
+- Keep API and CLI behavior on the same discovery implementation.
+
+Still future:
+
+- Add task-build subphase timing.
 
 Acceptance criteria:
 

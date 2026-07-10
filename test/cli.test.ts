@@ -705,6 +705,55 @@ Feature: Counter
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("transports report timing without rewriting the main JSON report", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Starts clean
+    Then the counter is 0
+`,
+          steps: counterStepsFor(`
+  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+`),
+        });
+        const path = yield* Path.Path;
+        const bddRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+        const jsonReport = fixture.path("single-write.json");
+        const timingSidecar = fixture.path("timing.txt");
+
+        yield* Effect.promise(() =>
+          execFilePromise(
+            process.execPath,
+            [
+              path.join(bddRoot, "src", "bin.ts"),
+              "--features",
+              fixture.path("*.feature"),
+              "--steps",
+              fixture.path("*.mjs"),
+              "--reporter",
+              "json",
+              "--output-file.json",
+              jsonReport,
+              "--benchmark-timing-file",
+              timingSidecar,
+            ],
+            { cwd: bddRoot },
+          ),
+        );
+
+        const fs = yield* FileSystem.FileSystem;
+        const json = yield* fs.readFileString(jsonReport);
+        const timing = yield* fs.readFileString(timingSidecar);
+
+        assert.strictEqual(/reportEmissionMillis/.test(json), false);
+        assert.match(timing, /^\d+\n$/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("releases scoped step resources before the CLI returns from a failing scenario", () =>
     Effect.scoped(
       Effect.gen(function* () {

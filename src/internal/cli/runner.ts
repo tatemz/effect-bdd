@@ -3,9 +3,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
-import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
-import * as Record from "effect/Record";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
 import type * as Bdd from "../../Bdd.ts";
@@ -38,7 +36,11 @@ interface BuiltScenarios {
 }
 
 interface FeatureDefinitionIndex {
-  readonly byTitle: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>>;
+  readonly byTitle: FeatureDefinitionTitleIndex;
+}
+
+interface FeatureDefinitionTitleIndex {
+  [title: string]: ReadonlyArray<Bdd.Feature<unknown, never>> | undefined;
 }
 
 interface RunEvents {
@@ -116,12 +118,10 @@ const buildScenarioTasks: (
   source: FeatureSource,
   definitions: FeatureDefinitionIndex,
 ) => Effect.Effect<BuiltScenarios, DiscoveryError | ParseError, Parser.GherkinCompiler> =
+  // oxlint-disable-next-line complexity
   Effect.fnUntraced(function* (source: FeatureSource, definitions: FeatureDefinitionIndex) {
     const parsed = yield* Parser.parse(source.source, source.path);
-    const matches = Fn.pipe(
-      Record.get(definitions.byTitle, parsed.name),
-      Option.getOrElse((): ReadonlyArray<Bdd.Feature<unknown, never>> => []),
-    );
+    const matches = definitions.byTitle[parsed.name] ?? [];
     if (matches.length > 1) {
       return yield* Effect.fail(
         new DiscoveryError({
@@ -185,25 +185,17 @@ const buildScenarioTasks: (
 
 const featureDefinitionIndex = (
   definitions: ReadonlyArray<Bdd.Feature<unknown, never>>,
-): FeatureDefinitionIndex => {
-  const emptyIndex: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>> = {};
-  const byTitle = Arr.reduce(definitions, emptyIndex, (index, definition) =>
-    Record.set(index, definition.title, appendDefinition(index, definition)),
-  );
-  return { byTitle };
-};
+): FeatureDefinitionIndex => ({
+  byTitle: Arr.reduce(definitions, emptyFeatureDefinitionTitleIndex(), (index, definition) => {
+    const existing = index[definition.title];
+    index[definition.title] =
+      existing === undefined ? [definition] : Fn.pipe(existing, Arr.append(definition));
+    return index;
+  }),
+});
 
-const appendDefinition = (
-  index: Record.ReadonlyRecord<string, ReadonlyArray<Bdd.Feature<unknown, never>>>,
-  definition: Bdd.Feature<unknown, never>,
-): ReadonlyArray<Bdd.Feature<unknown, never>> =>
-  Fn.pipe(
-    Record.get(index, definition.title),
-    Option.match({
-      onNone: () => [definition],
-      onSome: Arr.append(definition),
-    }),
-  );
+// This mutable index is scoped to one CLI run and is not shared across fibers.
+const emptyFeatureDefinitionTitleIndex = (): FeatureDefinitionTitleIndex => Object.create(null);
 
 const isFatalDiscoveryIssue = (issue: Discovery.DiscoveryIssue): boolean =>
   issue._tag === "FeatureTitleMismatch" ||

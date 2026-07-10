@@ -50,6 +50,8 @@ Results live under `benchmarks/results/`; both locations are gitignored.
   runner is faster.
 - Phase tables aggregate all measured effect-bdd CLI runs and show median and
   p95 values.
+- Report-emission duration is transported through a benchmark-only timing
+  sidecar. The benchmark's main JSON report is written exactly once.
 
 Some checked-in suites intentionally exercise realistic, framework-specific
 code. Generated no-op suites are better for isolating framework overhead. Do not

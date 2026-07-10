@@ -63,6 +63,7 @@ const effectRun = (
       taskBuildMillis: 10,
       filteringMillis: 1,
       executionMillis,
+      reportEmissionMillis: iteration === 1 ? 5 : 7,
     },
   },
   scenarios: [],
@@ -126,6 +127,7 @@ describe("benchmark reports", () => {
 
     assert.match(markdown, /Feature discovery: median 20ms, p95 30ms/);
     assert.match(markdown, /Execution: median 40ms, p95 50ms/);
+    assert.match(markdown, /Report emission: median 6ms, p95 7ms/);
     assert.strictEqual(/first measured run/.test(markdown), false);
     assert.match(html, /Feature discovery median 20ms, p95 30ms/);
   });

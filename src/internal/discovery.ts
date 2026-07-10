@@ -5,8 +5,6 @@ import type * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Record from "effect/Record";
-import * as Result from "effect/Result";
 import type { MatchResult } from "./expression.ts";
 import * as Parser from "./parser.ts";
 
@@ -143,6 +141,7 @@ export interface DiscoveryResult<E, R> {
  *
  * @internal
  */
+// oxlint-disable-next-line complexity
 export const buildScenarioTasks = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
@@ -161,88 +160,162 @@ export const buildScenarioTasks = <E, R>(
     };
   }
 
-  const duplicateScenario = firstDuplicateTitle(
-    Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
-  );
-  if (Option.isSome(duplicateScenario)) {
+  const definitions = indexScenarioDefinitions(featureDefinition.scenarios);
+  if (definitions.duplicateTitle !== undefined) {
     return {
       tasks: [],
       issues: [
         {
           _tag: "DuplicateScenarioDefinition",
-          scenarioTitle: duplicateScenario.value,
+          scenarioTitle: definitions.duplicateTitle,
         },
       ],
     };
   }
 
-  const scenarioDefinitions = scenarioDefinitionMap(featureDefinition);
   const resolved = Arr.map(feature.pickles, resolvePickle(feature));
-  const built = Arr.map(resolved, (entry): ScenarioTask<E, R> | DiscoveryIssue => {
-    if (duplicateSourceScenario(resolved, entry)) {
-      return {
-        _tag: "DuplicateSourceScenario",
-        scenarioTitle: entry.scenarioTitle,
-        scenarioLine: entry.scenarioLine,
-      };
-    }
-    const scenarioDefinition = Record.get(scenarioDefinitions, entry.scenarioTitle);
-    if (Option.isNone(scenarioDefinition)) {
-      return {
-        _tag: "UnmatchedScenario",
-        scenarioTitle: entry.scenarioTitle,
-        scenarioLine: entry.scenarioLine,
-        candidates: Arr.map(featureDefinition.scenarios, (scenario) => scenario.title),
-      };
-    }
-    return {
+  const definitionCandidates = Arr.map(featureDefinition.scenarios, (scenario) => scenario.title);
+  const sourceCandidates = Arr.map(resolved, (entry) => entry.scenarioTitle);
+  const collection = Arr.reduce(resolved, emptyDiscoveryCollection<E, R>(), (state, entry) =>
+    appendResolvedPickle(
+      state,
+      entry,
       featureDefinition,
-      scenarioDefinition: scenarioDefinition.value,
-      featureTitle: feature.name,
-      scenarioTitle: entry.pickle.name,
-      sourceScenarioTitle: entry.scenarioTitle,
-      scenarioIndex: entry.scenarioIndex,
-      scenarioLine: entry.scenarioLine,
-      ...(entry.rule === undefined
-        ? {}
-        : {
-            ruleTitle: entry.rule.name,
-            ruleLine: entry.rule.location.line,
-          }),
-      tags: Arr.map(entry.pickle.tags, (tag) => tag.name),
-      pickle: entry.pickle,
-      source: feature.source,
-    };
-  });
-  const tasks = Arr.filterMap(built, (entry) =>
-    "_tag" in entry ? Result.fail(undefined) : Result.succeed(entry),
-  );
-  // A definition is used only when discovery successfully builds at least one task for it.
-  const usedScenarioTitles = Arr.map(tasks, (task) => task.sourceScenarioTitle);
-  const unused = Fn.pipe(
-    featureDefinition.scenarios,
-    Arr.filter((scenario) => !Arr.contains(scenario.title)(usedScenarioTitles)),
-    Arr.map(
-      (scenario): DiscoveryIssue => ({
-        _tag: "UnusedScenarioDefinition",
-        scenarioTitle: scenario.title,
-        candidates: Arr.map(resolved, (entry) => entry.scenarioTitle),
-      }),
+      feature,
+      definitions.byTitle,
+      definitionCandidates,
     ),
   );
-  const issues = Fn.pipe(
-    built,
-    Arr.filterMap((entry) => ("_tag" in entry ? Result.succeed(entry) : Result.fail(undefined))),
-    Arr.appendAll(unused),
-  );
-  return { tasks, issues };
+  Arr.forEach(featureDefinition.scenarios, (scenario) => {
+    if (!hasTitle(collection.usedScenarioTitles, scenario.title)) {
+      collection.issues[collection.issues.length] = {
+        _tag: "UnusedScenarioDefinition",
+        scenarioTitle: scenario.title,
+        candidates: sourceCandidates,
+      };
+    }
+  });
+  return { tasks: collection.tasks, issues: collection.issues };
 };
 
-const firstDuplicateTitle = (titles: ReadonlyArray<string>): Option.Option<string> =>
-  Fn.pipe(
-    titles,
-    Arr.findFirst((title, index) => Arr.contains(title)(Arr.take(titles, index))),
+interface ScenarioDefinitionIndex<R> {
+  [title: string]: ScenarioDefinition<R> | undefined;
+}
+
+interface IndexedScenarioDefinitions<R> {
+  readonly byTitle: ScenarioDefinitionIndex<R>;
+  readonly duplicateTitle: string | undefined;
+}
+
+const indexScenarioDefinitions = <R>(
+  scenarios: ReadonlyArray<ScenarioDefinition<R>>,
+): IndexedScenarioDefinitions<R> => {
+  const initial: IndexedScenarioDefinitions<R> = {
+    byTitle: emptyScenarioDefinitionIndex<R>(),
+    duplicateTitle: undefined,
+  };
+  return Arr.reduce(scenarios, initial, (state, scenario) => {
+    if (state.byTitle[scenario.title] !== undefined) {
+      return state.duplicateTitle === undefined
+        ? { ...state, duplicateTitle: scenario.title }
+        : state;
+    }
+    state.byTitle[scenario.title] = scenario;
+    return state;
+  });
+};
+
+const emptyScenarioDefinitionIndex = <R>(): ScenarioDefinitionIndex<R> => Object.create(null);
+
+interface SourceScenarioIndex {
+  [scenarioTitle: string]: string | undefined;
+}
+
+interface TitleIndex {
+  [title: string]: true | undefined;
+}
+
+interface DiscoveryCollection<E, R> {
+  readonly tasks: Array<ScenarioTask<E, R>>;
+  readonly issues: Array<DiscoveryIssue>;
+  readonly sourceScenarioIds: SourceScenarioIndex;
+  readonly usedScenarioTitles: TitleIndex;
+}
+
+// These mutable indexes are allocated per discovery call and never escape the returned result.
+const emptyDiscoveryCollection = <E, R>(): DiscoveryCollection<E, R> => ({
+  tasks: [],
+  issues: [],
+  sourceScenarioIds: Object.create(null),
+  usedScenarioTitles: Object.create(null),
+});
+
+const appendResolvedPickle = <E, R>(
+  collection: DiscoveryCollection<E, R>,
+  entry: ResolvedPickle,
+  featureDefinition: FeatureDefinition<E, R>,
+  feature: Parser.CompiledFeature,
+  scenarioDefinitions: ScenarioDefinitionIndex<R>,
+  definitionCandidates: ReadonlyArray<string>,
+): DiscoveryCollection<E, R> => {
+  const previousSourceId = collection.sourceScenarioIds[entry.scenarioTitle];
+  if (previousSourceId === undefined) {
+    collection.sourceScenarioIds[entry.scenarioTitle] = entry.sourceScenarioId;
+  } else if (previousSourceId !== entry.sourceScenarioId) {
+    collection.issues[collection.issues.length] = {
+      _tag: "DuplicateSourceScenario",
+      scenarioTitle: entry.scenarioTitle,
+      scenarioLine: entry.scenarioLine,
+    };
+    return collection;
+  }
+
+  const scenarioDefinition = scenarioDefinitions[entry.scenarioTitle];
+  if (scenarioDefinition === undefined) {
+    collection.issues[collection.issues.length] = {
+      _tag: "UnmatchedScenario",
+      scenarioTitle: entry.scenarioTitle,
+      scenarioLine: entry.scenarioLine,
+      candidates: definitionCandidates,
+    };
+    return collection;
+  }
+
+  collection.tasks[collection.tasks.length] = scenarioTask(
+    entry,
+    featureDefinition,
+    feature,
+    scenarioDefinition,
   );
+  collection.usedScenarioTitles[entry.scenarioTitle] = true;
+  return collection;
+};
+
+const scenarioTask = <E, R>(
+  entry: ResolvedPickle,
+  featureDefinition: FeatureDefinition<E, R>,
+  feature: Parser.CompiledFeature,
+  scenarioDefinition: ScenarioDefinition<R>,
+): ScenarioTask<E, R> => ({
+  featureDefinition,
+  scenarioDefinition,
+  featureTitle: feature.name,
+  scenarioTitle: entry.pickle.name,
+  sourceScenarioTitle: entry.scenarioTitle,
+  scenarioIndex: entry.scenarioIndex,
+  scenarioLine: entry.scenarioLine,
+  ...(entry.rule === undefined
+    ? {}
+    : {
+        ruleTitle: entry.rule.name,
+        ruleLine: entry.rule.location.line,
+      }),
+  tags: Arr.map(entry.pickle.tags, (tag) => tag.name),
+  pickle: entry.pickle,
+  source: feature.source,
+});
+
+const hasTitle = (index: TitleIndex, title: string): boolean => index[title] === true;
 
 const resolvePickle =
   (feature: Parser.CompiledFeature) =>
@@ -283,26 +356,4 @@ const resolveRule = (
     source,
     Option.map(({ rule }) => rule),
     Option.getOrUndefined,
-  );
-
-const duplicateSourceScenario = (
-  resolved: ReadonlyArray<ResolvedPickle>,
-  entry: ResolvedPickle,
-): boolean =>
-  Fn.pipe(
-    Arr.take(resolved, entry.scenarioIndex),
-    Arr.some(
-      (previous) =>
-        previous.scenarioTitle === entry.scenarioTitle &&
-        previous.sourceScenarioId !== entry.sourceScenarioId,
-    ),
-  );
-
-const scenarioDefinitionMap = <E, R>(
-  featureDefinition: FeatureDefinition<E, R>,
-): Record.ReadonlyRecord<string, ScenarioDefinition<R>> =>
-  Fn.pipe(
-    featureDefinition.scenarios,
-    Arr.map((scenario) => [scenario.title, scenario] as const),
-    Record.fromEntries,
   );

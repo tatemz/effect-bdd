@@ -30,6 +30,10 @@ interface EffectBddJsonReport {
   }>;
 }
 
+interface EffectBddTimingSidecar {
+  readonly reportEmissionMillis: number;
+}
+
 interface CucumberJsonFeature {
   readonly name?: string;
   readonly elements: ReadonlyArray<CucumberJsonElement>;
@@ -57,6 +61,7 @@ export const runEffectBddCli = async (
 ): Promise<BenchmarkRun> => {
   const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "effect-bdd-cli-"));
   const outputFile = path.join(outputDir, "report.json");
+  const timingFile = path.join(outputDir, "timing.txt");
   const args = [
     ...nodeLoaderArgs(profile),
     fromBenchmarkRoot("node_modules", "effect-bdd", "dist", "bin.js"),
@@ -69,18 +74,22 @@ export const runEffectBddCli = async (
     "json",
     "--output-file.json",
     outputFile,
+    "--benchmark-timing-file",
+    timingFile,
     "--parallel",
     String(parallel),
   ];
   const result = await runCommand(process.execPath, args, { cwd: benchmarkRoot });
   assertSuccessful(result);
   const report = parseEffectBddJsonReport(JSON.parse(await fs.readFile(outputFile, "utf8")));
+  const timing = parseEffectBddTimingSidecar(await fs.readFile(timingFile, "utf8"));
+  const summary = withReportEmissionTiming(report.summary, timing);
   await fs.rm(outputDir, { recursive: true, force: true });
   return subprocessRun("effect-bdd-cli", suite, phase, iteration, result, {
-    summary: report.summary,
-    ...(report.summary.phases?.executionMillis === undefined
+    summary,
+    ...(summary.phases?.executionMillis === undefined
       ? {}
-      : { executionDurationMillis: report.summary.phases.executionMillis }),
+      : { executionDurationMillis: summary.phases.executionMillis }),
     scenarios: report.scenarios.map((scenario) => ({
       feature: scenario.feature,
       scenario: scenario.scenario,
@@ -88,6 +97,20 @@ export const runEffectBddCli = async (
     })),
   });
 };
+
+const withReportEmissionTiming = (
+  summary: RunSummary,
+  timing: EffectBddTimingSidecar,
+): RunSummary =>
+  summary.phases === undefined
+    ? summary
+    : {
+        ...summary,
+        phases: {
+          ...summary.phases,
+          reportEmissionMillis: timing.reportEmissionMillis,
+        },
+      };
 
 export const runCucumberJs = async (
   suite: SuiteDefinition,
@@ -308,6 +331,14 @@ const parseEffectBddJsonReport = (value: unknown): EffectBddJsonReport => {
     summary: parseRunSummary(value.summary),
     scenarios: parseArray(value.scenarios, parseEffectBddScenario),
   };
+};
+
+const parseEffectBddTimingSidecar = (value: string): EffectBddTimingSidecar => {
+  const reportEmissionMillis = Number(value.trim());
+  if (!Number.isFinite(reportEmissionMillis) || reportEmissionMillis < 0) {
+    throw new Error("effect-bdd timing sidecar must contain a non-negative duration");
+  }
+  return { reportEmissionMillis };
 };
 
 const parseEffectBddScenario = (value: unknown): EffectBddJsonReport["scenarios"][number] => {

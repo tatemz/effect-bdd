@@ -234,6 +234,7 @@ const phaseDefinitions: ReadonlyArray<{
   { key: "taskBuildMillis", label: "Task build" },
   { key: "filteringMillis", label: "Filtering" },
   { key: "executionMillis", label: "Execution" },
+  { key: "reportEmissionMillis", label: "Report emission" },
 ];
 
 const measuredPhaseStats = (
