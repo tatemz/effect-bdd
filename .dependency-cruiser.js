@@ -14,7 +14,7 @@ const config = {
       severity: "error",
       comment: "Production modules never reach into tests, examples, or generated scratch space.",
       from: { path: "^(?:src|scripts|oxlint-rules)/" },
-      to: { path: "^(?:test|examples|typetest|dist|coverage)/" },
+      to: { path: "^(?:test|examples|benchmarks|typetest|dist|coverage)/" },
     },
     {
       name: "production-does-not-use-dev-dependencies",
@@ -29,7 +29,10 @@ const config = {
       severity: "error",
       comment: "Don't import local modules that cannot be resolved; broken paths break the build.",
       from: {},
-      to: { couldNotResolve: true, path: "^(?:\\.|/|src/|test/|scripts/|examples/|oxlint-rules/)" },
+      to: {
+        couldNotResolve: true,
+        path: "^(?:\\.|/|src/|test/|scripts/|examples/|benchmarks/|oxlint-rules/)",
+      },
     },
     {
       name: "not-to-undeclared",
@@ -96,7 +99,7 @@ const config = {
       path: "node_modules",
     },
     exclude: {
-      path: "(^|/)(?:coverage|dist|node_modules|\\.examples|\\.effect-bdd-[^/]+)(/|$)",
+      path: "(^|/)(?:coverage|dist|node_modules|benchmarks/(?:dist|generated|results)|\\.examples|\\.effect-bdd-[^/]+)(/|$)",
     },
     tsConfig: {
       fileName: "tsconfig.json",

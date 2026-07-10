@@ -17,8 +17,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: pnpm --dir benchmarks check
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm test:types
       - run: pnpm test:examples
+      - run: pnpm --dir benchmarks run smoke
