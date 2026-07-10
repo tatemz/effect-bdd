@@ -217,4 +217,86 @@ Feature: Counter
       ]);
     }),
   );
+
+  it.effect("reuses resolved source metadata for large scenario outlines", () =>
+    Effect.gen(function* () {
+      const feature = Bdd.feature("Outline scale").pipe(
+        Bdd.scenario("generated outline").pipe(Bdd.given`generated value`(() => Effect.void)),
+      );
+      const examples = Array.from({ length: 100 }, (_, index) => `      | ${index + 1} |`).join(
+        "\n",
+      );
+      const parsed = yield* parseFeature(`
+Feature: Outline scale
+
+  Scenario Outline: generated outline
+    Given generated value
+
+    Examples:
+      | value |
+${examples}
+`);
+
+      const result = Discovery.buildScenarioTasks(feature, parsed);
+
+      assert.strictEqual(result.tasks.length, 100);
+      assert.deepStrictEqual(result.issues, []);
+      assert.strictEqual(result.tasks[0].sourceScenarioTitle, "generated outline");
+      assert.strictEqual(result.tasks[99].scenarioTitle, "generated outline");
+    }),
+  );
+
+  it.effect("indexes unused definitions at scale without changing their order", () =>
+    Effect.gen(function* () {
+      const scenarios = Array.from({ length: 100 }, (_, index) =>
+        Bdd.scenario(`Scenario ${index + 1}`).pipe(Bdd.given`generated step`(() => Effect.void)),
+      );
+      const feature = Bdd.feature("Unused scale").pipe(...scenarios);
+      const parsed = yield* parseFeature(`
+Feature: Unused scale
+
+  Scenario: Scenario 1
+    Given generated step
+`);
+
+      const result = Discovery.buildScenarioTasks(feature, parsed);
+
+      assert.strictEqual(result.tasks.length, 1);
+      assert.strictEqual(result.issues.length, 99);
+      assert.deepStrictEqual(result.issues[0], {
+        _tag: "UnusedScenarioDefinition",
+        scenarioTitle: "Scenario 2",
+        candidates: ["Scenario 1"],
+      });
+      assert.deepStrictEqual(result.issues[98], {
+        _tag: "UnusedScenarioDefinition",
+        scenarioTitle: "Scenario 100",
+        candidates: ["Scenario 1"],
+      });
+    }),
+  );
+
+  it.effect("indexes JavaScript object property names safely", () =>
+    Effect.gen(function* () {
+      const step = Bdd.given`generated step`(() => Effect.void);
+      const feature = Bdd.feature("Index safety").pipe(
+        Bdd.scenario("__proto__").pipe(step),
+        Bdd.scenario("constructor").pipe(step),
+      );
+      const parsed = yield* parseFeature(`
+Feature: Index safety
+
+  Scenario: __proto__
+    Given generated step
+
+  Scenario: constructor
+    Given generated step
+`);
+
+      const result = Discovery.buildScenarioTasks(feature, parsed);
+
+      assert.strictEqual(result.tasks.length, 2);
+      assert.deepStrictEqual(result.issues, []);
+    }),
+  );
 });

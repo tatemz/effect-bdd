@@ -1,7 +1,9 @@
 /** @internal */
 import * as Arr from "effect/Array";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
+import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -56,6 +58,11 @@ const outputFileJson = Flag.file("output-file.json").pipe(
 
 const outputFileJunit = Flag.file("output-file.junit").pipe(
   Flag.withDescription("File path for the junit reporter."),
+  Flag.optional,
+);
+
+const benchmarkTimingFile = Flag.file("benchmark-timing-file").pipe(
+  Flag.withDescription("Internal benchmark sidecar for aggregate report-emission timing."),
   Flag.optional,
 );
 
@@ -151,6 +158,7 @@ export const cli = Command.make(
     outputFileHtml,
     outputFileJson,
     outputFileJunit,
+    benchmarkTimingFile,
     parallel,
     stepTimeout,
     verbose,
@@ -168,7 +176,12 @@ export const cli = Command.make(
       onEvent: (event) =>
         Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
     }).pipe(Effect.mapError(toUserError));
-    yield* Reporter.emitAll(reporters, result).pipe(Effect.mapError(toUserError));
+    const reportEmissionMillis = yield* timedMillis(Reporter.emitAll(reporters, result)).pipe(
+      Effect.mapError(toUserError),
+    );
+    yield* emitBenchmarkTiming(options.benchmarkTimingFile, reportEmissionMillis).pipe(
+      Effect.mapError(toUserError),
+    );
     const failure = resultFailure(result, options.strict);
     if (Option.isSome(failure)) {
       return yield* Effect.fail(failure.value);
@@ -189,6 +202,23 @@ export const run = Command.run(cli, {
 const toUserError = (error: { readonly message: string }): CliError.UserError =>
   new CliError.UserError({ cause: error.message });
 
+const timedMillis: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<number, E, R> =
+  Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {
+    const startedAt = yield* Clock.currentTimeMillis;
+    yield* effect;
+    const finishedAt = yield* Clock.currentTimeMillis;
+    return finishedAt - startedAt;
+  });
+
+const emitBenchmarkTiming = (outputFile: string | undefined, reportEmissionMillis: number) => {
+  if (outputFile === undefined) {
+    return Effect.void;
+  }
+  return Effect.flatMap(FileSystem.FileSystem, (fs) =>
+    fs.writeFileString(outputFile, `${reportEmissionMillis}\n`),
+  );
+};
+
 interface CliArgs {
   readonly features: ReadonlyArray<string>;
   readonly steps: ReadonlyArray<string>;
@@ -197,6 +227,7 @@ interface CliArgs {
   readonly outputFileHtml: Option.Option<string>;
   readonly outputFileJson: Option.Option<string>;
   readonly outputFileJunit: Option.Option<string>;
+  readonly benchmarkTimingFile: Option.Option<string>;
   readonly parallel: number;
   readonly stepTimeout: Option.Option<Duration.Duration>;
   readonly verbose: boolean;
@@ -225,6 +256,7 @@ const cliOptions = (args: CliArgs): CliOptions => ({
   strict: args.strict,
   parallel: args.parallel,
   ...stepTimeoutOption(args.stepTimeout),
+  ...benchmarkTimingFileOption(args.benchmarkTimingFile),
 });
 
 const defaultReporters = (reporters: ReadonlyArray<ReporterName>): ReadonlyArray<ReporterName> =>
@@ -254,6 +286,11 @@ const stepTimeoutOption = (
   timeout: Option.Option<Duration.Duration>,
 ): Pick<CliOptions, "stepTimeout"> | {} =>
   Option.isSome(timeout) ? { stepTimeout: timeout.value } : {};
+
+const benchmarkTimingFileOption = (
+  file: Option.Option<string>,
+): Pick<CliOptions, "benchmarkTimingFile"> | {} =>
+  Option.isSome(file) ? { benchmarkTimingFile: file.value } : {};
 
 const resultFailure = (result: CliRunResult, strict: boolean): Option.Option<CliError.UserError> =>
   Option.map(resultFailureCause(result, strict), (cause) => new CliError.UserError({ cause }));

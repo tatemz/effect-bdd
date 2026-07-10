@@ -144,6 +144,7 @@ export interface CliOptions {
   readonly filters: CliFilters;
   readonly parallel: number;
   readonly stepTimeout?: Duration.Duration;
+  readonly benchmarkTimingFile?: string;
 }
 
 /** @internal */
