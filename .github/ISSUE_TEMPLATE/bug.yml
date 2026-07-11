@@ -1,0 +1,81 @@
+name: Bug report
+description: Report reproducible incorrect behavior in effect-bdd
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        Do not use this form for security vulnerabilities. Report them privately according to the security policy.
+  - type: input
+    id: effect-bdd-version
+    attributes:
+      label: effect-bdd version
+      description: The exact installed version, such as 0.6.0.
+      placeholder: 0.6.0
+    validations:
+      required: true
+  - type: input
+    id: effect-version
+    attributes:
+      label: Effect version
+      description: The exact installed Effect version.
+      placeholder: 4.0.0-beta.97
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Include the runtime name and exact version.
+      placeholder: Node.js 24.4.1
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.5, Ubuntu 24.04, or Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide a repository, code sample, or exact steps that reproduce the problem.
+      placeholder: |
+        1. Configure...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and additional context
+      description: Paste relevant output, stack traces, feature files, or configuration.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I reproduced this with the latest released version of effect-bdd.
+          required: true
