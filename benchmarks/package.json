@@ -15,7 +15,7 @@
     "report": "tsx src/report.ts"
   },
   "dependencies": {
-    "effect": "4.0.0-beta.90",
+    "effect": "4.0.0-beta.97",
     "effect-bdd": "link:.."
   },
   "devDependencies": {

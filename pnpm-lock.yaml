@@ -58,8 +58,8 @@ importers:
   benchmarks:
     dependencies:
       effect:
-        specifier: 4.0.0-beta.90
-        version: 4.0.0-beta.90
+        specifier: 4.0.0-beta.97
+        version: 4.0.0-beta.97
       effect-bdd:
         specifier: link:..
         version: link:..
@@ -1239,9 +1239,6 @@ packages:
   diff@4.0.4:
     resolution: {integrity: sha512-X07nttJQkwkfKfvTPG/KSnE2OMdcUCao6+eXF3wmnIQRn2aPAHH3VxDbDOdegkd6JbPsXqShpvEOHfAT+nCNwQ==}
     engines: {node: '>=0.3.1'}
-
-  effect@4.0.0-beta.90:
-    resolution: {integrity: sha512-A0U3OE+2oyK/iFG6VYbFj9gwjJ7rFXjgP7qV+m7n/4lOREp9Lfk1///SlGCpX7HRueOCZO1l7aW0KByXuJeiPA==}
 
   effect@4.0.0-beta.97:
     resolution: {integrity: sha512-pK03HpQVxGZOWdwDAy/iwvV8u3KYcUf2mOWyWqaut2zau8V2u6ejWP7b4BELjyUIiZWW1fl/s/VJpgZUcTjThg==}
@@ -3029,19 +3026,6 @@ snapshots:
   detect-libc@2.1.2: {}
 
   diff@4.0.4: {}
-
-  effect@4.0.0-beta.90:
-    dependencies:
-      '@standard-schema/spec': 1.1.0
-      fast-check: 4.9.0
-      find-my-way-ts: 0.1.6
-      ini: 7.0.0
-      kubernetes-types: 1.30.0
-      msgpackr: 2.0.4
-      multipasta: 0.2.8
-      toml: 4.1.2
-      uuid: 14.0.1
-      yaml: 2.9.0
 
   effect@4.0.0-beta.97:
     dependencies:
