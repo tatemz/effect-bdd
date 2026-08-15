@@ -10,6 +10,7 @@ running the steps.
 ## Contents
 
 - [Install](#install)
+- [Upgrading to 0.7.0](#upgrading-to-070)
 - [Upgrading to 0.6.0](#upgrading-to-060)
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
@@ -22,13 +23,19 @@ running the steps.
 
 ## Install
 
-`effect-bdd` requires Node `>=22.12.0` and currently tracks the Effect v4 beta release
-train. Use matching `4.0.0-beta.x` versions of `effect` and Effect platform packages.
+`effect-bdd` requires Node `>=22.12.0` and currently tracks the Effect v4 release
+candidate train. Use matching `4.0.0-rc.x` versions of `effect` and Effect platform packages.
 
 ```sh
-pnpm add effect-bdd effect@4.0.0-beta.90
+pnpm add effect-bdd effect@4.0.0-rc.109
 pnpm add -D tsx
 ```
+
+## Upgrading to 0.7.0
+
+Version 0.7.0 tracks Effect `4.0.0-rc.109`. Install matching `4.0.0-rc.x`
+versions of `effect` and Effect platform packages. Effect `4.0.0-beta.x` no
+longer satisfies the peer range.
 
 ## Upgrading to 0.6.0
 

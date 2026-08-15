@@ -1,6 +1,6 @@
 {
   "name": "effect-bdd",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "An Effect-native API for testing Gherkin feature files",
   "keywords": [
     "algebraic-data-types",
@@ -79,15 +79,15 @@
   "dependencies": {
     "@cucumber/gherkin": "^39.1.0",
     "@cucumber/messages": "^32.3.1",
-    "@effect/platform-node": "4.0.0-beta.97"
+    "@effect/platform-node": "4.0.0-rc.109"
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",
-    "@effect/vitest": "4.0.0-beta.97",
+    "@effect/vitest": "4.0.0-rc.109",
     "@types/node": "^25.9.2",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "dependency-cruiser": "^17.4.3",
-    "effect": "4.0.0-beta.97",
+    "effect": "4.0.0-rc.109",
     "knip": "^6.16.1",
     "oxfmt": "^0.54.0",
     "oxlint": "^1.69.0",
@@ -96,7 +96,7 @@
     "vitest": "^4.1.8"
   },
   "peerDependencies": {
-    "effect": "^4.0.0-beta.97"
+    "effect": "^4.0.0-rc.109"
   },
   "engines": {
     "node": ">=22.12.0"

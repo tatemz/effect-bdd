@@ -26,7 +26,7 @@ import * as Schema from "effect/Schema";
  * @category errors
  * @since 0.1.0
  */
-export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseError", {
+export class ParseError extends Schema.TaggedError<ParseError>()("ParseError", {
   message: Schema.String,
   line: Schema.Number,
   column: Schema.Number,
@@ -60,7 +60,7 @@ export class ParseError extends Schema.TaggedErrorClass<ParseError>()("ParseErro
  * @category errors
  * @since 0.1.0
  */
-export class MatchError extends Schema.TaggedErrorClass<MatchError>()("MatchError", {
+export class MatchError extends Schema.TaggedError<MatchError>()("MatchError", {
   message: Schema.String,
   scenario: Schema.String,
   step: Schema.String,
@@ -96,7 +96,7 @@ export class MatchError extends Schema.TaggedErrorClass<MatchError>()("MatchErro
  * @category errors
  * @since 0.1.0
  */
-export class StepError extends Schema.TaggedErrorClass<StepError>()("StepError", {
+export class StepError extends Schema.TaggedError<StepError>()("StepError", {
   message: Schema.String,
   scenario: Schema.String,
   step: Schema.String,
@@ -115,7 +115,7 @@ export class StepError extends Schema.TaggedErrorClass<StepError>()("StepError",
  * @category errors
  * @since 0.5.0
  */
-export class ScenarioSetupError extends Schema.TaggedErrorClass<ScenarioSetupError>()(
+export class ScenarioSetupError extends Schema.TaggedError<ScenarioSetupError>()(
   "ScenarioSetupError",
   {
     message: Schema.String,
@@ -136,7 +136,7 @@ export class ScenarioSetupError extends Schema.TaggedErrorClass<ScenarioSetupErr
  * @category errors
  * @since 0.5.0
  */
-export class ScenarioTeardownError extends Schema.TaggedErrorClass<ScenarioTeardownError>()(
+export class ScenarioTeardownError extends Schema.TaggedError<ScenarioTeardownError>()(
   "ScenarioTeardownError",
   {
     message: Schema.String,
@@ -171,10 +171,7 @@ export class ScenarioTeardownError extends Schema.TaggedErrorClass<ScenarioTeard
  * @category errors
  * @since 0.4.0
  */
-export class StepTimeoutError extends Schema.TaggedErrorClass<StepTimeoutError>()(
-  "StepTimeoutError",
-  {
-    message: Schema.String,
-    timeout: Schema.Duration,
-  },
-) {}
+export class StepTimeoutError extends Schema.TaggedError<StepTimeoutError>()("StepTimeoutError", {
+  message: Schema.String,
+  timeout: Schema.Duration,
+}) {}
