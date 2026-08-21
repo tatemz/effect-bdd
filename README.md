@@ -27,13 +27,13 @@ running the steps.
 candidate train. Use matching `4.0.0-rc.x` versions of `effect` and Effect platform packages.
 
 ```sh
-pnpm add effect-bdd effect@4.0.0-rc.109
+pnpm add effect-bdd effect@4.0.0-rc.111
 pnpm add -D tsx
 ```
 
 ## Upgrading to 0.7.0
 
-Version 0.7.0 tracks Effect `4.0.0-rc.109`. Install matching `4.0.0-rc.x`
+Version 0.7.0 tracks Effect `4.0.0-rc.111`. Install matching `4.0.0-rc.x`
 versions of `effect` and Effect platform packages. Effect `4.0.0-beta.x` no
 longer satisfies the peer range.
 

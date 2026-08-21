@@ -123,6 +123,7 @@ const isDurationInputString = (value: string): value is DurationInputString =>
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withAlias("v"),
   Flag.withDescription("Print every scenario result instead of only failures and diagnostics."),
+  Flag.withDefault(false),
 );
 
 const tags = Flag.string("tags").pipe(
@@ -141,10 +142,12 @@ const title = Flag.string("title").pipe(
 
 const failFast = Flag.boolean("fail-fast").pipe(
   Flag.withDescription("Stop after the first failed scenario. Runs sequentially when enabled."),
+  Flag.withDefault(false),
 );
 
 const strict = Flag.boolean("strict").pipe(
   Flag.withDescription("Fail when any loaded feature or scenario definition is unused."),
+  Flag.withDefault(false),
 );
 
 /** @internal */
