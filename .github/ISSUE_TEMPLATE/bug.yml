@@ -12,8 +12,8 @@ body:
     id: effect-bdd-version
     attributes:
       label: effect-bdd version
-      description: The exact installed version, such as 0.7.0.
-      placeholder: 0.7.0
+      description: The exact installed version, such as 0.8.0.
+      placeholder: 0.8.0
     validations:
       required: true
   - type: input
