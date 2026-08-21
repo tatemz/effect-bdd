@@ -115,8 +115,8 @@ describe("Bdd", () => {
 
     const scenario = Bdd.scenario("Failure").pipe(
       Bdd.given`zero`((): Effect.Effect<number, "given failed", Inventory> => Effect.succeed(0)),
-      Bdd.when`increment`(
-        (state: number): Effect.Effect<number, "when failed", Pricing> => Effect.succeed(state + 1),
+      Bdd.when`increment`((state: number): Effect.Effect<number, "when failed", Pricing> =>
+        Effect.succeed(state + 1),
       ),
       Bdd.then`one`((state: number): Effect.Effect<number, "then failed"> => Effect.succeed(state)),
     );
@@ -179,8 +179,8 @@ describe("Bdd", () => {
 
     const feature = Bdd.feature("Scoped").pipe(
       Bdd.scenario("Needs scope").pipe(
-        Bdd.given`a scoped resource`(
-          (): Effect.Effect<number, never, Scope.Scope | Inventory> => Effect.succeed(1),
+        Bdd.given`a scoped resource`((): Effect.Effect<number, never, Scope.Scope | Inventory> =>
+          Effect.succeed(1),
         ),
       ),
     );
@@ -205,8 +205,8 @@ describe("Bdd", () => {
       Effect.succeed({ count: 1 });
 
     const scenario = Bdd.scenario("Needs inventory").pipe(
-      Bdd.given`inventory is available`(
-        (): Effect.Effect<number, "step failed", Inventory> => Effect.succeed(1),
+      Bdd.given`inventory is available`((): Effect.Effect<number, "step failed", Inventory> =>
+        Effect.succeed(1),
       ),
       Bdd.provide(Layer.effect(Inventory, providerEffect)),
     );

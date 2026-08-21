@@ -94,12 +94,10 @@ export const run = <E, R>(
       Fn.pipe(
         buildScenarioTasks(featureDefinition, feature),
         Effect.flatMap((tasks) => Effect.forEach(tasks, (task) => runScenarioTask(task, options))),
-        Effect.map(
-          (scenarios): Report => ({
-            feature: feature.name,
-            scenarios,
-          }),
-        ),
+        Effect.map((scenarios): Report => ({
+          feature: feature.name,
+          scenarios,
+        })),
       ),
     ),
   );
