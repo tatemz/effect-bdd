@@ -139,14 +139,12 @@ const decodeCapture = (
 ): Result.Result<unknown, MatchResult<never>> =>
   Fn.pipe(
     decoder.decode(raw),
-    Result.mapError(
-      (cause): MatchResult<never> => ({
-        _tag: "DecodeMismatch",
-        capture: decoder.name,
-        raw,
-        cause,
-      }),
-    ),
+    Result.mapError((cause): MatchResult<never> => ({
+      _tag: "DecodeMismatch",
+      capture: decoder.name,
+      raw,
+      cause,
+    })),
   );
 
 const matchResultOption = (result: MatchResult<unknown>): Option.Option<unknown> => {

@@ -144,17 +144,14 @@ const buildScenarioTasks: (
             } satisfies CliDiagnostic,
           ],
           Arr.appendAll(
-            Arr.map(
-              parsed.pickles,
-              (pickle): CliDiagnostic => ({
-                _tag: "UnmatchedScenario",
-                featurePath: source.path,
-                featureTitle: parsed.name,
-                scenarioTitle: pickle.name,
-                scenarioLine: pickle.location?.line ?? parsed.line,
-                message: `Scenario cannot run because no feature definition matched "${parsed.name}"`,
-              }),
-            ),
+            Arr.map(parsed.pickles, (pickle): CliDiagnostic => ({
+              _tag: "UnmatchedScenario",
+              featurePath: source.path,
+              featureTitle: parsed.name,
+              scenarioTitle: pickle.name,
+              scenarioLine: pickle.location?.line ?? parsed.line,
+              message: `Scenario cannot run because no feature definition matched "${parsed.name}"`,
+            })),
           ),
         ),
         matchedFeatureTitles: [],
@@ -174,10 +171,10 @@ const buildScenarioTasks: (
     );
 
     return {
-      tasks: Arr.map(
-        discovered.tasks,
-        (task): ScenarioTask => ({ featurePath: source.path, core: task }),
-      ),
+      tasks: Arr.map(discovered.tasks, (task): ScenarioTask => ({
+        featurePath: source.path,
+        core: task,
+      })),
       diagnostics,
       matchedFeatureTitles: [definition.title],
     };
@@ -407,13 +404,11 @@ const unusedFeatureDefinitions = (
   Fn.pipe(
     definitions,
     Arr.filter((definition) => !Arr.contains(definition.title)(matchedFeatureTitles)),
-    Arr.map(
-      (definition): CliDiagnostic => ({
-        _tag: "UnusedFeatureDefinition",
-        featureTitle: definition.title,
-        message: `Feature definition exported but no feature file matched: ${definition.title}`,
-      }),
-    ),
+    Arr.map((definition): CliDiagnostic => ({
+      _tag: "UnusedFeatureDefinition",
+      featureTitle: definition.title,
+      message: `Feature definition exported but no feature file matched: ${definition.title}`,
+    })),
   );
 
 /** @internal */
