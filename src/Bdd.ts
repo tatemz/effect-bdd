@@ -193,7 +193,7 @@ export interface Step<
   Captures = unknown,
   Argument = undefined,
 > extends Pipeable {
-  <State extends In, E0, R0>(self: Scenario<State, E0, R0>): Scenario<Out, E | E0, R | R0>;
+  <E0, R0>(self: Scenario<In, E0, R0>): Scenario<Out, E | E0, R | R0>;
   readonly [StepTypeId]: typeof StepTypeId;
   readonly kind: Kind;
   readonly expression: Expression<Captures>;
@@ -228,7 +228,7 @@ export type AnyProvider = Layer.Layer<any, any, any>;
 export interface Scenario<State = void, E = never, R = never> extends Pipeable {
   <E0, R0>(self: Feature<E0, R0>): Feature<E | E0, R | R0>;
   readonly [ScenarioTypeId]: typeof ScenarioTypeId;
-  readonly _State?: (_: State) => State;
+  readonly _State?: State;
   readonly title: string;
   readonly steps: ReadonlyArray<AnyStep>;
   readonly providers: ReadonlyArray<AnyProvider>;
@@ -771,36 +771,36 @@ export interface StepTag<Kind extends StepKind> {
 interface EmptyStepFactory<Kind extends StepKind> {
   readonly kind: Kind;
   readonly expression: Expression<{}>;
-  <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, {}>;
   <In, Out, E, R>(impl: (state: In) => Effect.Effect<Out, E, R>): Step<Kind, In, Out, E, R, {}>;
-  <Arg, Out, E, R>(
-    arg: StepArg<Arg>,
-    impl: (arg: Arg) => Effect.Effect<Out, E, R>,
-  ): Step<Kind, unknown, Out, E, R, {}, Arg>;
+  <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, {}>;
   <Arg, In, Out, E, R>(
     arg: StepArg<Arg>,
     impl: (arg: Arg, state: In) => Effect.Effect<Out, E, R>,
   ): Step<Kind, In, Out, E, R, {}, Arg>;
+  <Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (arg: Arg) => Effect.Effect<Out, E, R>,
+  ): Step<Kind, unknown, Out, E, R, {}, Arg>;
 }
 
 interface CapturedStepFactory<Captures, Kind extends StepKind> {
   readonly kind: Kind;
   readonly expression: Expression<Captures>;
-  <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, Captures>;
-  <Out, E, R>(
-    impl: (captures: Captures) => Effect.Effect<Out, E, R>,
-  ): Step<Kind, unknown, Out, E, R, Captures>;
   <In, Out, E, R>(
     impl: (captures: Captures, state: In) => Effect.Effect<Out, E, R>,
   ): Step<Kind, In, Out, E, R, Captures>;
-  <Arg, Out, E, R>(
-    arg: StepArg<Arg>,
-    impl: (captures: Captures, arg: Arg) => Effect.Effect<Out, E, R>,
-  ): Step<Kind, unknown, Out, E, R, Captures, Arg>;
+  <Out, E, R>(
+    impl: (captures: Captures) => Effect.Effect<Out, E, R>,
+  ): Step<Kind, unknown, Out, E, R, Captures>;
+  <Out, E, R>(impl: () => Effect.Effect<Out, E, R>): Step<Kind, unknown, Out, E, R, Captures>;
   <Arg, In, Out, E, R>(
     arg: StepArg<Arg>,
     impl: (captures: Captures, arg: Arg, state: In) => Effect.Effect<Out, E, R>,
   ): Step<Kind, In, Out, E, R, Captures, Arg>;
+  <Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (captures: Captures, arg: Arg) => Effect.Effect<Out, E, R>,
+  ): Step<Kind, unknown, Out, E, R, Captures, Arg>;
 }
 
 const makeFeature = <E, R>(
@@ -860,9 +860,7 @@ interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> 
 const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
 ): Step<Kind, In, Out, E, R, Captures, Argument> => {
-  function appendStep<State extends In, E0, R0>(
-    self: Scenario<State, E0, R0>,
-  ): Scenario<Out, E | E0, R | R0> {
+  function appendStep<E0, R0>(self: Scenario<In, E0, R0>): Scenario<Out, E | E0, R | R0> {
     if (!isScenario(self)) {
       // oxlint-disable-next-line effect-bdd/no-throw-statements
       throw new TypeError("Expected a Bdd.Scenario when appending a step.");

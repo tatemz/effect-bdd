@@ -84,16 +84,26 @@ describe("Bdd", () => {
   });
 
   test("scenario chains evolve state through pipe", () => {
-    const givenNoCounter = Bdd.given`no counter exists`(() => Effect.void);
-    const whenCreated = Bdd.when`the counter is created`(() => Effect.succeed({ value: 0 }));
-    const thenZero = Bdd.then`the counter value is zero`((state: { readonly value: number }) => {
-      expect(state.value).type.toBe<number>();
-      return Effect.succeed(state);
-    });
+    const initialValue = Bdd.capture("initialValue", Schema.NumberFromString);
+    const increment = Bdd.capture("increment", Schema.NumberFromString);
 
-    const scenario = Bdd.scenario("Creating a counter").pipe(givenNoCounter, whenCreated, thenZero);
+    const scenario = Bdd.scenario("Creating a counter").pipe(
+      Bdd.given`a counter at ${initialValue}`(({ initialValue }) => {
+        expect(initialValue).type.toBe<number>();
+        return Effect.succeed({ value: initialValue });
+      }),
+      Bdd.when`the counter is incremented by ${increment}`(({ increment }, state) => {
+        expect(increment).type.toBe<number>();
+        expect(state).type.toBe<{ value: number }>();
+        return Effect.succeed({ value: state.value + increment });
+      }),
+      Bdd.then`the counter value is correct`((state) => {
+        expect(state).type.toBe<{ value: number }>();
+        return Effect.succeed(state);
+      }),
+    );
 
-    expect(scenario).type.toBe<Bdd.Scenario<{ readonly value: number }, never, never>>();
+    expect(scenario).type.toBe<Bdd.Scenario<{ value: number }, never, never>>();
     expect(scenario.title).type.toBe<string>();
   });
 

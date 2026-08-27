@@ -197,6 +197,22 @@ during discovery.
 Scenario state flows through the chain. There is no feature-level `initial` state; the
 first step sets up the first useful state.
 
+Steps declared inside a scenario chain infer captures, decoded arguments, and state from
+the surrounding `pipe`:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect, Schema } from "effect";
+
+const count = Bdd.capture("count", Schema.FiniteFromString);
+
+const scenario = Bdd.scenario("Counting up").pipe(
+  Bdd.given`a counter at ${count}`(({ count }) => Effect.succeed({ value: count })),
+  Bdd.when`the counter is incremented`((state) => Effect.succeed({ value: state.value + 1 })),
+  Bdd.then`the counter value is correct`((state) => Effect.succeed(state)),
+);
+```
+
 ## Step Patterns
 
 ### Captures
