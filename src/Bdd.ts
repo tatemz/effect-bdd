@@ -232,6 +232,10 @@ export interface Scenario<State = void, E = never, R = never> extends Pipeable {
   readonly title: string;
   readonly steps: ReadonlyArray<AnyStep>;
   readonly providers: ReadonlyArray<AnyProvider>;
+  readonly step: ScenarioStepTag<State, E, R>;
+  readonly given: ScenarioStepTag<State, E, R>;
+  readonly when: ScenarioStepTag<State, E, R>;
+  readonly thenStep: ScenarioStepTag<State, E, R>;
 }
 
 /**
@@ -768,6 +772,41 @@ export interface StepTag<Kind extends StepKind> {
   ): CapturedStepFactory<CapturesOf<Captures>, Kind>;
 }
 
+/**
+ * Scenario-bound tagged-template step factory.
+ *
+ * Unlike standalone step definitions, scenario-bound steps infer their input
+ * state from the preceding step in the scenario chain.
+ *
+ * @category models
+ * @since 0.10.0
+ */
+export interface ScenarioStepTag<State, E0, R0> {
+  (strings: TemplateStringsArray): ScenarioEmptyStepFactory<State, E0, R0>;
+  <const Captures extends readonly [Capture<string, any>, ...Array<Capture<string, any>>]>(
+    strings: TemplateStringsArray,
+    ...captures: Captures
+  ): ScenarioCapturedStepFactory<State, E0, R0, CapturesOf<Captures>>;
+}
+
+interface ScenarioEmptyStepFactory<State, E0, R0> {
+  <Out, E, R>(impl: (state: State) => Effect.Effect<Out, E, R>): Scenario<Out, E0 | E, R0 | R>;
+  <Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (arg: Arg, state: State) => Effect.Effect<Out, E, R>,
+  ): Scenario<Out, E0 | E, R0 | R>;
+}
+
+interface ScenarioCapturedStepFactory<State, E0, R0, Captures> {
+  <Out, E, R>(
+    impl: (captures: Captures, state: State) => Effect.Effect<Out, E, R>,
+  ): Scenario<Out, E0 | E, R0 | R>;
+  <Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (captures: Captures, arg: Arg, state: State) => Effect.Effect<Out, E, R>,
+  ): Scenario<Out, E0 | E, R0 | R>;
+}
+
 interface EmptyStepFactory<Kind extends StepKind> {
   readonly kind: Kind;
   readonly expression: Expression<{}>;
@@ -831,23 +870,112 @@ const makeScenario = <State, E, R>(
     }
     return makeFeature(self.title, [...self.scenarios, scenario]);
   }
+  let scenario: Scenario<State, E, R>;
   const properties: Pick<
     Scenario<State, E, R>,
-    typeof ScenarioTypeId | "title" | "steps" | "providers" | "pipe"
+    | typeof ScenarioTypeId
+    | "title"
+    | "steps"
+    | "providers"
+    | "pipe"
+    | "step"
+    | "given"
+    | "when"
+    | "thenStep"
   > = {
     [ScenarioTypeId]: ScenarioTypeId,
     title,
     steps,
     providers,
+    step: makeScenarioStepTag(() => scenario, "Step"),
+    given: makeScenarioStepTag(() => scenario, "Given"),
+    when: makeScenarioStepTag(() => scenario, "When"),
+    thenStep: makeScenarioStepTag(() => scenario, "Then"),
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
   };
   // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
-  const scenario: Scenario<State, E, R> = Object.assign(appendScenario, properties);
+  scenario = Object.assign(appendScenario, properties);
+  // Keep fluent helpers out of the serialized model shape.
+  // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
+  Object.defineProperties(scenario, {
+    step: { value: scenario.step, enumerable: false },
+    given: { value: scenario.given, enumerable: false },
+    when: { value: scenario.when, enumerable: false },
+    thenStep: { value: scenario.thenStep, enumerable: false },
+  });
   hideTypeId(scenario, ScenarioTypeId);
   return Object.freeze(scenario);
 };
+
+function makeScenarioStepTag<State, E0, R0>(
+  getScenario: () => Scenario<State, E0, R0>,
+  kind: StepKind,
+): ScenarioStepTag<State, E0, R0> {
+  function scenarioStepTag(strings: TemplateStringsArray): ScenarioEmptyStepFactory<State, E0, R0>;
+  function scenarioStepTag<
+    const Captures extends readonly [Capture<string, any>, ...Array<Capture<string, any>>],
+  >(
+    strings: TemplateStringsArray,
+    ...captures: Captures
+  ): ScenarioCapturedStepFactory<State, E0, R0, CapturesOf<Captures>>;
+  function scenarioStepTag(
+    strings: TemplateStringsArray,
+    ...captures: ReadonlyArray<Capture<string, unknown>>
+  ): ScenarioEmptyStepFactory<State, E0, R0> | ScenarioCapturedStepFactory<State, E0, R0, any> {
+    if (!isTemplateStringsArray(strings)) {
+      // oxlint-disable-next-line effect-bdd/no-throw-statements
+      throw new TypeError(`${stepTagName(kind)} is a tagged-template step factory.`);
+    }
+    const matcher = expression.makeMatcher(strings, captures);
+    return captures.length === 0
+      ? makeScenarioStepFactory(getScenario, kind, matcher, false)
+      : makeScenarioStepFactory(getScenario, kind, matcher, true);
+  }
+  return scenarioStepTag;
+}
+
+function makeScenarioStepFactory<State, E0, R0>(
+  getScenario: () => Scenario<State, E0, R0>,
+  kind: StepKind,
+  matcher: Expression<unknown>,
+  hasCaptures: false,
+): ScenarioEmptyStepFactory<State, E0, R0>;
+function makeScenarioStepFactory<State, E0, R0, Captures>(
+  getScenario: () => Scenario<State, E0, R0>,
+  kind: StepKind,
+  matcher: Expression<Captures>,
+  hasCaptures: true,
+): ScenarioCapturedStepFactory<State, E0, R0, Captures>;
+function makeScenarioStepFactory<State, E0, R0, Captures>(
+  getScenario: () => Scenario<State, E0, R0>,
+  kind: StepKind,
+  matcher: Expression<Captures>,
+  hasCaptures: boolean,
+) {
+  function factory<Out, E, R>(
+    impl: (state: State) => Effect.Effect<Out, E, R>,
+  ): Scenario<Out, E0 | E, R0 | R>;
+  function factory<Arg, Out, E, R>(
+    arg: StepArg<Arg>,
+    impl: (arg: Arg, state: State) => Effect.Effect<Out, E, R>,
+  ): Scenario<Out, E0 | E, R0 | R>;
+  function factory(first: unknown, second?: unknown): Scenario<any, any, any> {
+    const hasArgument = isStepArg(first);
+    const argument = hasArgument ? first : undefined;
+    const impl = stepImplementation(hasArgument ? second : first);
+    const step = makeStep({
+      kind,
+      expression: matcher,
+      ...(argument === undefined ? {} : { argument }),
+      run: (captures: Captures, decodedArgument: unknown, state: State) =>
+        impl(...handlerArgs(hasCaptures, argument !== undefined, captures, decodedArgument, state)),
+    });
+    return step(getScenario());
+  }
+  return factory;
+}
 
 interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
   readonly kind: Kind;

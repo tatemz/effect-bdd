@@ -197,6 +197,28 @@ during discovery.
 Scenario state flows through the chain. There is no feature-level `initial` state; the
 first step sets up the first useful state.
 
+Use fluent scenario steps when each step belongs to one scenario. The state parameter is
+inferred from the preceding step's `Effect`:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+
+const scenario = Bdd.scenario("Adding an item").given`an empty cart`(() =>
+  Effect.succeed({ total: 0 }),
+).when`an item costs 10`((state) => Effect.succeed({ total: state.total + 10 }))
+  .thenStep`the total is 10`((state) =>
+  state.total === 10 ? Effect.succeed(state) : Effect.fail("unexpected total"),
+);
+```
+
+Use standalone `Bdd.given`, `Bdd.when`, and `Bdd.then` definitions for steps shared by
+multiple scenarios. Standalone state parameters need explicit types because no scenario
+has supplied their input state yet.
+
+Fluent assertions use `thenStep` instead of `then` so scenarios cannot be mistaken for
+Promises by `await` and `Promise.resolve`.
+
 ## Step Patterns
 
 ### Captures

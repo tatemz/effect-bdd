@@ -97,6 +97,23 @@ describe("Bdd", () => {
     expect(scenario.title).type.toBe<string>();
   });
 
+  test("fluent scenario steps infer state from the preceding step", () => {
+    const expected = Bdd.capture("expected", Schema.NumberFromString);
+
+    const scenario = Bdd.scenario("Fluent counter").given`a counter`(() =>
+      Effect.succeed({ value: 0 }),
+    ).when`the counter is incremented`((state) => {
+      expect(state).type.toBe<{ value: number }>();
+      return Effect.succeed({ value: state.value + 1 });
+    }).thenStep`the value is ${expected}`((captures, state) => {
+      expect(captures).type.toBe<{ readonly expected: number }>();
+      expect(state).type.toBe<{ value: number }>();
+      return Effect.succeed(state);
+    });
+
+    expect(scenario).type.toBe<Bdd.Scenario<{ value: number }, never, never>>();
+  });
+
   test("scenario pipe rejects incompatible step state", () => {
     const givenNumber = Bdd.given`a number`(() => Effect.succeed(1));
     const thenString = Bdd.then`a string`((state: string) => Effect.succeed(state));

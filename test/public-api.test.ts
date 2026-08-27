@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Context, Duration, Effect, Layer } from "effect";
+import { Context, Duration, Effect, Layer, Schema } from "effect";
 import { Bdd } from "effect-bdd";
 import {
   MatchError,
@@ -52,6 +52,21 @@ describe("public API", () => {
       assert.strictEqual(Bdd.isFeature({ ...feature }), false);
       assert.deepStrictEqual(Object.keys(feature), ["title", "scenarios", "pipe"]);
       assert.strictEqual(Object.getOwnPropertySymbols(feature).length, 1);
+    });
+
+    it("builds scenarios with fluent step factories", () => {
+      const expected = Bdd.capture("expected", Schema.NumberFromString);
+      const scenario = Bdd.scenario("Fluent counter").given`a counter`(() =>
+        Effect.succeed({ value: 0 }),
+      ).when`the counter is incremented`((state) => Effect.succeed({ value: state.value + 1 }))
+        .thenStep`the value is ${expected}`((_captures, state) => Effect.succeed(state));
+
+      assert.deepStrictEqual(
+        scenario.steps.map(({ kind }) => kind),
+        ["Given", "When", "Then"],
+      );
+      assert.strictEqual(scenario.steps[2]?.expression.source, "the value is {expected}");
+      assert.deepStrictEqual(Object.keys(scenario), ["title", "steps", "providers", "pipe"]);
     });
 
     it("rejects forged append receivers immediately", () => {
