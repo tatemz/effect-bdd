@@ -79,15 +79,15 @@
   "dependencies": {
     "@cucumber/gherkin": "^42.0.1",
     "@cucumber/messages": "^34.2.1",
-    "@effect/platform-node": "4.0.0-rc.112"
+    "@effect/platform-node": "4.0.0-rc.115"
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",
-    "@effect/vitest": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.115",
     "@types/node": "^25.9.2",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "dependency-cruiser": "^17.4.3",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.0-rc.115",
     "knip": "^6.32.2",
     "oxfmt": "^0.64.0",
     "oxlint": "^1.79.0",
@@ -96,7 +96,7 @@
     "vitest": "^4.1.11"
   },
   "peerDependencies": {
-    "effect": "^4.0.0-rc.112"
+    "effect": "^4.0.0-rc.115"
   },
   "engines": {
     "node": ">=22.12.0"
