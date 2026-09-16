@@ -13,15 +13,17 @@ const config = {
       name: "production-does-not-import-tests",
       severity: "error",
       comment: "Production modules never reach into tests, examples, or generated scratch space.",
-      from: { path: "^(?:src|scripts|oxlint-rules)/" },
-      to: { path: "^(?:test|examples|benchmarks|typetest|dist|coverage)/" },
+      from: { path: "^(?:packages/effect-bdd/src|packages/effect-bdd/scripts|oxlint-rules)/" },
+      to: {
+        path: "^(?:packages/effect-bdd/test|packages/effect-bdd/typetest|examples|benchmarks|dist|coverage)/",
+      },
     },
     {
       name: "production-does-not-use-dev-dependencies",
       severity: "error",
       comment:
         "Runtime source must not depend on devDependencies; promote the dependency or isolate it in tests/tools.",
-      from: { path: "^src/" },
+      from: { path: "^packages/effect-bdd/src/" },
       to: { dependencyTypes: ["npm-dev"], dependencyTypesNot: ["type-only"] },
     },
     {
@@ -31,7 +33,7 @@ const config = {
       from: {},
       to: {
         couldNotResolve: true,
-        path: "^(?:\\.|/|src/|test/|scripts/|examples/|benchmarks/|oxlint-rules/)",
+        path: "^(?:\\.|/|packages/effect-bdd/src/|packages/effect-bdd/test/|packages/effect-bdd/scripts/|examples/|benchmarks/|oxlint-rules/)",
       },
     },
     {
@@ -39,7 +41,7 @@ const config = {
       severity: "error",
       comment:
         "Every runtime import must be a declared dependency (incl. peer), not a hoisted accident.",
-      from: { path: "^src/" },
+      from: { path: "^packages/effect-bdd/src/" },
       to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"] },
     },
     {
@@ -47,7 +49,10 @@ const config = {
       severity: "error",
       comment:
         "@cucumber/* is a swappable infrastructure detail; only the Cucumber adapter may depend on it at runtime. Core depends on the GherkinCompiler port instead.",
-      from: { path: "^src/", pathNot: "^src/internal/cucumberCompiler\\.ts$" },
+      from: {
+        path: "^packages/effect-bdd/src/",
+        pathNot: "^packages/effect-bdd/src/internal/cucumberCompiler\\.ts$",
+      },
       to: { path: "node_modules/@cucumber/", dependencyTypesNot: ["type-only"] },
     },
     {
@@ -56,25 +61,25 @@ const config = {
       comment:
         "The reusable BDD library stays below the CLI; command wiring depends on core, never the other way around.",
       from: {
-        path: "^src/(?:Bdd|Errors|index|internal/(?!cli/).+)\\.ts$",
+        path: "^packages/effect-bdd/src/(?:Bdd|Errors|index|internal/(?!cli/).+)\\.ts$",
       },
       to: {
-        path: "^src/(?:bin|main|internal/cli/)",
+        path: "^packages/effect-bdd/src/(?:bin|main|internal/cli/)",
       },
     },
     {
       name: "cli-internals-do-not-import-entrypoints",
       severity: "error",
       comment: "CLI internals are reusable services; bin/main are the outer runtime boundary.",
-      from: { path: "^src/internal/cli/" },
-      to: { path: "^src/(?:bin|main)\\.ts$" },
+      from: { path: "^packages/effect-bdd/src/internal/cli/" },
+      to: { path: "^packages/effect-bdd/src/(?:bin|main)\\.ts$" },
     },
     {
       name: "tests-do-not-import-dist",
       severity: "error",
       comment: "Tests exercise source or the example package explicitly; dist is generated output.",
-      from: { path: "^(?:test|typetest|oxlint-rules)/" },
-      to: { path: "^dist/" },
+      from: { path: "^(?:packages/effect-bdd/test|packages/effect-bdd/typetest|oxlint-rules)/" },
+      to: { path: "^(?:packages/effect-bdd/)?dist/" },
     },
     {
       name: "no-orphans",
@@ -82,10 +87,10 @@ const config = {
       comment: "Orphan modules are usually dead code or a missing wiring; delete or import them.",
       from: {
         orphan: true,
-        path: "^src/",
+        path: "^packages/effect-bdd/src/",
         pathNot: [
           "\\.d\\.ts$",
-          "^src/(?:bin|index)\\.ts$",
+          "^packages/effect-bdd/src/(?:bin|index)\\.ts$",
           "(^|/)(?:tsconfig|vitest\\.config|tstyche)",
           "(^|/)\\.[^/]+\\.(js|cjs|mjs)$",
         ],
@@ -101,9 +106,7 @@ const config = {
     exclude: {
       path: "(^|/)(?:coverage|dist|node_modules|benchmarks/(?:dist|generated|results)|\\.examples|\\.effect-bdd-[^/]+)(/|$)",
     },
-    tsConfig: {
-      fileName: "tsconfig.json",
-    },
+
     tsPreCompilationDeps: true,
   },
 };

@@ -15,7 +15,7 @@ These are better first targets because the benchmark already shows they are visi
 
 Completed in the initial ingestion pass:
 
-- `src/internal/discovery.ts` is the single task-building implementation used by
+- `packages/effect-bdd/src/internal/discovery.ts` is the single task-building implementation used by
   both the programmatic runner and CLI adapter.
 - Pickle source metadata is resolved once, scenario and duplicate lookups use
   per-run null-prototype indexes, and task/issue collection is single-pass.
@@ -52,8 +52,8 @@ The current data says the expensive parts are mostly around ingestion: getting f
 
 Entry points:
 
-- `loadFeatureDefinitions()` in `src/internal/cli/loaders.ts`
-- `ModuleLoader.load()` in `src/internal/cli/moduleLoader.ts`
+- `loadFeatureDefinitions()` in `packages/effect-bdd/src/internal/cli/loaders.ts`
+- `ModuleLoader.load()` in `packages/effect-bdd/src/internal/cli/moduleLoader.ts`
 
 What it does:
 
@@ -78,8 +78,8 @@ Do not invent a complex plugin system. First make the existing path cheaper and 
 
 Entry points:
 
-- `loadFeatureSources()` in `src/internal/cli/loaders.ts`
-- `GlobResolver.resolve()` in `src/internal/cli/glob.ts`
+- `loadFeatureSources()` in `packages/effect-bdd/src/internal/cli/loaders.ts`
+- `GlobResolver.resolve()` in `packages/effect-bdd/src/internal/cli/glob.ts`
 
 What it does:
 
@@ -113,10 +113,10 @@ Do not replace globbing with a dependency unless the local resolver becomes a ma
 
 Entry points:
 
-- `buildScenarioTasks()` in `src/internal/discovery.ts`
-- CLI adapter in `src/internal/cli/runner.ts`
-- programmatic adapter in `src/internal/runner.ts`
-- `featureDefinitionIndex()` in `src/internal/cli/runner.ts`
+- `buildScenarioTasks()` in `packages/effect-bdd/src/internal/discovery.ts`
+- CLI adapter in `packages/effect-bdd/src/internal/cli/runner.ts`
+- programmatic adapter in `packages/effect-bdd/src/internal/runner.ts`
+- `featureDefinitionIndex()` in `packages/effect-bdd/src/internal/cli/runner.ts`
 
 What it does:
 
@@ -155,8 +155,8 @@ Do not weaken validation to gain speed. The matching and diagnostics are part of
 
 Entry points:
 
-- `Reporter.emitAll()` in `src/main.ts`
-- reporter implementation in `src/internal/cli/reporter.ts`
+- `Reporter.emitAll()` in `packages/effect-bdd/src/main.ts`
+- reporter implementation in `packages/effect-bdd/src/internal/cli/reporter.ts`
 
 What it does:
 

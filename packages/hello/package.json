@@ -1,0 +1,42 @@
+{
+  "name": "@effect-bdd/hello",
+  "version": "0.1.0",
+  "description": "A hello world package for the effect-bdd monorepo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tatemz/effect-bdd.git",
+    "directory": "packages/hello"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "pnpm --dir ../.. exec tsc -p packages/hello/tsconfig.json",
+    "check": "pnpm --dir ../.. exec tsc -p packages/hello/tsconfig.json --noEmit",
+    "prepack": "pnpm build"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

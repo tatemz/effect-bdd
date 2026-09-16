@@ -5,6 +5,9 @@ coverage/
 .env
 .DS_Store
 scratchpad/
+.pack/
 test/.effect-bdd-*
 test/.effect-bdd-report-*
+packages/effect-bdd/test/.effect-bdd-*
+packages/effect-bdd/test/.effect-bdd-report-*
 .examples/

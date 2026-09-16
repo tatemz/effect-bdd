@@ -62,6 +62,8 @@ writeFileSync(
       include: ["./*.ts"],
       compilerOptions: {
         noEmit: true,
+        composite: false,
+        incremental: false,
         rootDir: "..",
         allowImportingTsExtensions: true,
         noUnusedLocals: false,
@@ -79,7 +81,7 @@ writeFileSync(
 );
 
 try {
-  execFileSync("npx", ["tsc", "-p", outDir], { cwd: root, stdio: "inherit" });
+  execFileSync("pnpm", ["exec", "tsc", "-p", outDir], { cwd: root, stdio: "inherit" });
   console.log(`Typechecked ${count} example(s).`);
 } finally {
   rmSync(outDir, { recursive: true, force: true });

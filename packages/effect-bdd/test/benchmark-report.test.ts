@@ -1,11 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
-import { renderHtml, renderMarkdown } from "../benchmarks/src/report.ts";
+import { renderHtml, renderMarkdown } from "../../../benchmarks/src/report.ts";
 import type {
   BenchmarkResult,
   BenchmarkRun,
   RunnerId,
   RunnerStats,
-} from "../benchmarks/src/types.ts";
+} from "../../../benchmarks/src/types.ts";
 
 const runnerStats = (runner: RunnerId, medianMillis: number): RunnerStats => ({
   runner,

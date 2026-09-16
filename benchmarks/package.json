@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "effect": "4.0.0-rc.112",
-    "effect-bdd": "link:.."
+    "effect-bdd": "workspace:^"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^13.2.1",

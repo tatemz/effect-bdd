@@ -320,14 +320,14 @@ const gitCommit = async (): Promise<string> => {
 };
 
 const packageVersions = async (): Promise<Readonly<Record<string, string>>> => {
-  const rootPackage = parsePackageJson(
-    JSON.parse(await fs.readFile(fromRepoRoot("package.json"), "utf8")),
+  const effectBddPackage = parsePackageJson(
+    JSON.parse(await fs.readFile(fromRepoRoot("packages", "effect-bdd", "package.json"), "utf8")),
   );
   const benchmarkPackage = parsePackageJson(
     JSON.parse(await fs.readFile(path.join(benchmarkRoot, "package.json"), "utf8")),
   );
   return {
-    "effect-bdd": rootPackage.version,
+    "effect-bdd": effectBddPackage.version,
     effect: benchmarkPackage.dependencies.effect,
     "@cucumber/cucumber": benchmarkPackage.devDependencies["@cucumber/cucumber"],
     tsx: benchmarkPackage.devDependencies.tsx,
