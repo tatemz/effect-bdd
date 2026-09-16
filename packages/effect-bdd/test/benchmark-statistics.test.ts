@@ -1,5 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
-import { durationStats, measurementStability, percentDelta } from "../benchmarks/src/statistics.ts";
+import {
+  durationStats,
+  measurementStability,
+  percentDelta,
+} from "../../../benchmarks/src/statistics.ts";
 
 describe("benchmark statistics", () => {
   it("calculates deterministic duration summaries", () => {

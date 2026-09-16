@@ -30,7 +30,7 @@
   },
   "overrides": [
     {
-      "files": ["src/**"],
+      "files": ["packages/effect-bdd/src/**"],
       "rules": {
         "effect-bdd/no-async-await-in-src": "error",
         "effect-bdd/no-effect-defect-apis-in-src": "error",
@@ -48,11 +48,11 @@
           "error",
           {
             "allowedFiles": [
-              "src/internal/cli/models.ts",
-              "src/internal/cli/reporter.ts",
-              "src/internal/cli/runner.ts",
-              "src/internal/cli/tagExpression.ts",
-              "src/internal/runner.ts"
+              "packages/effect-bdd/src/internal/cli/models.ts",
+              "packages/effect-bdd/src/internal/cli/reporter.ts",
+              "packages/effect-bdd/src/internal/cli/runner.ts",
+              "packages/effect-bdd/src/internal/cli/tagExpression.ts",
+              "packages/effect-bdd/src/internal/runner.ts"
             ]
           }
         ],
@@ -62,33 +62,37 @@
       }
     },
     {
-      "files": ["src/**"],
+      "files": ["packages/effect-bdd/src/**"],
       "rules": {
         "effect-bdd/no-any-annotation": [
           "error",
           {
             "allowedFiles": [
-              "src/Bdd.ts",
-              "src/internal/cli/models.ts",
-              "src/internal/cli/runner.ts"
+              "packages/effect-bdd/src/Bdd.ts",
+              "packages/effect-bdd/src/internal/cli/models.ts",
+              "packages/effect-bdd/src/internal/cli/runner.ts"
             ]
           }
         ]
       }
     },
     {
-      "files": ["src/**"],
+      "files": ["packages/effect-bdd/src/**"],
       "rules": {
         "effect-bdd/no-native-date-url-json-boundaries": [
           "error",
           {
-            "allowedFiles": ["src/internal/cli/reporter.ts"]
+            "allowedFiles": ["packages/effect-bdd/src/internal/cli/reporter.ts"]
           }
         ]
       }
     },
     {
-      "files": ["src/index.ts", "src/Bdd.ts", "src/Errors.ts"],
+      "files": [
+        "packages/effect-bdd/src/index.ts",
+        "packages/effect-bdd/src/Bdd.ts",
+        "packages/effect-bdd/src/Errors.ts"
+      ],
       "rules": {
         "effect-bdd/no-untraced-effect-fn-in-public": "error"
       }

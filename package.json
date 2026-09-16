@@ -1,113 +1,37 @@
 {
-  "name": "effect-bdd",
-  "version": "0.9.1",
-  "description": "An Effect-native API for testing Gherkin feature files",
-  "keywords": [
-    "algebraic-data-types",
-    "bdd",
-    "functional-programming",
-    "gherkin",
-    "testing",
-    "typescript"
-  ],
-  "homepage": "https://github.com/tatemz/effect-bdd#readme",
-  "bugs": {
-    "url": "https://github.com/tatemz/effect-bdd/issues"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tatemz/effect-bdd.git"
-  },
-  "bin": {
-    "effect-bdd": "dist/bin.js"
-  },
-  "files": [
-    "dist/**/*.js",
-    "dist/**/*.d.ts"
-  ],
+  "name": "effect-bdd-workspace",
+  "private": true,
   "type": "module",
-  "sideEffects": [],
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./Bdd": {
-      "types": "./dist/Bdd.d.ts",
-      "default": "./dist/Bdd.js"
-    },
-    "./Errors": {
-      "types": "./dist/Errors.d.ts",
-      "default": "./dist/Errors.js"
-    },
-    "./bin": null,
-    "./main": null,
-    "./internal/*": null,
-    "./*/index": null
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.json && pnpm babel",
-    "babel": "babel dist --plugins annotate-pure-calls --out-dir dist",
+    "build": "pnpm --recursive --parallel --filter \"./packages/*\" run build",
+    "check": "pnpm --recursive --parallel --filter \"./packages/*\" run check",
+    "lint": "pnpm lint:oxlint && pnpm lint:package-boundaries && pnpm lint:knip",
+    "lint:oxlint": "oxlint . --deny-warnings",
+    "lint:package-boundaries": "depcruise --config .dependency-cruiser.js --output-type err packages/effect-bdd/src packages/effect-bdd/test packages/effect-bdd/scripts packages/hello/src examples benchmarks oxlint-rules",
+    "lint:knip": "knip --config knip.jsonc",
+    "format": "oxfmt .",
+    "format:check": "oxfmt . --check",
+    "test": "pnpm --filter effect-bdd test",
+    "test:types": "pnpm --filter effect-bdd test:types",
+    "test:examples": "pnpm --filter effect-bdd test:examples",
+    "test:examples:run": "pnpm --dir examples test",
     "bench": "pnpm --dir benchmarks run bench",
     "bench:compare": "pnpm --dir benchmarks run compare",
     "bench:compiled": "pnpm --dir benchmarks run compare:compiled",
     "bench:pressure": "pnpm --dir benchmarks run pressure",
     "bench:report": "pnpm --dir benchmarks run report",
     "bench:smoke": "pnpm --dir benchmarks run smoke",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "lint": "pnpm lint:oxlint && pnpm lint:package-boundaries && pnpm lint:knip",
-    "lint:oxlint": "oxlint . --deny-warnings",
-    "lint:package-boundaries": "depcruise --config .dependency-cruiser.js --output-type err src test scripts examples benchmarks oxlint-rules",
-    "lint:knip": "knip --config knip.jsonc",
-    "format": "oxfmt .",
-    "format:check": "oxfmt . --check",
-    "test": "vitest run",
-    "test:types": "tstyche",
-    "test:examples": "node scripts/check-examples.mjs",
-    "test:examples:run": "pnpm --dir examples test",
     "ci": "pnpm build && pnpm lint && pnpm format:check && pnpm test && pnpm test:types && pnpm test:examples && pnpm test:examples:run",
-    "prepack": "pnpm build"
-  },
-  "dependencies": {
-    "@cucumber/gherkin": "^42.0.1",
-    "@cucumber/messages": "^34.2.1",
-    "@effect/platform-node": "4.0.0-rc.112"
+    "publish:packages": "pnpm --recursive --filter \"./packages/*\" publish --access public --provenance --no-git-checks"
   },
   "devDependencies": {
-    "@babel/cli": "^7.29.7",
-    "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^25.9.2",
-    "babel-plugin-annotate-pure-calls": "^0.5.0",
     "dependency-cruiser": "^17.4.3",
-    "effect": "4.0.0-rc.112",
     "knip": "^6.32.2",
     "oxfmt": "^0.64.0",
     "oxlint": "^1.79.0",
-    "tstyche": "^7.2.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   },
-  "peerDependencies": {
-    "effect": "^4.0.0-rc.112"
-  },
-  "engines": {
-    "node": ">=22.12.0"
-  },
-  "packageManager": "pnpm@10.16.1",
-  "tags": [
-    "bdd",
-    "gherkin",
-    "testing",
-    "typescript",
-    "algebraic-data-types",
-    "functional-programming"
-  ]
+  "packageManager": "pnpm@10.16.1"
 }

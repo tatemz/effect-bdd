@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "effect": "4.0.0-rc.112",
-    "effect-bdd": "link:.."
+    "effect-bdd": "workspace:^"
   },
   "devDependencies": {
     "tsx": "^4.23.12",

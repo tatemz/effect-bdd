@@ -26,11 +26,15 @@ corepack prepare pnpm@10.16.1 --activate
 pnpm install --frozen-lockfile
 ```
 
-Build the package before running examples or benchmarks:
+Build all publishable packages before running examples or benchmarks:
 
 ```sh
 pnpm build
+pnpm --filter effect-bdd build
+pnpm --filter @effect-bdd/hello build
 ```
+
+The repository root is a private workspace. Publishable packages live under `packages/`; use `pnpm --filter` to work on one package and `pnpm publish:packages` to publish all public packages.
 
 ## Making Changes
 
@@ -70,7 +74,7 @@ pnpm test:examples
 pnpm --dir benchmarks run smoke
 ```
 
-The root `pnpm ci` command also runs the example application, but it does not
+The root `pnpm run ci` command also runs the example application, but it does not
 replace the benchmark checks above.
 
 In the pull request:

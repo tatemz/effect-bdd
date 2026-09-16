@@ -15,4 +15,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm dlx pkg-pr-new publish --compact
+      - run: pnpm dlx pkg-pr-new publish --compact ./packages/effect-bdd ./packages/hello

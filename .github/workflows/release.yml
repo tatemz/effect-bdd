@@ -20,18 +20,24 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm run ci
-      - run: npm pack --dry-run
+      - name: Inspect package archives
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/release-packages"
+          pnpm --filter effect-bdd pack --pack-destination "$GITHUB_WORKSPACE/release-packages"
+          pnpm --filter @effect-bdd/hello pack --pack-destination "$GITHUB_WORKSPACE/release-packages"
       - name: Verify npm auth
         run: npm whoami
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Publish to npm
-        run: npm publish --provenance --access public
+      - name: Publish packages to npm
+        run: pnpm run publish:packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Create GitHub release
+      - name: Create GitHub releases
         run: |
-          version="v$(node -p "require('./package.json').version")"
-          gh release create "$version" --target "$GITHUB_SHA" --title "$version" --generate-notes
+          effect_bdd_version="$(node -p "require('./packages/effect-bdd/package.json').version")"
+          hello_version="$(node -p "require('./packages/hello/package.json').version")"
+          gh release create "effect-bdd-v${effect_bdd_version}" --target "$GITHUB_SHA" --title "effect-bdd v${effect_bdd_version}" --generate-notes
+          gh release create "hello-v${hello_version}" --target "$GITHUB_SHA" --title "@effect-bdd/hello v${hello_version}" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

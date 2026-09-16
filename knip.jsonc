@@ -1,26 +1,25 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
   "ignoreDependencies": [
-    // Babel resolves this plugin from the CLI flag in the `babel` package script.
+    // Babel resolves this plugin from the CLI flag in the package build script.
     "babel-plugin-annotate-pure-calls",
   ],
   "workspaces": {
     ".": {
+      "entry": ["oxlint-rules/**/*.test.mjs"],
+      "project": ["oxlint-rules/**/*.mjs"],
+    },
+    "packages/effect-bdd": {
       "entry": [
         // Step modules are loaded by glob at runtime in CLI tests.
         "test/fixtures/*.step.ts",
-        // Tstyche discovers these through `tstyche.json`.
+        // Tstyche discovers these through the package-local configuration.
         "typetest/**/*.tst.ts",
-        // Oxlint's JS plugin test harness discovers these directly.
-        "oxlint-rules/**/*.test.mjs",
       ],
-      "project": [
-        "src/**/*.ts",
-        "test/**/*.ts",
-        "typetest/**/*.tst.ts",
-        "scripts/**/*.mjs",
-        "oxlint-rules/**/*.mjs",
-      ],
+      "project": ["src/**/*.ts", "test/**/*.ts", "typetest/**/*.tst.ts", "scripts/**/*.mjs"],
+    },
+    "packages/hello": {
+      "project": ["src/**/*.ts"],
     },
     "examples": {
       "entry": ["counter.ts", "counter.steps.ts"],

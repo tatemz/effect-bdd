@@ -1,7 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as fs from "node:fs/promises";
-import { defaultGeneratedScale, ensureGeneratedSuites } from "../benchmarks/src/generatedSuites.ts";
-import { fromBenchmarkRoot } from "../benchmarks/src/paths.ts";
+import {
+  defaultGeneratedScale,
+  ensureGeneratedSuites,
+} from "../../../benchmarks/src/generatedSuites.ts";
+import { fromBenchmarkRoot } from "../../../benchmarks/src/paths.ts";
 
 describe("generated benchmark suites", () => {
   it("removes stale files when a generated scale shrinks", async () => {

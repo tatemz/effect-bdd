@@ -7,6 +7,68 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.2
+        version: 25.9.2
+      dependency-cruiser:
+        specifier: ^17.4.3
+        version: 17.4.3
+      knip:
+        specifier: ^6.32.2
+        version: 6.32.2
+      oxfmt:
+        specifier: ^0.64.0
+        version: 0.64.0
+      oxlint:
+        specifier: ^1.79.0
+        version: 1.79.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  benchmarks:
+    dependencies:
+      effect:
+        specifier: 4.0.0-rc.112
+        version: 4.0.0-rc.112
+      effect-bdd:
+        specifier: workspace:^
+        version: link:../packages/effect-bdd
+    devDependencies:
+      '@cucumber/cucumber':
+        specifier: ^13.2.1
+        version: 13.2.1
+      '@types/node':
+        specifier: ^25.9.2
+        version: 25.9.2
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  examples:
+    dependencies:
+      effect:
+        specifier: 4.0.0-rc.112
+        version: 4.0.0-rc.112
+      effect-bdd:
+        specifier: workspace:^
+        version: link:../packages/effect-bdd
+    devDependencies:
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/effect-bdd:
     dependencies:
       '@cucumber/gherkin':
         specifier: ^42.0.1
@@ -30,21 +92,12 @@ importers:
       babel-plugin-annotate-pure-calls:
         specifier: ^0.5.0
         version: 0.5.0(@babel/core@7.29.7)
-      dependency-cruiser:
-        specifier: ^17.4.3
-        version: 17.4.3
       effect:
         specifier: 4.0.0-rc.112
         version: 4.0.0-rc.112
       knip:
         specifier: ^6.32.2
         version: 6.32.2
-      oxfmt:
-        specifier: ^0.64.0
-        version: 0.64.0
-      oxlint:
-        specifier: ^1.79.0
-        version: 1.79.0
       tstyche:
         specifier: ^7.2.2
         version: 7.2.2(typescript@6.0.3)
@@ -55,43 +108,7 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
-  benchmarks:
-    dependencies:
-      effect:
-        specifier: 4.0.0-rc.112
-        version: 4.0.0-rc.112
-      effect-bdd:
-        specifier: link:..
-        version: link:..
-    devDependencies:
-      '@cucumber/cucumber':
-        specifier: ^13.2.1
-        version: 13.2.1
-      '@types/node':
-        specifier: ^25.9.2
-        version: 25.9.2
-      tsx:
-        specifier: ^4.23.12
-        version: 4.23.12
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  examples:
-    dependencies:
-      effect:
-        specifier: 4.0.0-rc.112
-        version: 4.0.0-rc.112
-      effect-bdd:
-        specifier: link:..
-        version: link:..
-    devDependencies:
-      tsx:
-        specifier: ^4.23.12
-        version: 4.23.12
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
+  packages/hello: {}
 
 packages:
 
@@ -3770,7 +3787,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.2
       pathe: 2.0.3
-      picomatch: 4.0.4
+      picomatch: 4.0.5
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.2.4

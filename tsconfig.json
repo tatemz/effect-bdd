@@ -1,27 +1,5 @@
 {
-  "$schema": "http://json.schemastore.org/tsconfig",
-  "include": ["src"],
-  "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleDetection": "force",
-    "verbatimModuleSyntax": true,
-    "allowJs": false,
-    "rewriteRelativeImportExtensions": true,
-    "erasableSyntaxOnly": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "strict": true,
-    "exactOptionalPropertyTypes": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
-    "stripInternal": true,
-    "skipLibCheck": true,
-    "noErrorTruncation": true,
-    "types": ["node"]
-  }
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "include": [],
+  "references": [{ "path": "tsconfig.packages.json" }]
 }
