@@ -23,50 +23,50 @@ import * as Reporter from "./internal/cli/reporter.ts";
 import * as Runner from "./internal/cli/runner.ts";
 import * as CucumberCompiler from "./internal/cucumberCompiler.ts";
 
-const features = Flag.string("features").pipe(
+const features = Flag.String("features").pipe(
   Flag.withAlias("f"),
   Flag.withDescription("Feature file glob. Can be supplied multiple times."),
   Flag.between(1, Infinity),
 );
 
-const steps = Flag.string("steps").pipe(
+const steps = Flag.String("steps").pipe(
   Flag.withAlias("s"),
   Flag.withDescription("Step definition module glob. Can be supplied multiple times."),
   Flag.between(1, Infinity),
 );
 
-const reporter = Flag.choice("reporter", ["text", "html", "json", "junit"] as const).pipe(
+const reporter = Flag.Literals("reporter", ["text", "html", "json", "junit"] as const).pipe(
   Flag.withAlias("r"),
   Flag.withDescription("Reporter to run. Can be supplied multiple times."),
   Flag.between(0, Infinity),
 );
 
-const outputFileText = Flag.file("output-file.text").pipe(
+const outputFileText = Flag.File("output-file.text").pipe(
   Flag.withDescription("File path for the text reporter. Defaults to stdout."),
   Flag.optional,
 );
 
-const outputFileHtml = Flag.file("output-file.html").pipe(
+const outputFileHtml = Flag.File("output-file.html").pipe(
   Flag.withDescription("File path for the html reporter."),
   Flag.optional,
 );
 
-const outputFileJson = Flag.file("output-file.json").pipe(
+const outputFileJson = Flag.File("output-file.json").pipe(
   Flag.withDescription("File path for the json reporter. Defaults to stdout."),
   Flag.optional,
 );
 
-const outputFileJunit = Flag.file("output-file.junit").pipe(
+const outputFileJunit = Flag.File("output-file.junit").pipe(
   Flag.withDescription("File path for the junit reporter."),
   Flag.optional,
 );
 
-const benchmarkTimingFile = Flag.file("benchmark-timing-file").pipe(
+const benchmarkTimingFile = Flag.File("benchmark-timing-file").pipe(
   Flag.withDescription("Internal benchmark sidecar for aggregate report-emission timing."),
   Flag.optional,
 );
 
-const parallel = Flag.integer("parallel").pipe(
+const parallel = Flag.Int("parallel").pipe(
   Flag.withAlias("p"),
   Flag.withDescription("Number of scenarios to run concurrently."),
   Flag.filter(
@@ -76,7 +76,7 @@ const parallel = Flag.integer("parallel").pipe(
   Flag.withDefault(1),
 );
 
-const stepTimeout = Flag.string("step-timeout").pipe(
+const stepTimeout = Flag.String("step-timeout").pipe(
   Flag.withDescription(
     'Maximum duration for each step, using Effect Duration input such as "500 millis" or "5 seconds".',
   ),
@@ -120,19 +120,19 @@ const isDurationInputString = (value: string): value is DurationInputString =>
     value,
   );
 
-const verbose = Flag.boolean("verbose").pipe(
+const verbose = Flag.Boolean("verbose").pipe(
   Flag.withAlias("v"),
   Flag.withDescription("Print every scenario result instead of only failures and diagnostics."),
   Flag.withDefault(false),
 );
 
-const tags = Flag.string("tags").pipe(
+const tags = Flag.String("tags").pipe(
   Flag.withAlias("t"),
   Flag.withDescription("Cucumber-style tag expression. Can be supplied multiple times."),
   Flag.between(0, Infinity),
 );
 
-const title = Flag.string("title").pipe(
+const title = Flag.String("title").pipe(
   Flag.withAlias("n"),
   Flag.withDescription(
     "Run scenarios whose feature/scenario title contains this text. Can be supplied multiple times.",
@@ -140,12 +140,12 @@ const title = Flag.string("title").pipe(
   Flag.between(0, Infinity),
 );
 
-const failFast = Flag.boolean("fail-fast").pipe(
+const failFast = Flag.Boolean("fail-fast").pipe(
   Flag.withDescription("Stop after the first failed scenario. Runs sequentially when enabled."),
   Flag.withDefault(false),
 );
 
-const strict = Flag.boolean("strict").pipe(
+const strict = Flag.Boolean("strict").pipe(
   Flag.withDescription("Fail when any loaded feature or scenario definition is unused."),
   Flag.withDefault(false),
 );
