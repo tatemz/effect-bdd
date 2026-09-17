@@ -25,7 +25,7 @@ running the steps.
 candidate train. Use matching `4.0.0-rc.x` versions of `effect` and Effect platform packages.
 
 ```sh
-pnpm add effect-bdd effect@4.0.0-rc.112
+pnpm add effect-bdd effect@4.0.0-rc.115
 pnpm add -D tsx
 ```
 
