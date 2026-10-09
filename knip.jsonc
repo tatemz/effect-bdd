@@ -23,8 +23,13 @@
       ],
     },
     "examples": {
-      "entry": ["counter.ts", "counter.steps.ts", "greeter/greeter.ts", "greeter/greeter.steps.ts"],
-      "project": ["*.ts", "greeter/*.ts"],
+      "entry": [
+        "counter/counter.ts",
+        "counter/counter.steps.ts",
+        "greeter-api/greeter.ts",
+        "greeter-api/greeter.steps.ts",
+      ],
+      "project": ["counter/*.ts", "greeter-api/*.ts"],
     },
     "benchmarks": {
       "entry": ["cucumber/*.ts", "effect-bdd/*.ts"],

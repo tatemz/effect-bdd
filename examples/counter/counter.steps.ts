@@ -1,6 +1,6 @@
 import { Bdd } from "effect-bdd";
 import { Effect, Schema } from "effect";
-import * as Support from "./counter.steps-support.ts";
+import * as Support from "./counter-state.ts";
 
 /** Captures how many times a step repeats a counter change. */
 const count = Bdd.capture("count", Schema.FiniteFromString.check(Schema.isGreaterThanOrEqualTo(0)));
