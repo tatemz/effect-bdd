@@ -2,27 +2,30 @@ import { Bdd } from "effect-bdd";
 import { Effect, Result, Schema } from "effect";
 import * as Counter from "./counter.ts";
 
-/**
- * The state a counter scenario carries: the latest domain outcome, passed
- * to each step as-is. `undefined` in the success arm means no counter
- * exists yet; a failure holds the rejection of the latest change attempt.
- */
-type CounterState = Result.Result<Counter.Counter | undefined, Counter.CounterRejection>;
-
-/** The seed state for scenarios that begin with no counter. */
-const noCounter: CounterState = Result.succeed(undefined);
-
 /** Captures how many times a step repeats a counter change. */
 const count = Bdd.capture("count", Schema.FiniteFromString.check(Schema.isGreaterThanOrEqualTo(0)));
 
 /** Captures the counter value a `Then` step expects. */
 const expectedValue = Bdd.capture("expectedValue", Schema.FiniteFromString);
 
+/** Reads the value of an existing counter, for value assertions. */
+const valueOf = (state: Counter.CounterState): number | undefined =>
+  Result.getOrElse(state, () => undefined)?.value;
+
+/** Asserts the counter holds the expected value and returns the state. */
+const expectValue = (
+  state: Counter.CounterState,
+  expected: number,
+): Effect.Effect<Counter.CounterState, string> =>
+  valueOf(state) === expected
+    ? Effect.succeed(state)
+    : Effect.fail(`Expected counter value ${expected}, got ${valueOf(state) ?? "none"}.`);
+
 /**
  * The canonical Counter behavior as executable BDD.
  *
  * Steps are defined inline in each scenario pipe. The scenario state is the
- * domain `Result` itself: each step hands the previous result to the next
+ * domain `CounterState` itself: each step hands the previous state to the next
  * domain call instead of unwrapping and re-wrapping it, and returns the new
  * state explicitly. `Bdd.tap` and `Bdd.tapError` observe the run without
  * changing it: a scenario tap runs at its chain position, a feature tap runs
@@ -33,24 +36,16 @@ const expectedValue = Bdd.capture("expectedValue", Schema.FiniteFromString);
 export const counter = Bdd.feature("Counter").pipe(
   Bdd.scenario("Creating a counter").pipe(
     Bdd.given`no counter exists`(() => {
-      return Effect.succeed(noCounter);
+      return Effect.succeed(Counter.missing);
     }),
     Bdd.when`the counter is created`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.create));
+      return Effect.sync(() => Counter.create(counter));
     }),
     Bdd.tap((counter) => {
       return Effect.log(`[Counter] created state: ${JSON.stringify(counter)}`);
     }),
-    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
-      return Effect.gen(function* () {
-        const counterValue = Result.getOrElse(counter, () => undefined)?.value;
-        if (counterValue === expectedValue) {
-          return counter;
-        }
-        return yield* Effect.fail(
-          `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
-        );
-      });
+    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter) => {
+      return expectValue(counter, expectedValue);
     }),
   ),
   Bdd.tap((state) => {
@@ -58,10 +53,10 @@ export const counter = Bdd.feature("Counter").pipe(
   }),
   Bdd.scenario("A counter is created only once").pipe(
     Bdd.given`a counter was created`(() => {
-      return Effect.succeed(Counter.create(undefined));
+      return Effect.succeed(Counter.create(Counter.missing));
     }),
     Bdd.when`the counter is created again`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.create));
+      return Effect.sync(() => Counter.create(counter));
     }),
     Bdd.then`the change is rejected because the counter already exists`((counter) => {
       return Effect.gen(function* () {
@@ -74,58 +69,42 @@ export const counter = Bdd.feature("Counter").pipe(
   ),
   Bdd.scenario("Counting up").pipe(
     Bdd.given`a counter was created`(() => {
-      return Effect.succeed(Counter.create(undefined));
+      return Effect.succeed(Counter.create(Counter.missing));
     }),
     Bdd.when`the counter is incremented ${count} times`(({ count }, counter) => {
       return Effect.sync(() =>
         Array.from({ length: count }).reduce(
-          (current: CounterState) => Result.flatMap(current, Counter.increment),
+          (current: Counter.CounterState) => Counter.increment(current),
           counter,
         ),
       );
     }),
-    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
-      return Effect.gen(function* () {
-        const counterValue = Result.getOrElse(counter, () => undefined)?.value;
-        if (counterValue === expectedValue) {
-          return counter;
-        }
-        return yield* Effect.fail(
-          `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
-        );
-      });
+    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter) => {
+      return expectValue(counter, expectedValue);
     }),
   ),
   Bdd.scenario("Counting down").pipe(
     Bdd.given`a counter at value ${count}`(({ count }) => {
       return Effect.succeed(
         Array.from({ length: count }).reduce(
-          (current: CounterState) => Result.flatMap(current, Counter.increment),
-          Counter.create(undefined),
+          (current: Counter.CounterState) => Counter.increment(current),
+          Counter.create(Counter.missing),
         ),
       );
     }),
     Bdd.when`the counter is decremented`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.decrement));
+      return Effect.sync(() => Counter.decrement(counter));
     }),
-    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
-      return Effect.gen(function* () {
-        const counterValue = Result.getOrElse(counter, () => undefined)?.value;
-        if (counterValue === expectedValue) {
-          return counter;
-        }
-        return yield* Effect.fail(
-          `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
-        );
-      });
+    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter) => {
+      return expectValue(counter, expectedValue);
     }),
   ),
   Bdd.scenario("A missing counter cannot change").pipe(
     Bdd.given`no counter exists`(() => {
-      return Effect.succeed(noCounter);
+      return Effect.succeed(Counter.missing);
     }),
     Bdd.when`the counter is incremented`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.increment));
+      return Effect.sync(() => Counter.increment(counter));
     }),
     Bdd.tapError((failure) => {
       return Effect.logError(`[Counter] ${failure._tag}: ${failure.message}`);
