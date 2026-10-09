@@ -963,12 +963,12 @@ Feature: Taps
       });
     });
 
-    it.effect("runs feature taps on every step's resulting state", () => {
+    it.effect("runs a feature tap once at its declared position", () => {
       const observed: Array<string> = [];
       const feature = Bdd.feature("Feature taps").pipe(
         Bdd.tap((state) =>
           Effect.sync(() => {
-            observed.push(String(state));
+            observed.push(`before:${String(state)}`);
           }),
         ),
         Bdd.scenario("One step").pipe(
@@ -981,6 +981,12 @@ Feature: Taps
             }),
           ),
         ),
+        Bdd.tap((state) =>
+          Effect.sync(() => {
+            observed.push(`after:${String(state)}`);
+          }),
+        ),
+        Bdd.scenario("Another step").pipe(Bdd.given`a word`(() => Effect.succeed("two"))),
       );
 
       return Effect.gen(function* () {
@@ -993,11 +999,17 @@ Feature: Feature taps
     Given a word
     When the word is doubled
     Then the word is oneone
+
+  Scenario: Another step
+    Given a word
 `,
         );
 
-        // After every step's state is produced, including the final step.
-        assert.deepStrictEqual(observed, ["one", "oneone", "oneone"]);
+        // The first tap is anchored before every scenario: it runs once, before
+        // the first, with no state yet. The second is anchored after "One
+        // step": it runs once with that scenario's final state, and never for
+        // scenarios declared after it.
+        assert.deepStrictEqual(observed, ["before:undefined", "after:oneone"]);
       });
     });
 
@@ -1033,9 +1045,43 @@ Feature: Failing taps
       });
     });
 
-    it.effect("runs error taps on step failure and preserves the original error", () => {
+    it.effect(
+      "runs a feature tapError declared after the scenario and preserves the original error",
+      () => {
+        const observed: Array<string> = [];
+        const feature = Bdd.feature("Error taps").pipe(
+          Bdd.scenario("Step fails").pipe(
+            Bdd.when`the action fails`(() => Effect.fail("boom" as const)),
+          ),
+          Bdd.tapError((failure) =>
+            Effect.sync(() => {
+              observed.push(failure._tag);
+            }),
+          ),
+        );
+
+        return Effect.gen(function* () {
+          const error = yield* runError(
+            runBdd(
+              feature,
+              `
+Feature: Error taps
+
+  Scenario: Step fails
+    When the action fails
+`,
+            ),
+          );
+
+          assert.strictEqual(error._tag, "StepError");
+          assert.deepStrictEqual(observed, ["StepError"]);
+        });
+      },
+    );
+
+    it.effect("does not run a feature tapError declared before every scenario", () => {
       const observed: Array<string> = [];
-      const feature = Bdd.feature("Error taps").pipe(
+      const feature = Bdd.feature("Early error taps").pipe(
         Bdd.tapError((failure) =>
           Effect.sync(() => {
             observed.push(failure._tag);
@@ -1051,7 +1097,7 @@ Feature: Failing taps
           runBdd(
             feature,
             `
-Feature: Error taps
+Feature: Early error taps
 
   Scenario: Step fails
     When the action fails
@@ -1059,17 +1105,18 @@ Feature: Error taps
           ),
         );
 
+        // The tap is declared before every scenario, so it observes nothing.
         assert.strictEqual(error._tag, "StepError");
-        assert.deepStrictEqual(observed, ["StepError"]);
+        assert.deepStrictEqual(observed, []);
       });
     });
 
     it.effect("replaces the failure with TapError when an error tap handler fails", () => {
       const feature = Bdd.feature("Failing error taps").pipe(
-        Bdd.tapError(() => Effect.fail("handler exploded" as const)),
         Bdd.scenario("Step fails").pipe(
           Bdd.when`the action fails`(() => Effect.fail("boom" as const)),
         ),
+        Bdd.tapError(() => Effect.fail("handler exploded" as const)),
       );
 
       return Effect.gen(function* () {
@@ -1126,7 +1173,8 @@ Feature: Data-first
         );
 
         assert.strictEqual(error._tag, "StepError");
-        // Feature taps run after scenario taps regardless of wiring order.
+        // The feature tapError is declared after the scenario, so it runs after
+        // the scenario's own tapError.
         assert.deepStrictEqual(observed, ["scenario:StepError", "feature:StepError"]);
       });
     });

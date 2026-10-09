@@ -457,8 +457,10 @@ const addItem = Bdd.scenario("Add item").pipe(
 The state annotation is the contract: `Bdd.tap((state: Cart) => ...)` only typechecks
 where the chain's current state is `Cart`.
 
-On a feature, `Bdd.tap` runs after every step of every scenario. Because scenarios may
-use different state types, feature tap handlers must accept `unknown` state:
+On a feature, `Bdd.tap` runs once at its declared position: before the first scenario
+when nothing precedes it (receiving `undefined` state), otherwise after the scenario
+declared before it, receiving that scenario's final state. Because scenarios may use
+different state types, feature tap handlers must accept `unknown` state:
 
 ```ts
 import { Bdd } from "effect-bdd";
@@ -473,16 +475,18 @@ const feature = Bdd.feature("Shopping cart").pipe(
 ```
 
 `Bdd.tapError` observes a scenario failure without swallowing it, mirroring
-`Effect.tapError`. The handler receives the failure, and the scenario still fails with
-the original error:
+`Effect.tapError`. On a scenario it observes that scenario's failures. On a feature it
+observes the failures of the scenarios declared before it — a tap declared before every
+scenario observes nothing. The handler receives the failure, and the scenario still
+fails with the original error:
 
 ```ts
 import { Bdd } from "effect-bdd";
 import { Effect } from "effect";
 
 const feature = Bdd.feature("Shopping cart").pipe(
-  Bdd.tapError((failure) => Effect.logError(`${failure._tag}: ${failure.message}`)),
   Bdd.scenario("Add item").pipe(Bdd.when`an item is added`(() => Effect.succeed(undefined))),
+  Bdd.tapError((failure) => Effect.logError(`${failure._tag}: ${failure.message}`)),
 );
 ```
 

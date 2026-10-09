@@ -294,6 +294,19 @@ export interface Scenario<State = void, E = never, R = never> extends Pipeable {
 }
 
 /**
+ * A tap node anchored to its declaration position within a feature: it runs
+ * once at that boundary — before the first scenario when nothing precedes it,
+ * otherwise after the scenario declared before it.
+ *
+ * @category models
+ * @since 0.10.0
+ */
+export interface FeatureTapNode {
+  readonly afterScenarios: number;
+  readonly taps: ReadonlyArray<TapHandler<any>>;
+}
+
+/**
  * A feature definition made from explicit scenario chains.
  *
  * @category models
@@ -306,9 +319,7 @@ export interface Feature<E = never, R = never> extends Pipeable {
   readonly title: string;
   readonly scenarios: ReadonlyArray<Scenario<any, any, any>>;
   /** @since 0.10.0 */
-  readonly taps: ReadonlyArray<TapHandler<any>>;
-  /** @since 0.10.0 */
-  readonly errorTaps: ReadonlyArray<AnyTapError>;
+  readonly taps: ReadonlyArray<FeatureTapNode>;
 }
 
 /**
@@ -321,12 +332,7 @@ export interface Feature<E = never, R = never> extends Pipeable {
  * @since 0.2.0
  */
 export const isFeature = (u: unknown): u is Feature<unknown, unknown> =>
-  hasTypeId(u, FeatureTypeId) &&
-  hasStringProperty(u, "title") &&
-  hasFeatureTaps(u) &&
-  hasScenarios(u);
-
-const hasFeatureTaps = (u: unknown): boolean => hasTaps(u) && hasErrorTaps(u);
+  hasTypeId(u, FeatureTypeId) && hasStringProperty(u, "title") && hasTaps(u) && hasScenarios(u);
 
 /**
  * Checks whether a value is a {@link Scenario} definition.
@@ -664,8 +670,11 @@ export interface TapApplicator<In> {
  *
  * `Bdd.tap` mirrors `Effect.tap`. In a scenario chain it runs wherever it is
  * piped, receiving the state produced so far and passing it through unchanged.
- * On a feature it runs after every step of every scenario, receiving `unknown`
- * state.
+ * On a feature it runs once at its declared position — before the first
+ * scenario when nothing precedes it (receiving `undefined` state), otherwise
+ * after the scenario declared before it, receiving that scenario's final
+ * state on success. Feature tap handlers must accept `unknown` state because
+ * scenarios may use different state types.
  *
  * If the handler fails, the scenario fails with a {@link TapError}.
  *
@@ -717,7 +726,10 @@ const tap_: Tap = Fn.dual(
           self.providers,
           self.errorTaps,
         )
-      : makeFeature(self.title, self.scenarios, [...self.taps, tap], self.errorTaps);
+      : makeFeature(self.title, self.scenarios, [
+          ...self.taps,
+          { afterScenarios: self.scenarios.length, taps: [tap] },
+        ]);
   },
 );
 
@@ -734,11 +746,13 @@ export interface TapErrorOn {
 /**
  * Observes a scenario failure without swallowing it.
  *
- * `Bdd.tapError` mirrors `Effect.tapError`. The handler receives the scenario's
- * failure — {@link ScenarioSetupError}, {@link StepError},
- * {@link ScenarioTeardownError}, or {@link TapError} — and the scenario still
- * fails with the original error. `ParseError` and `MatchError` are never
- * observed because they fail before a scenario executes.
+ * `Bdd.tapError` mirrors `Effect.tapError`. On a scenario it observes that
+ * scenario's failures. On a feature it observes the failures of the scenarios
+ * declared before it — a tap declared before every scenario observes nothing.
+ * The handler receives the failure — {@link ScenarioSetupError},
+ * {@link StepError}, {@link ScenarioTeardownError}, or {@link TapError} — and
+ * the scenario still fails with the original error. `ParseError` and
+ * `MatchError` are never observed because they fail before a scenario executes.
  *
  * If the handler itself fails, its {@link TapError} replaces the original
  * failure, exactly as an `Effect.tapError` handler failure would.
@@ -778,10 +792,19 @@ const tapError_ = Fn.dual(
     self: Scenario<State, E, R> | Feature<E, R>,
     handler: TapErrorHandler,
   ): Scenario<State, E, R> | Feature<E, R> => {
-    const errorTaps = [...self.errorTaps, handler];
-    return isScenario(self)
-      ? makeScenario(self.title, self.steps, self.providers, errorTaps)
-      : makeFeature(self.title, self.scenarios, self.taps, errorTaps);
+    if (isScenario(self)) {
+      return makeScenario(self.title, self.steps, self.providers, [...self.errorTaps, handler]);
+    }
+    // A feature tapError observes only the scenarios declared before it, so it
+    // bakes into those scenarios when declared rather than firing for every
+    // scenario unconditionally.
+    const scenarios = Arr.map(self.scenarios, (scenario) =>
+      makeScenario(scenario.title, scenario.steps, scenario.providers, [
+        ...scenario.errorTaps,
+        handler,
+      ]),
+    );
+    return makeFeature(self.title, scenarios, self.taps);
   },
 ) as TapError;
 
@@ -1066,15 +1089,13 @@ interface CapturedStepFactory<Captures, Kind extends StepKind> {
 const makeFeature = <E, R>(
   title: string,
   scenarios: ReadonlyArray<Scenario<any, any, any>>,
-  taps: ReadonlyArray<TapHandler<unknown>> = [],
-  errorTaps: ReadonlyArray<AnyTapError> = [],
+  taps: ReadonlyArray<FeatureTapNode> = [],
 ): Feature<E, R> => {
   const feature: Feature<E, R> = {
     [FeatureTypeId]: FeatureTypeId,
     title,
     scenarios,
     taps,
-    errorTaps,
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
@@ -1094,7 +1115,7 @@ const makeScenario = <State, E, R>(
       // oxlint-disable-next-line effect-bdd/no-throw-statements
       throw new TypeError("Expected a Bdd.Feature when appending a scenario.");
     }
-    return makeFeature(self.title, [...self.scenarios, scenario], self.taps, self.errorTaps);
+    return makeFeature(self.title, [...self.scenarios, scenario], self.taps);
   }
   const properties: Pick<
     Scenario<State, E, R>,

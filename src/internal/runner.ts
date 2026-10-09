@@ -196,10 +196,7 @@ const provideScenarioContext =
 const tapScenarioFailures = <E, R>(
   task: ScenarioTask<E, R>,
 ): (<A>(effect: Effect.Effect<A, RunError, R>) => Effect.Effect<A, RunError, R>) => {
-  const handlers = Fn.pipe(
-    task.scenarioDefinition.errorTaps,
-    Arr.appendAll(task.featureDefinition.errorTaps),
-  );
+  const handlers = task.scenarioDefinition.errorTaps;
   if (handlers.length === 0) {
     return (effect) => effect;
   }
@@ -305,6 +302,23 @@ const runSteps: <E, R>(
   }
 
   const featureTaps = task.featureDefinition.taps;
+  // A feature tap runs once at its anchor: declared before any scenario, it
+  // runs before the first one with no state yet; otherwise it runs after the
+  // scenario declared before it, receiving that scenario's final state on
+  // success — exactly as an `Effect.tap` placed at that position would.
+  const beforeScenario =
+    task.definitionIndex === 0
+      ? Fn.pipe(
+          featureTaps,
+          Arr.filter((node) => node.afterScenarios === 0),
+          Arr.flatMap((node) => node.taps),
+        )
+      : [];
+  const afterScenario = Fn.pipe(
+    featureTaps,
+    Arr.filter((node) => node.afterScenarios === task.definitionIndex + 1),
+    Arr.flatMap((node) => node.taps),
+  );
   const sourceSteps = task.pickle.steps;
   const initialState: Effect.Effect<unknown, RunError, R> = Effect.succeed(undefined);
   return yield* Fn.pipe(
@@ -312,16 +326,21 @@ const runSteps: <E, R>(
     Arr.reduce(initialState, (state, node, chainIndex) =>
       Effect.flatMap(state, (previous) =>
         isStepDefinition(node)
-          ? Fn.pipe(
-              runStep(task, node, sourceStepAt(chain, chainIndex, sourceSteps), previous, options),
-              Effect.flatMap((next) =>
-                featureTaps.length === 0
-                  ? Effect.succeed(next)
-                  : runTaps(task, featureTaps, chain, chainIndex, sourceSteps, next),
-              ),
-            )
+          ? runStep(task, node, sourceStepAt(chain, chainIndex, sourceSteps), previous, options)
           : runTaps(task, node.taps, chain, chainIndex, sourceSteps, previous),
       ),
+    ),
+    // A feature tap anchored before this scenario observes the run's start;
+    // one anchored after it observes the scenario's final state, exactly as an
+    // `Effect.tap` placed after the scenario would.
+    Effect.flatMap((finalState) =>
+      beforeScenario.length === 0 && afterScenario.length === 0
+        ? Effect.succeed(finalState)
+        : Fn.pipe(
+            runFeatureTaps(task, beforeScenario, undefined),
+            Effect.flatMap(() => runFeatureTaps(task, afterScenario, finalState)),
+            Effect.as(finalState),
+          ),
     ),
   );
 });
@@ -383,6 +402,38 @@ const runTaps = <E, R>(
       ),
     );
   return Fn.pipe(handlers, Effect.forEach(runTap, { discard: true }), Effect.as(state));
+};
+
+/**
+ * Runs feature taps at their anchored boundary. A tap anchored before the
+ * scenario receives `undefined` (the run has not produced state yet); one
+ * anchored after it receives the scenario's final state. Handler failures map
+ * to `TapError` exactly like chain taps.
+ */
+const runFeatureTaps = <E, R>(
+  task: ScenarioTask<E, R>,
+  handlers: ReadonlyArray<TapHandler<unknown>>,
+  state: unknown,
+): Effect.Effect<void, RunError, R> => {
+  const runTap = (handler: TapHandler<unknown>): Effect.Effect<void, TapError, R> =>
+    Fn.pipe(
+      // Feature taps must accept `unknown` state because scenarios may use
+      // different state types; the handler view is erased in storage.
+      // oxlint-disable-next-line effect-bdd/no-type-assertions
+      handler(state) as Effect.Effect<void, unknown, R>,
+      Effect.asVoid,
+      Effect.mapError(
+        (cause): TapError =>
+          new TapError({
+            message: `Feature tap handler failed: ${task.sourceScenarioTitle}`,
+            scenario: task.sourceScenarioTitle,
+            step: task.sourceScenarioTitle,
+            line: task.scenarioLine,
+            cause,
+          }),
+      ),
+    );
+  return Fn.pipe(handlers, Effect.forEach(runTap, { discard: true }));
 };
 
 const runStep: <E, R>(
