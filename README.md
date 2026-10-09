@@ -427,6 +427,68 @@ Timeouts fail as `StepError`s whose `cause` is a `StepTimeoutError`. Effect time
 interrupt fibers, but synchronous infinite loops or non-interruptible native work can
 still block the process.
 
+### Taps
+
+`Bdd.tap` observes the scenario state without changing it, mirroring `Effect.tap`. In a
+scenario chain it runs wherever it is piped, receiving the state produced so far and
+passing it through unchanged:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+
+interface Cart {
+  readonly items: ReadonlyArray<string>;
+}
+
+const emptyCart: Cart = { items: [] };
+
+const showCart = Bdd.tap((state: Cart) => Effect.log(`${state.items.length} item(s)`));
+
+const addItem = Bdd.scenario("Add item").pipe(
+  Bdd.given`an empty cart`(() => Effect.succeed(emptyCart)),
+  showCart,
+  Bdd.when`an item is added`((state: Cart) => Effect.succeed({ items: ["sku"] })),
+  showCart,
+  Bdd.then`the cart has one item`((state: Cart) => Effect.succeed(state)),
+);
+```
+
+The state annotation is the contract: `Bdd.tap((state: Cart) => ...)` only typechecks
+where the chain's current state is `Cart`.
+
+On a feature, `Bdd.tap` runs after every step of every scenario. Because scenarios may
+use different state types, feature tap handlers must accept `unknown` state:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+
+const feature = Bdd.feature("Shopping cart").pipe(
+  Bdd.tap((state) => Effect.log(`state: ${String(state)}`)),
+  Bdd.scenario("Add item").pipe(
+    Bdd.given`an empty cart`(() => Effect.succeed({ items: [] as ReadonlyArray<string> })),
+  ),
+);
+```
+
+`Bdd.tapError` observes a scenario failure without swallowing it, mirroring
+`Effect.tapError`. The handler receives the failure, and the scenario still fails with
+the original error:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+
+const feature = Bdd.feature("Shopping cart").pipe(
+  Bdd.tapError((failure) => Effect.logError(`${failure._tag}: ${failure.message}`)),
+  Bdd.scenario("Add item").pipe(Bdd.when`an item is added`(() => Effect.succeed(undefined))),
+);
+```
+
+If a tap handler itself fails, the scenario fails with a `TapError` — the same rule an
+`Effect.tapError` handler failure follows.
+
 ## Reference
 
 ### Important CLI Flags
@@ -478,6 +540,7 @@ scenario chain independently.
 - `ScenarioSetupError`: scenario-level provider setup failed before steps ran.
 - `StepError`: a matched step implementation failed or exceeded its configured timeout.
 - `ScenarioTeardownError`: scenario scope finalization failed after steps finished.
+- `TapError`: a `Bdd.tap` or `Bdd.tapError` handler failed.
 
 ### Public API
 
@@ -485,14 +548,15 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 
 - constructors: `Bdd.capture`, `Bdd.table`, `Bdd.docString`, `Bdd.feature`, `Bdd.scenario`
 - steps: `Bdd.given`, `Bdd.when`, `Bdd.then`, `Bdd.step`
-- scenario wiring: `Bdd.provide`
+- scenario wiring: `Bdd.provide`, `Bdd.tap`, `Bdd.tapError`
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
 - guards: `Bdd.isFeature`, `Bdd.isScenario`, `Bdd.isStep`, `Bdd.isStepTimeoutError`
 - models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`,
   `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`,
-  `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`, `Bdd.StepTimeoutError`
+  `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`, `Bdd.StepTimeoutError`,
+  `Bdd.TapError`, `Bdd.ScenarioFailure`
 
 `Bdd.then` is a tagged-template step constructor. Because the namespace has a `then`
 property, do not pass `Bdd` itself to promise APIs or `await` it; use

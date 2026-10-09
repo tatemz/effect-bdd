@@ -279,6 +279,53 @@ describe("Bdd", () => {
     );
   });
 
+  test("tap preserves scenario state and typechecks the annotated state", () => {
+    const showCount = Bdd.tap((_state: number) => Effect.succeed(undefined));
+    const scenario = Bdd.scenario("Counter").pipe(
+      Bdd.given`one`(() => Effect.succeed(1)),
+      showCount,
+      Bdd.when`incremented`((state: number) => Effect.succeed(state + 1)),
+      showCount,
+    );
+
+    expect(scenario).type.toBe<Bdd.Scenario<number, never, never>>();
+
+    const stringTap = Bdd.tap((_state: string) => Effect.succeed(undefined));
+    expect(stringTap).type.not.toBeCallableWith(
+      Bdd.scenario("Wrong state").pipe(Bdd.given`one`(() => Effect.succeed(1))),
+    );
+  });
+
+  test("feature taps accept unannotated handlers", () => {
+    const feature = Bdd.feature("Counter").pipe(
+      Bdd.tap((_state) => Effect.succeed(undefined)),
+      Bdd.scenario("One").pipe(Bdd.given`one`(() => Effect.succeed(1))),
+    );
+
+    expect(feature).type.toBe<Bdd.Feature<never, never>>();
+  });
+
+  test("tapError preserves feature and scenario types", () => {
+    const feature = Bdd.feature("Counter").pipe(
+      Bdd.tapError((failure) => {
+        expect(failure._tag).type.toBe<
+          | "ParseError"
+          | "MatchError"
+          | "ScenarioSetupError"
+          | "StepError"
+          | "ScenarioTeardownError"
+          | "TapError"
+        >();
+        return Effect.succeed(undefined);
+      }),
+      Bdd.scenario("Failure").pipe(
+        Bdd.given`zero`((): Effect.Effect<number, "given failed"> => Effect.succeed(0)),
+      ),
+    );
+
+    expect(feature).type.toBe<Bdd.Feature<"given failed", never>>();
+  });
+
   test("then preserves step overload parity", () => {
     const qty = Bdd.capture("qty", Schema.NumberFromString);
     const Payload = Schema.Struct({

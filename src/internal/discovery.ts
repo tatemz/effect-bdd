@@ -6,6 +6,7 @@ import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type { MatchResult } from "./expression.ts";
+import type { TapHandler, TapErrorHandler } from "../Errors.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -59,16 +60,38 @@ export interface AnyStep<R = unknown> {
   ) => Effect.Effect<unknown, unknown, R>;
 }
 
+/**
+ * Tap node shape stored in scenario chains. Identified structurally by the
+ * absence of `run` and the presence of `taps` at runtime.
+ *
+ * @internal
+ */
+/**
+ * Tap node shape stored in scenario chains. Identified structurally by the
+ * absence of `run` and the presence of `taps` at runtime.
+ *
+ * @internal
+ */
+interface AnyTapNode {
+  readonly taps: ReadonlyArray<TapHandler<unknown>>;
+}
+
+/** @internal */
+export type AnyStepOrTap<R = unknown> = AnyStep<R> | AnyTapNode;
+
 interface ScenarioDefinition<R = unknown> {
   readonly title: string;
-  readonly steps: ReadonlyArray<AnyStep<R>>;
+  readonly steps: ReadonlyArray<AnyStepOrTap<R>>;
   readonly providers: ReadonlyArray<Layer.Layer<unknown, unknown, R>>;
+  readonly errorTaps: ReadonlyArray<TapErrorHandler>;
 }
 
 /** @internal */
 export interface FeatureDefinition<E, R> {
   readonly title: string;
   readonly scenarios: ReadonlyArray<ScenarioDefinition<R>>;
+  readonly taps: ReadonlyArray<TapHandler<unknown>>;
+  readonly errorTaps: ReadonlyArray<TapErrorHandler>;
   readonly _E?: E;
   readonly _R?: R;
 }

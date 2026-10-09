@@ -1,6 +1,7 @@
 /**
  * @since 0.1.0
  */
+import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 /**
@@ -174,4 +175,86 @@ export class ScenarioTeardownError extends Schema.TaggedError<ScenarioTeardownEr
 export class StepTimeoutError extends Schema.TaggedError<StepTimeoutError>()("StepTimeoutError", {
   message: Schema.String,
   timeout: Schema.Duration,
+}) {}
+
+/**
+ * A tap handler observes the scenario state without changing it.
+ *
+ * The Effect may fail — a failing handler surfaces as a {@link TapError}.
+ *
+ * @category models
+ * @since 0.10.0
+ */
+export interface TapHandler<In> {
+  (state: In): Effect.Effect<void, unknown, never>;
+}
+
+/**
+ * A tap error handler observes a scenario failure without swallowing it.
+ *
+ * The Effect may fail — a failing handler surfaces as a {@link TapError} that
+ * replaces the original failure, mirroring `Effect.tapError` handler semantics.
+ *
+ * @category models
+ * @since 0.10.0
+ */
+export interface TapErrorHandler {
+  (failure: RunError): Effect.Effect<void, unknown, never>;
+}
+
+/**
+ * Error type returned by `Bdd.run`.
+ *
+ * @category errors
+ * @since 0.1.0
+ */
+export type RunError =
+  | ParseError
+  | MatchError
+  | ScenarioSetupError
+  | StepError
+  | ScenarioTeardownError
+  | TapError;
+
+/**
+ * The scenario failure errors observable with `Bdd.tapError`.
+ *
+ * @category errors
+ * @since 0.10.0
+ */
+export type ScenarioFailure = RunError;
+
+/**
+ * An error raised when a {@link Bdd.tap} or `Bdd.tapError` handler fails.
+ *
+ * **Details**
+ *
+ * Taps observe without changing outcomes, so a tap handler failure replaces the
+ * scenario's own failure the same way an `Effect.tapError` handler failure does.
+ * The `cause` field preserves the handler's original failure.
+ *
+ * @example
+ * ```ts
+ * import { TapError } from "effect-bdd/Errors"
+ *
+ * const error = new TapError({
+ *   message: "Tap failed: given step",
+ *   scenario: "Add item",
+ *   step: "an empty cart",
+ *   line: 4,
+ *   cause: "log sink unavailable"
+ * })
+ *
+ * console.log(error._tag) // "TapError"
+ * ```
+ *
+ * @category errors
+ * @since 0.10.0
+ */
+export class TapError extends Schema.TaggedError<TapError>()("TapError", {
+  message: Schema.String,
+  scenario: Schema.String,
+  step: Schema.String,
+  line: Schema.Number,
+  cause: Schema.Unknown,
 }) {}
