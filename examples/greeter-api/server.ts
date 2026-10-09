@@ -1,34 +1,24 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { Context, Effect, Layer } from "effect";
 import { HttpRouter, HttpServer } from "effect/http";
-import { HttpApiBuilder, HttpApiClient } from "effect/http-api";
+import { HttpApiClient } from "effect/http-api";
 import * as NetAddress from "effect/net/NetAddress";
 import { createServer } from "node:http";
-import { Api, HealthHandlers, type ApiClient } from "./api.ts";
-import { type Language, Greeter } from "./greeter.ts";
+import { Api, type ApiClient } from "./api.ts";
 
 /**
- * The served API routes: the typed `Api` with its handlers, plus the Greeter
- * implementation for the request handlers to resolve.
+ * Starts the given app layer on an ephemeral port and returns the bound port
+ * and a typed client for it.
  *
- * A scenario picks the language by piping `Greeter.layerFor(language)` in as
- * the request-scoped implementation.
- */
-const apiApp = (language: Language) =>
-  HttpRouter.provideRequest(Greeter.layerFor(language))(
-    HttpApiBuilder.layer(Api).pipe(Layer.provide(HealthHandlers)),
-  );
-
-/**
- * Builds the served app and returns the bound port and a typed client for it.
- *
+ * The caller owns the app: it composes the layers it wants served — handlers,
+ * implementations, request-scoped wiring — and hands the finished layer here.
  * The server runs until the surrounding scope closes; port `0` picks an
  * ephemeral port, which is how each scenario gets an isolated server.
  */
-export const startApp = (language: Language) =>
+export const startApp = <A, E, R>(app: Layer.Layer<A, E, R>) =>
   Effect.gen(function* () {
     const context = yield* Layer.build(
-      HttpRouter.serve(apiApp(language), { disableListenLog: true }).pipe(
+      HttpRouter.serve(app, { disableListenLog: true }).pipe(
         Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 0 })),
       ),
     );
