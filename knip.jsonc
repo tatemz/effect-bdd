@@ -23,8 +23,8 @@
       ],
     },
     "examples": {
-      "entry": ["counter.ts", "counter.steps.ts"],
-      "project": ["*.ts"],
+      "entry": ["counter.ts", "counter.steps.ts", "greeter/greeter.ts", "greeter/greeter.steps.ts"],
+      "project": ["*.ts", "greeter/*.ts"],
     },
     "benchmarks": {
       "entry": ["cucumber/*.ts", "effect-bdd/*.ts"],

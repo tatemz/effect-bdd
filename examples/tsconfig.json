@@ -1,6 +1,6 @@
 {
   "extends": "../tsconfig.json",
-  "include": ["./*.ts"],
+  "include": ["./*.ts", "./greeter/*.ts"],
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
