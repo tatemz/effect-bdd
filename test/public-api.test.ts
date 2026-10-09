@@ -50,7 +50,14 @@ describe("public API", () => {
       assert.strictEqual(Bdd.isStep({ ...step }), false);
       assert.strictEqual(Bdd.isScenario({ ...scenario }), false);
       assert.strictEqual(Bdd.isFeature({ ...feature }), false);
-      assert.deepStrictEqual(Object.keys(feature), ["title", "scenarios", "pipe"]);
+      assert.deepStrictEqual(Object.keys(feature), ["title", "scenarios", "taps", "pipe"]);
+      assert.deepStrictEqual(Object.keys(scenario), [
+        "title",
+        "steps",
+        "providers",
+        "errorTaps",
+        "pipe",
+      ]);
       assert.strictEqual(Object.getOwnPropertySymbols(feature).length, 1);
     });
 

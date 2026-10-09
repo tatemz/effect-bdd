@@ -1,4 +1,5 @@
 import { setWorldConstructor } from "@cucumber/cucumber";
+import type * as Counter from "../counter-domain.ts";
 
 export type LineItem = {
   readonly sku: string;
@@ -17,37 +18,15 @@ export type Payload = {
   readonly qty: number;
 };
 
-export type Counter = {
-  readonly value: number;
-  readonly active: boolean;
-};
-
-export type CounterRejection =
-  | "AlreadyExists"
-  | "DoesNotExist"
-  | "MaximumReached"
-  | "MinimumReached"
-  | "Disabled";
-
-export type CounterScenarioState = {
-  readonly counter: Counter | undefined;
-  readonly rejection: CounterRejection | undefined;
-};
-
 export const emptyCart: Cart = {
   items: [],
   taxEnabled: false,
 };
 
-export const initialCounterState: CounterScenarioState = {
-  counter: undefined,
-  rejection: undefined,
-};
-
 export class BenchmarkWorld {
   readonly events: Array<string> = [];
-  cart: Cart = emptyCart;
-  counterState: CounterScenarioState = initialCounterState;
+  cart: Cart = { items: [], taxEnabled: false };
+  counterState: Counter.Counter | undefined = undefined;
 }
 
 setWorldConstructor(BenchmarkWorld);

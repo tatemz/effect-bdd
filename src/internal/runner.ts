@@ -18,8 +18,10 @@ import {
   ScenarioTeardownError,
   StepError,
   StepTimeoutError,
+  TapError,
 } from "../Errors.ts";
 import * as Discovery from "./discovery.ts";
+import type { TapHandler } from "../Errors.ts";
 import type * as Expression from "./expression.ts";
 import * as Parser from "./parser.ts";
 
@@ -32,12 +34,19 @@ export type DocStringInput = Discovery.DocStringInput;
 /** @internal */
 type ConcreteStepKind = Discovery.ConcreteStepKind;
 
-type RunError = ParseError | MatchError | ScenarioSetupError | StepError | ScenarioTeardownError;
+type RunError =
+  | ParseError
+  | MatchError
+  | ScenarioSetupError
+  | StepError
+  | ScenarioTeardownError
+  | TapError;
 
 type TableArg<A> = Discovery.TableArg<A>;
 type DocStringArg<A> = Discovery.DocStringArg<A>;
 type StepArg<A> = Discovery.StepArg<A>;
 type AnyStep<R = unknown> = Discovery.AnyStep<R>;
+type AnyStepOrTap<R = unknown> = Discovery.AnyStepOrTap<R>;
 type FeatureDefinition<E, R> = Discovery.FeatureDefinition<E, R>;
 
 interface Report {
@@ -133,6 +142,7 @@ export const runScenarioTask = <E, R>(
       runSteps(task, options),
       provideScenarioContext(context),
       Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
+      tapScenarioFailures(task),
       Scope.provide(scope),
     );
     const stepExit = yield* Effect.exit(program);
@@ -178,6 +188,44 @@ const provideScenarioContext =
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Option.isSome(context) ? Effect.provide(effect, context.value) : effect;
 
+/**
+ * Runs the scenario's error taps on a failure without swallowing it, mirroring
+ * `Effect.tapError`: the original failure is preserved, and a handler failure
+ * becomes a `TapError` that replaces it.
+ */
+const tapScenarioFailures = <E, R>(
+  task: ScenarioTask<E, R>,
+): (<A>(effect: Effect.Effect<A, RunError, R>) => Effect.Effect<A, RunError, R>) => {
+  const handlers = task.scenarioDefinition.errorTaps;
+  if (handlers.length === 0) {
+    return (effect) => effect;
+  }
+  return (effect) =>
+    Fn.pipe(
+      effect,
+      Effect.catchIf(
+        () => true,
+        (failure: RunError) =>
+          Fn.pipe(
+            Effect.forEach(handlers, (handler) => Effect.asVoid(handler(failure)), {
+              discard: true,
+            }),
+            Effect.mapError(
+              (cause): RunError =>
+                new TapError({
+                  message: `Tap error handler failed: ${task.sourceScenarioTitle}`,
+                  scenario: task.sourceScenarioTitle,
+                  step: task.sourceScenarioTitle,
+                  line: task.scenarioLine,
+                  cause,
+                }),
+            ),
+            Effect.andThen(Effect.fail(failure)),
+          ),
+      ),
+    );
+};
+
 const closeScenarioScope = <A, E>(
   _task: ScenarioTask<unknown, unknown>,
   scope: Scope.Closeable,
@@ -190,8 +238,8 @@ const isRunError = (u: unknown): u is RunError => isDiscoveryRunError(u) || isEx
 const isDiscoveryRunError = (u: unknown): u is ParseError | MatchError | ScenarioSetupError =>
   u instanceof ParseError || u instanceof MatchError || u instanceof ScenarioSetupError;
 
-const isExecutionRunError = (u: unknown): u is StepError | ScenarioTeardownError =>
-  u instanceof StepError || u instanceof ScenarioTeardownError;
+const isExecutionRunError = (u: unknown): u is StepError | ScenarioTeardownError | TapError =>
+  u instanceof StepError || u instanceof ScenarioTeardownError || u instanceof TapError;
 
 const scenarioSetupError = (
   task: ScenarioTask<unknown, unknown>,
@@ -241,7 +289,8 @@ const runSteps: <E, R>(
   options: RunOptions,
 ) {
   const steps = task.pickle.steps;
-  const definitions = task.scenarioDefinition.steps;
+  const chain = task.scenarioDefinition.steps;
+  const definitions = Arr.filter(chain, isStepDefinition);
   if (steps.length !== definitions.length) {
     return yield* matchErrorEffect({
       message: `Scenario "${task.sourceScenarioTitle}" has ${steps.length} source step(s), but its chain has ${definitions.length} step(s)`,
@@ -252,32 +301,156 @@ const runSteps: <E, R>(
     });
   }
 
+  const featureTaps = task.featureDefinition.taps;
+  // A feature tap runs once at its anchor: declared before any scenario, it
+  // runs before the first one with no state yet; otherwise it runs after the
+  // scenario declared before it, receiving that scenario's final state on
+  // success — exactly as an `Effect.tap` placed at that position would.
+  const beforeScenario =
+    task.definitionIndex === 0
+      ? Fn.pipe(
+          featureTaps,
+          Arr.filter((node) => node.afterScenarios === 0),
+          Arr.flatMap((node) => node.taps),
+        )
+      : [];
+  const afterScenario = Fn.pipe(
+    featureTaps,
+    Arr.filter((node) => node.afterScenarios === task.definitionIndex + 1),
+    Arr.flatMap((node) => node.taps),
+  );
+  const sourceSteps = task.pickle.steps;
   const initialState: Effect.Effect<unknown, RunError, R> = Effect.succeed(undefined);
   return yield* Fn.pipe(
-    Arr.zip(definitions, steps),
-    Arr.reduce(initialState, (state, [definition, step], index) =>
+    chain,
+    Arr.reduce(initialState, (state, node, chainIndex) =>
       Effect.flatMap(state, (previous) =>
-        runStep(task, definition, step, index, previous, options),
+        isStepDefinition(node)
+          ? runStep(task, node, sourceStepAt(chain, chainIndex, sourceSteps), previous, options)
+          : runTaps(task, node.taps, chain, chainIndex, sourceSteps, previous),
       ),
+    ),
+    // A feature tap anchored before this scenario observes the run's start;
+    // one anchored after it observes the scenario's final state, exactly as an
+    // `Effect.tap` placed after the scenario would.
+    Effect.flatMap((finalState) =>
+      beforeScenario.length === 0 && afterScenario.length === 0
+        ? Effect.succeed(finalState)
+        : Fn.pipe(
+            runFeatureTaps(task, beforeScenario, undefined),
+            Effect.flatMap(() => runFeatureTaps(task, afterScenario, finalState)),
+            Effect.as(finalState),
+          ),
     ),
   );
 });
 
+const isStepDefinition = (node: AnyStepOrTap<unknown>): node is AnyStep<unknown> =>
+  "run" in node && typeof node.run === "function";
+
+interface SourceStepRef {
+  readonly step: PickleStep;
+  readonly index: number;
+}
+
+const sourceStepAt = (
+  chain: ReadonlyArray<AnyStepOrTap<unknown>>,
+  chainIndex: number,
+  sourceSteps: ReadonlyArray<PickleStep>,
+): SourceStepRef => {
+  const stepIndex = stepDefinitionsBefore(chain, chainIndex);
+  return { step: sourceSteps[stepIndex], index: stepIndex };
+};
+
+/**
+ * Counts the step definitions before a chain position so tap nodes can locate
+ * their next source step without holding positions themselves.
+ */
+const stepDefinitionsBefore = (
+  chain: ReadonlyArray<AnyStepOrTap<unknown>>,
+  chainIndex: number,
+): number => Fn.pipe(chain, Arr.take(chainIndex), Arr.filter(isStepDefinition), Arr.length);
+
+const runTaps = <E, R>(
+  task: ScenarioTask<E, R>,
+  handlers: ReadonlyArray<TapHandler<unknown>>,
+  chain: ReadonlyArray<AnyStepOrTap<unknown>>,
+  chainIndex: number,
+  sourceSteps: ReadonlyArray<PickleStep>,
+  state: unknown,
+): Effect.Effect<unknown, RunError, R> => {
+  const next = sourceStepAt(chain, chainIndex, sourceSteps);
+  const stepText = next.step === undefined ? task.sourceScenarioTitle : next.step.text;
+  const line =
+    next.step === undefined ? task.scenarioLine : Parser.stepLine(next.step, task.source);
+  const runTap = (handler: TapHandler<unknown>): Effect.Effect<void, TapError, R> =>
+    Fn.pipe(
+      // The chain verified state compatibility at definition time; the handler
+      // view is erased to `unknown` in storage and returns unknown errors.
+      // oxlint-disable-next-line effect-bdd/no-type-assertions
+      handler(state) as Effect.Effect<void, unknown, R>,
+      Effect.asVoid,
+      Effect.mapError(
+        (cause): TapError =>
+          new TapError({
+            message: `Tap handler failed: ${stepText}`,
+            scenario: task.sourceScenarioTitle,
+            step: stepText,
+            line,
+            cause,
+          }),
+      ),
+    );
+  return Fn.pipe(handlers, Effect.forEach(runTap, { discard: true }), Effect.as(state));
+};
+
+/**
+ * Runs feature taps at their anchored boundary. A tap anchored before the
+ * scenario receives `undefined` (the run has not produced state yet); one
+ * anchored after it receives the scenario's final state. Handler failures map
+ * to `TapError` exactly like chain taps.
+ */
+const runFeatureTaps = <E, R>(
+  task: ScenarioTask<E, R>,
+  handlers: ReadonlyArray<TapHandler<unknown>>,
+  state: unknown,
+): Effect.Effect<void, RunError, R> => {
+  const runTap = (handler: TapHandler<unknown>): Effect.Effect<void, TapError, R> =>
+    Fn.pipe(
+      // Feature taps must accept `unknown` state because scenarios may use
+      // different state types; the handler view is erased in storage.
+      // oxlint-disable-next-line effect-bdd/no-type-assertions
+      handler(state) as Effect.Effect<void, unknown, R>,
+      Effect.asVoid,
+      Effect.mapError(
+        (cause): TapError =>
+          new TapError({
+            message: `Feature tap handler failed: ${task.sourceScenarioTitle}`,
+            scenario: task.sourceScenarioTitle,
+            step: task.sourceScenarioTitle,
+            line: task.scenarioLine,
+            cause,
+          }),
+      ),
+    );
+  return Fn.pipe(handlers, Effect.forEach(runTap, { discard: true }));
+};
+
 const runStep: <E, R>(
   task: ScenarioTask<E, R>,
   stepDefinition: AnyStep<R>,
-  step: PickleStep,
-  index: number,
+  sourceStep: SourceStepRef,
   state: unknown,
   options: RunOptions,
 ) => Effect.Effect<unknown, RunError, R> = Effect.fnUntraced(function* <E, R>(
   task: ScenarioTask<E, R>,
   stepDefinition: AnyStep<R>,
-  step: PickleStep,
-  index: number,
+  sourceStep: SourceStepRef,
   state: unknown,
   options: RunOptions,
 ) {
+  const step = sourceStep.step;
+  const index = sourceStep.index;
   const kind = yield* stepKind(step, task.source);
   const captures = yield* verifyStep(task, stepDefinition, step, kind, index);
   const argument = yield* decodeArgument(

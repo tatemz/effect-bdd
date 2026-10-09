@@ -3,7 +3,7 @@ import { defaultGeneratedScale, generatedSuitesFor } from "./generatedSuites.ts"
 import type { GeneratedScale, SuiteDefinition } from "./types.ts";
 
 const fixtureFeature = (name: string): string => fromRepoRoot("test", "fixtures", name);
-const exampleFeature = (name: string): string => fromRepoRoot("examples", name);
+const exampleFeature = (name: string): string => fromRepoRoot("examples", "counter", name);
 
 const gherkinGoodFeatures = [
   "minimal.feature",

@@ -1,12 +1,15 @@
 {
-  "name": "effect-bdd-counter-example",
+  "name": "effect-bdd-examples",
   "private": true,
   "type": "module",
   "scripts": {
     "check": "tsc -p tsconfig.json",
-    "test": "node --import tsx ./node_modules/effect-bdd/dist/bin.js --features counter.feature --steps counter.steps.ts"
+    "test": "node --import tsx ./node_modules/effect-bdd/dist/bin.js --features \"*/*.feature\" --steps \"*/*.steps.ts\" --parallel 2",
+    "test:counter": "pnpm run test --tags @counter",
+    "test:greeter-api": "pnpm run test --tags @greeter"
   },
   "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.118",
     "effect": "4.0.0-rc.118",
     "effect-bdd": "link:.."
   },

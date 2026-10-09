@@ -13,6 +13,7 @@ import type {
   RunError as RunError_,
   RunOptions as RunOptions_,
   Scenario as Scenario_,
+  ScenarioFailure as ScenarioFailure_,
   Step as Step_,
   TableArg as TableArg_,
 } from "./Bdd.ts";
@@ -20,6 +21,7 @@ import type {
   ScenarioSetupError as ScenarioSetupError_,
   ScenarioTeardownError as ScenarioTeardownError_,
   StepTimeoutError as StepTimeoutError_,
+  TapError as TapError_,
 } from "./Errors.ts";
 
 export {
@@ -29,6 +31,7 @@ export {
   ScenarioTeardownError,
   StepError,
   StepTimeoutError,
+  TapError,
 } from "./Errors.ts";
 
 /**
@@ -124,6 +127,22 @@ export declare namespace Bdd {
    * @since 0.5.0
    */
   export type ScenarioTeardownError = ScenarioTeardownError_;
+
+  /**
+   * Error raised when a tap handler fails.
+   *
+   * @category errors
+   * @since 0.10.0
+   */
+  export type TapError = TapError_;
+
+  /**
+   * The scenario failure errors observable with `Bdd.tapError`.
+   *
+   * @category errors
+   * @since 0.10.0
+   */
+  export type ScenarioFailure = ScenarioFailure_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.

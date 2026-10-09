@@ -921,4 +921,262 @@ Feature: Checkout
       ]);
     });
   });
+
+  describe("taps", () => {
+    it.effect("runs a scenario tap in chain position and passes state through", () => {
+      const observed: Array<number> = [];
+      const showCount = Bdd.tap((state: number) =>
+        Effect.sync(() => {
+          observed.push(state);
+        }),
+      );
+      const feature = Bdd.feature("Taps").pipe(
+        Bdd.scenario("Observes state").pipe(
+          Bdd.given`a counter at zero`(() => Effect.succeed(0)),
+          showCount,
+          Bdd.when`the counter is incremented`((state: number) => Effect.succeed(state + 1)),
+          showCount,
+          Bdd.then`the counter value is 1`((state: number) =>
+            Effect.sync(() => {
+              assert.strictEqual(state, 1);
+              return state;
+            }),
+          ),
+        ),
+      );
+
+      return Effect.gen(function* () {
+        const report = yield* runBdd(
+          feature,
+          `
+Feature: Taps
+
+  Scenario: Observes state
+    Given a counter at zero
+    When the counter is incremented
+    Then the counter value is 1
+`,
+        );
+
+        assert.strictEqual(report.scenarios.length, 1);
+        assert.deepStrictEqual(observed, [0, 1]);
+      });
+    });
+
+    it.effect("runs a feature tap once at its declared position", () => {
+      const observed: Array<string> = [];
+      const feature = Bdd.feature("Feature taps").pipe(
+        Bdd.tap((state) =>
+          Effect.sync(() => {
+            observed.push(`before:${String(state)}`);
+          }),
+        ),
+        Bdd.scenario("One step").pipe(
+          Bdd.given`a word`(() => Effect.succeed("one")),
+          Bdd.when`the word is doubled`((state: string) => Effect.succeed(`${state}${state}`)),
+          Bdd.then`the word is oneone`((state: string) =>
+            Effect.sync(() => {
+              assert.strictEqual(state, "oneone");
+              return state;
+            }),
+          ),
+        ),
+        Bdd.tap((state) =>
+          Effect.sync(() => {
+            observed.push(`after:${String(state)}`);
+          }),
+        ),
+        Bdd.scenario("Another step").pipe(Bdd.given`a word`(() => Effect.succeed("two"))),
+      );
+
+      return Effect.gen(function* () {
+        yield* runBdd(
+          feature,
+          `
+Feature: Feature taps
+
+  Scenario: One step
+    Given a word
+    When the word is doubled
+    Then the word is oneone
+
+  Scenario: Another step
+    Given a word
+`,
+        );
+
+        // The first tap is anchored before every scenario: it runs once, before
+        // the first, with no state yet. The second is anchored after "One
+        // step": it runs once with that scenario's final state, and never for
+        // scenarios declared after it.
+        assert.deepStrictEqual(observed, ["before:undefined", "after:oneone"]);
+      });
+    });
+
+    it.effect("fails with TapError when a state tap handler fails", () => {
+      const feature = Bdd.feature("Failing taps").pipe(
+        Bdd.scenario("Tap fails").pipe(
+          Bdd.given`a word`(() => Effect.succeed("one")),
+          Bdd.tap(() => Effect.fail("log sink unavailable" as const)),
+          Bdd.when`the word is doubled`((state: string) => Effect.succeed(`${state}${state}`)),
+        ),
+      );
+
+      return Effect.gen(function* () {
+        const error = yield* runError(
+          runBdd(
+            feature,
+            `
+Feature: Failing taps
+
+  Scenario: Tap fails
+    Given a word
+    When the word is doubled
+`,
+          ),
+        );
+
+        assert.strictEqual(error._tag, "TapError");
+        if (error._tag === "TapError") {
+          assert.strictEqual(error.scenario, "Tap fails");
+          assert.strictEqual(error.step, "the word is doubled");
+          assert.strictEqual(error.cause, "log sink unavailable");
+        }
+      });
+    });
+
+    it.effect(
+      "runs a feature tapError declared after the scenario and preserves the original error",
+      () => {
+        const observed: Array<string> = [];
+        const feature = Bdd.feature("Error taps").pipe(
+          Bdd.scenario("Step fails").pipe(
+            Bdd.when`the action fails`(() => Effect.fail("boom" as const)),
+          ),
+          Bdd.tapError((failure) =>
+            Effect.sync(() => {
+              observed.push(failure._tag);
+            }),
+          ),
+        );
+
+        return Effect.gen(function* () {
+          const error = yield* runError(
+            runBdd(
+              feature,
+              `
+Feature: Error taps
+
+  Scenario: Step fails
+    When the action fails
+`,
+            ),
+          );
+
+          assert.strictEqual(error._tag, "StepError");
+          assert.deepStrictEqual(observed, ["StepError"]);
+        });
+      },
+    );
+
+    it.effect("does not run a feature tapError declared before every scenario", () => {
+      const observed: Array<string> = [];
+      const feature = Bdd.feature("Early error taps").pipe(
+        Bdd.tapError((failure) =>
+          Effect.sync(() => {
+            observed.push(failure._tag);
+          }),
+        ),
+        Bdd.scenario("Step fails").pipe(
+          Bdd.when`the action fails`(() => Effect.fail("boom" as const)),
+        ),
+      );
+
+      return Effect.gen(function* () {
+        const error = yield* runError(
+          runBdd(
+            feature,
+            `
+Feature: Early error taps
+
+  Scenario: Step fails
+    When the action fails
+`,
+          ),
+        );
+
+        // The tap is declared before every scenario, so it observes nothing.
+        assert.strictEqual(error._tag, "StepError");
+        assert.deepStrictEqual(observed, []);
+      });
+    });
+
+    it.effect("replaces the failure with TapError when an error tap handler fails", () => {
+      const feature = Bdd.feature("Failing error taps").pipe(
+        Bdd.scenario("Step fails").pipe(
+          Bdd.when`the action fails`(() => Effect.fail("boom" as const)),
+        ),
+        Bdd.tapError(() => Effect.fail("handler exploded" as const)),
+      );
+
+      return Effect.gen(function* () {
+        const error = yield* runError(
+          runBdd(
+            feature,
+            `
+Feature: Failing error taps
+
+  Scenario: Step fails
+    When the action fails
+`,
+          ),
+        );
+
+        assert.strictEqual(error._tag, "TapError");
+        if (error._tag === "TapError") {
+          assert.strictEqual(error.cause, "handler exploded");
+        }
+      });
+    });
+
+    it.effect("supports the data-first tapError form on scenarios and features", () => {
+      const observed: Array<string> = [];
+      const feature = Bdd.tapError(
+        Bdd.feature("Data-first").pipe(
+          Bdd.tapError(
+            Bdd.scenario("One step").pipe(
+              Bdd.when`the action fails`(() => Effect.fail("boom" as const)),
+            ),
+            (failure) =>
+              Effect.sync(() => {
+                observed.push(`scenario:${failure._tag}`);
+              }),
+          ),
+        ),
+        (failure) =>
+          Effect.sync(() => {
+            observed.push(`feature:${failure._tag}`);
+          }),
+      );
+
+      return Effect.gen(function* () {
+        const error = yield* runError(
+          runBdd(
+            feature,
+            `
+Feature: Data-first
+
+  Scenario: One step
+    When the action fails
+`,
+          ),
+        );
+
+        assert.strictEqual(error._tag, "StepError");
+        // The feature tapError is declared after the scenario, so it runs after
+        // the scenario's own tapError.
+        assert.deepStrictEqual(observed, ["scenario:StepError", "feature:StepError"]);
+      });
+    });
+  });
 });

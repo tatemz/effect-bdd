@@ -6,6 +6,7 @@ import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type { MatchResult } from "./expression.ts";
+import type { TapHandler, TapErrorHandler } from "../Errors.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -59,16 +60,46 @@ export interface AnyStep<R = unknown> {
   ) => Effect.Effect<unknown, unknown, R>;
 }
 
+/**
+ * Tap node shape stored in scenario chains. Identified structurally by the
+ * absence of `run` and the presence of `taps` at runtime.
+ *
+ * @internal
+ */
+/**
+ * Tap node shape stored in scenario chains. Identified structurally by the
+ * absence of `run` and the presence of `taps` at runtime.
+ *
+ * @internal
+ */
+interface AnyTapNode {
+  readonly taps: ReadonlyArray<TapHandler<unknown>>;
+}
+
+/** @internal */
+export type AnyStepOrTap<R = unknown> = AnyStep<R> | AnyTapNode;
+
 interface ScenarioDefinition<R = unknown> {
   readonly title: string;
-  readonly steps: ReadonlyArray<AnyStep<R>>;
+  readonly steps: ReadonlyArray<AnyStepOrTap<R>>;
   readonly providers: ReadonlyArray<Layer.Layer<unknown, unknown, R>>;
+  readonly errorTaps: ReadonlyArray<TapErrorHandler>;
+}
+
+/**
+ * A feature tap node anchored at its declaration position: the number of
+ * scenarios declared before it.
+ */
+interface FeatureTapNode {
+  readonly afterScenarios: number;
+  readonly taps: ReadonlyArray<TapHandler<unknown>>;
 }
 
 /** @internal */
 export interface FeatureDefinition<E, R> {
   readonly title: string;
   readonly scenarios: ReadonlyArray<ScenarioDefinition<R>>;
+  readonly taps: ReadonlyArray<FeatureTapNode>;
   readonly _E?: E;
   readonly _R?: R;
 }
@@ -82,6 +113,8 @@ export interface ScenarioTask<E, R> {
   readonly sourceScenarioTitle: string;
   readonly scenarioIndex: number;
   readonly scenarioLine: number;
+  /** Declaration position of the scenario definition within its feature. */
+  readonly definitionIndex: number;
   readonly ruleTitle?: string;
   readonly ruleLine?: number;
   readonly tags: ReadonlyArray<string>;
@@ -198,8 +231,13 @@ export const buildScenarioTasks = <E, R>(
   return { tasks: collection.tasks, issues: collection.issues };
 };
 
+interface IndexedScenarioDefinition<R> {
+  readonly definition: ScenarioDefinition<R>;
+  readonly index: number;
+}
+
 interface ScenarioDefinitionIndex<R> {
-  [title: string]: ScenarioDefinition<R> | undefined;
+  [title: string]: IndexedScenarioDefinition<R> | undefined;
 }
 
 interface IndexedScenarioDefinitions<R> {
@@ -214,13 +252,13 @@ const indexScenarioDefinitions = <R>(
     byTitle: emptyScenarioDefinitionIndex<R>(),
     duplicateTitle: undefined,
   };
-  return Arr.reduce(scenarios, initial, (state, scenario) => {
+  return Arr.reduce(scenarios, initial, (state, scenario, index) => {
     if (state.byTitle[scenario.title] !== undefined) {
       return state.duplicateTitle === undefined
         ? { ...state, duplicateTitle: scenario.title }
         : state;
     }
-    state.byTitle[scenario.title] = scenario;
+    state.byTitle[scenario.title] = { definition: scenario, index };
     return state;
   });
 };
@@ -270,8 +308,8 @@ const appendResolvedPickle = <E, R>(
     return collection;
   }
 
-  const scenarioDefinition = scenarioDefinitions[entry.scenarioTitle];
-  if (scenarioDefinition === undefined) {
+  const indexed = scenarioDefinitions[entry.scenarioTitle];
+  if (indexed === undefined) {
     collection.issues[collection.issues.length] = {
       _tag: "UnmatchedScenario",
       scenarioTitle: entry.scenarioTitle,
@@ -285,7 +323,8 @@ const appendResolvedPickle = <E, R>(
     entry,
     featureDefinition,
     feature,
-    scenarioDefinition,
+    indexed.definition,
+    indexed.index,
   );
   collection.usedScenarioTitles[entry.scenarioTitle] = true;
   return collection;
@@ -296,6 +335,7 @@ const scenarioTask = <E, R>(
   featureDefinition: FeatureDefinition<E, R>,
   feature: Parser.CompiledFeature,
   scenarioDefinition: ScenarioDefinition<R>,
+  definitionIndex: number,
 ): ScenarioTask<E, R> => ({
   featureDefinition,
   scenarioDefinition,
@@ -304,6 +344,7 @@ const scenarioTask = <E, R>(
   sourceScenarioTitle: entry.scenarioTitle,
   scenarioIndex: entry.scenarioIndex,
   scenarioLine: entry.scenarioLine,
+  definitionIndex,
   ...(entry.rule === undefined
     ? {}
     : {
