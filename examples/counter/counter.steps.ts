@@ -99,16 +99,13 @@ export const counter = Bdd.feature("Counter").pipe(
     }),
     Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
       return Effect.gen(function* () {
-        if (Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected a counter to exist.");
+        const counterValue = Result.getOrElse(counter, () => undefined)?.value;
+        if (counterValue === expectedValue) {
+          return counter;
         }
-        const counterValue = counter.success?.value;
-        if (counterValue !== expectedValue) {
-          return yield* Effect.fail(
-            `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
-          );
-        }
-        return counter;
+        return yield* Effect.fail(
+          `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
+        );
       });
     }),
   ),
