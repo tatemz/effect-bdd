@@ -20,18 +20,16 @@ const greeting = Bdd.capture("greeting", Schema.String);
  * top level. Every step body is an `Effect.gen` generator or a braced
  * arrow body. Each scenario boots the real server on an ephemeral port
  * with the chosen Greeter implementation and asserts through the typed
- * client. `Bdd.tap` runs after every step of every scenario, reporting the
- * state so far. `Bdd.tapError` observes any failure and logs its tag and
- * message; the scenario still fails with the original error.
+ * client. `Bdd.tap` runs at its declared position in the scenario chain,
+ * reporting the state so far. `Bdd.tapError` observes the scenario's failure
+ * and logs its tag and message; the scenario still fails with the original
+ * error.
  */
 export const greeterApi = Bdd.feature("Greeter API").pipe(
-  Bdd.tapError((failure) => {
-    return Effect.logError(`[GreeterApi] ${failure._tag} - ${failure.message}`);
-  }),
-  Bdd.tap((state) => {
-    return Effect.log(`[GreeterApi] step state: ${JSON.stringify(state)}`);
-  }),
   Bdd.scenario("The health check greets in the chosen language").pipe(
+    Bdd.tapError((failure) => {
+      return Effect.logError(`[GreeterApi] ${failure._tag} - ${failure.message}`);
+    }),
     Bdd.given`the app is using the ${language} greeter`(({ language }) => {
       return Effect.sync(() => {
         return { language };
@@ -42,6 +40,9 @@ export const greeterApi = Bdd.feature("Greeter API").pipe(
         const { port, client } = yield* startApp(state.language);
         return { ...state, port, client };
       });
+    }),
+    Bdd.tap((state) => {
+      return Effect.log(`[GreeterApi] step state: ${JSON.stringify(state)}`);
     }),
     Bdd.then`the health check says status ${status} and greeting ${greeting}`(
       ({ status, greeting }, state) => {

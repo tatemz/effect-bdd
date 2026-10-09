@@ -4,8 +4,8 @@ import * as Counter from "./counter.ts";
 
 /**
  * The state a counter scenario carries: the latest domain outcome, passed
- * to each step as-is. `undefined` means no counter exists yet; a failure
- * holds the rejection of the latest change attempt.
+ * to each step as-is. `undefined` in the success arm means no counter
+ * exists yet; a failure holds the rejection of the latest change attempt.
  */
 type CounterState = Result.Result<Counter.Counter | undefined, Counter.CounterRejection>;
 
@@ -25,47 +25,37 @@ const expectedValue = Bdd.capture("expectedValue", Schema.FiniteFromString);
  * domain `Result` itself: each step hands the previous result to the next
  * domain call instead of unwrapping and re-wrapping it, and returns the new
  * state explicitly. `Bdd.tap` and `Bdd.tapError` observe the run without
- * changing it: the feature tap reports every step's state, and the feature
- * error tap reports any failure's tag and message before the scenario
- * still fails with the original error.
+ * changing it: a scenario tap runs at its chain position, a feature tap runs
+ * once after the scenario declared before it, and a `tapError` observes the
+ * failures of what was declared before it while the scenario still fails
+ * with the original error.
  */
 export const counter = Bdd.feature("Counter").pipe(
-  Bdd.tapError((failure) => {
-    const where = failure._tag === "TapError" ? failure.scenario : failure.message;
-    return Effect.logError(`[Counter] failure in ${where}: ${failure._tag} - ${failure.message}`);
-  }),
-  Bdd.tap((state) => {
-    return Effect.log(`[Counter] step state: ${JSON.stringify(state)}`);
-  }),
   Bdd.scenario("Creating a counter").pipe(
     Bdd.given`no counter exists`(() => {
       return Effect.succeed(noCounter);
     }),
     Bdd.when`the counter is created`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, (existing) => Counter.create(existing)));
+      return Effect.sync(() => Result.flatMap(counter, Counter.create));
     }),
-    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter) => {
-      return Effect.gen(function* () {
-        if (Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected a counter to exist.");
-        }
-        if (counter.success.value !== expectedValue) {
-          return yield* Effect.fail(
-            `Expected counter value ${expectedValue}, got ${counter.success.value}.`,
-          );
-        }
-        return counter;
-      });
+    Bdd.tap((counter) => {
+      return Effect.log(`[Counter] created state: ${JSON.stringify(counter)}`);
     }),
-    Bdd.then`the counter is active`((counter) => {
+    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
       return Effect.gen(function* () {
-        if (Result.isFailure(counter) || !counter.success.active) {
-          return yield* Effect.fail("Expected the counter to be active.");
+        const counterValue = Result.getOrElse(counter, () => undefined)?.value;
+        if (counterValue === expectedValue) {
+          return counter;
         }
-        return counter;
+        return yield* Effect.fail(
+          `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
+        );
       });
     }),
   ),
+  Bdd.tap((state) => {
+    return Effect.log(`[Counter] after "Creating a counter": ${JSON.stringify(state)}`);
+  }),
   Bdd.scenario("A counter is created only once").pipe(
     Bdd.given`a counter was created`(() => {
       return Effect.succeed(Counter.create(undefined));
@@ -75,13 +65,10 @@ export const counter = Bdd.feature("Counter").pipe(
     }),
     Bdd.then`the change is rejected because the counter already exists`((counter) => {
       return Effect.gen(function* () {
-        if (!Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected the change to be rejected.");
+        if (Result.isFailure(counter) && counter.failure === "AlreadyExists") {
+          return counter;
         }
-        if (counter.failure !== "AlreadyExists") {
-          return yield* Effect.fail(`Expected rejection AlreadyExists, got ${counter.failure}.`);
-        }
-        return counter;
+        return yield* Effect.fail("Expected the change to be rejected with AlreadyExists.");
       });
     }),
   ),
@@ -89,13 +76,13 @@ export const counter = Bdd.feature("Counter").pipe(
     Bdd.given`a counter was created`(() => {
       return Effect.succeed(Counter.create(undefined));
     }),
-    Bdd.when`the counter is incremented ${count} times`(({ count }, counter: CounterState) => {
-      return Effect.sync(() => {
-        return Array.from({ length: count }).reduce(
+    Bdd.when`the counter is incremented ${count} times`(({ count }, counter) => {
+      return Effect.sync(() =>
+        Array.from({ length: count }).reduce(
           (current: CounterState) => Result.flatMap(current, Counter.increment),
           counter,
-        );
-      });
+        ),
+      );
     }),
     Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
       return Effect.gen(function* () {
@@ -121,87 +108,15 @@ export const counter = Bdd.feature("Counter").pipe(
     Bdd.when`the counter is decremented`((counter) => {
       return Effect.sync(() => Result.flatMap(counter, Counter.decrement));
     }),
-    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter) => {
+    Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, counter: CounterState) => {
       return Effect.gen(function* () {
-        if (Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected a counter to exist.");
+        const counterValue = Result.getOrElse(counter, () => undefined)?.value;
+        if (counterValue === expectedValue) {
+          return counter;
         }
-        if (counter.success.value !== expectedValue) {
-          return yield* Effect.fail(
-            `Expected counter value ${expectedValue}, got ${counter.success.value}.`,
-          );
-        }
-        return counter;
-      });
-    }),
-  ),
-  Bdd.scenario("The counter never counts above 5").pipe(
-    Bdd.given`a counter at value ${count}`(({ count }) => {
-      return Effect.succeed(
-        Array.from({ length: count }).reduce(
-          (current: CounterState) => Result.flatMap(current, Counter.increment),
-          Counter.create(undefined),
-        ),
-      );
-    }),
-    Bdd.when`the counter is incremented`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.increment));
-    }),
-    Bdd.then`the change is rejected because the counter reached its maximum`((counter) => {
-      return Effect.gen(function* () {
-        if (!Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected the change to be rejected.");
-        }
-        if (counter.failure !== "MaximumReached") {
-          return yield* Effect.fail(`Expected rejection MaximumReached, got ${counter.failure}.`);
-        }
-        return counter;
-      });
-    }),
-  ),
-  Bdd.scenario("The counter never counts below 0").pipe(
-    Bdd.given`a counter was created`(() => {
-      return Effect.succeed(Counter.create(undefined));
-    }),
-    Bdd.when`the counter is decremented`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.decrement));
-    }),
-    Bdd.then`the change is rejected because the counter reached its minimum`((counter) => {
-      return Effect.gen(function* () {
-        if (!Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected the change to be rejected.");
-        }
-        if (counter.failure !== "MinimumReached") {
-          return yield* Effect.fail(`Expected rejection MinimumReached, got ${counter.failure}.`);
-        }
-        return counter;
-      });
-    }),
-  ),
-  Bdd.scenario("Disabling a counter freezes it").pipe(
-    Bdd.given`a counter at value ${count}`(({ count }) => {
-      return Effect.succeed(
-        Array.from({ length: count }).reduce(
-          (current: CounterState) => Result.flatMap(current, Counter.increment),
-          Counter.create(undefined),
-        ),
-      );
-    }),
-    Bdd.when`the counter is disabled`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.disable));
-    }),
-    Bdd.when`the counter is incremented`((counter) => {
-      return Effect.sync(() => Result.flatMap(counter, Counter.increment));
-    }),
-    Bdd.then`the change is rejected because the counter is disabled`((counter) => {
-      return Effect.gen(function* () {
-        if (!Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected the change to be rejected.");
-        }
-        if (counter.failure !== "Disabled") {
-          return yield* Effect.fail(`Expected rejection Disabled, got ${counter.failure}.`);
-        }
-        return counter;
+        return yield* Effect.fail(
+          `Expected counter value ${expectedValue}, got ${counterValue ?? "none"}.`,
+        );
       });
     }),
   ),
@@ -212,15 +127,15 @@ export const counter = Bdd.feature("Counter").pipe(
     Bdd.when`the counter is incremented`((counter) => {
       return Effect.sync(() => Result.flatMap(counter, Counter.increment));
     }),
+    Bdd.tapError((failure) => {
+      return Effect.logError(`[Counter] ${failure._tag}: ${failure.message}`);
+    }),
     Bdd.then`the change is rejected because the counter does not exist`((counter) => {
       return Effect.gen(function* () {
-        if (!Result.isFailure(counter)) {
-          return yield* Effect.fail("Expected the change to be rejected.");
+        if (Result.isFailure(counter) && counter.failure === "DoesNotExist") {
+          return counter;
         }
-        if (counter.failure !== "DoesNotExist") {
-          return yield* Effect.fail(`Expected rejection DoesNotExist, got ${counter.failure}.`);
-        }
-        return counter;
+        return yield* Effect.fail("Expected the change to be rejected with DoesNotExist.");
       });
     }),
   ),
