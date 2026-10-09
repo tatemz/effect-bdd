@@ -695,7 +695,7 @@ export interface TapApplicator<In> {
  *   Bdd.when`an item is added`((state: Cart) => Effect.succeed({ items: ["sku"] })),
  *   showCart,
  *   Bdd.then`the cart has one item`((state: Cart) =>
- *     Effect.sync(() => state.items.length === 1 ? state : state)
+ *     Effect.sync(() => state.items.length === 1 ? state : Effect.fail("expected one item"))
  *   ),
  * )
  * ```
@@ -767,10 +767,10 @@ export interface TapErrorOn {
  * )
  *
  * const feature = Bdd.feature("Shopping cart").pipe(
- *   reportFailure,
  *   Bdd.scenario("Failed assertion").pipe(
  *     Bdd.when`the assertion fails`(() => Effect.fail("expected 1, got 0")),
  *   ),
+ *   reportFailure,
  * )
  * ```
  *

@@ -467,12 +467,16 @@ import { Bdd } from "effect-bdd";
 import { Effect } from "effect";
 
 const feature = Bdd.feature("Shopping cart").pipe(
-  Bdd.tap((state) => Effect.log(`state: ${String(state)}`)),
   Bdd.scenario("Add item").pipe(
     Bdd.given`an empty cart`(() => Effect.succeed({ items: [] as ReadonlyArray<string> })),
+    Bdd.when`an item is added`((state) => Effect.succeed({ items: ["sku"] })),
   ),
+  Bdd.tap((state) => Effect.log(`state after Add item: ${JSON.stringify(state)}`)),
 );
 ```
+
+A tap piped before every scenario also works. It runs once before the first scenario and
+receives `undefined` state.
 
 `Bdd.tapError` observes a scenario failure without swallowing it, mirroring
 `Effect.tapError`. On a scenario it observes that scenario's failures. On a feature it
