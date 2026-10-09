@@ -18,7 +18,8 @@ const greeting = Bdd.capture("greeting", Schema.String);
  *
  * Steps are defined inline in each scenario pipe; only captures live at the
  * top level. Steps read as generators: `Effect.gen` wherever work is
- * sequenced or branched. Each scenario boots the real server on an ephemeral
+ * sequenced or branched, `Effect.sync` for state a step builds from its
+ * input. Each scenario boots the real server on an ephemeral
  * port with the chosen Greeter implementation and asserts through the typed
  * client. `Bdd.tap` runs after every step of every scenario, reporting the
  * state so far. `Bdd.tapError` observes any failure and logs its tag and
@@ -29,9 +30,14 @@ export const greeterApi = Bdd.feature("Greeter API").pipe(
   Bdd.tap((state) => Effect.log(`[GreeterApi] step state: ${JSON.stringify(state)}`)),
   Bdd.scenario("The health check greets in the chosen language").pipe(
     Bdd.given`the app is using the ${language} greeter`(({ language }) =>
-      Effect.succeed({ language }),
+      Effect.sync(() => ({ language })),
     ),
-    Bdd.when`the app is running`((state) => startApp(state.language)),
+    Bdd.when`the app is running`((state) =>
+      Effect.gen(function* () {
+        const { port, client } = yield* startApp(state.language);
+        return { ...state, port, client };
+      }),
+    ),
     Bdd.then`the health check says status ${status} and greeting ${greeting}`(
       ({ status, greeting }, state) =>
         Effect.gen(function* () {

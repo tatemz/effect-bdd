@@ -72,7 +72,7 @@ const expectRejection = (
  * Steps are defined inline in each scenario pipe; only captures and pure
  * helpers live at the top level. Steps read as generators: `Effect.gen`
  * wherever work is sequenced or branched, `Effect.sync` for pure state
- * changes, `Effect.succeed` for constants. `Bdd.tap` and `Bdd.tapError`
+ * changes. `Bdd.tap` and `Bdd.tapError`
  * observe the run without changing it: the feature tap reports every step's
  * state, and the feature error tap reports any failure's tag and message
  * before the scenario still fails with the original error.
@@ -84,7 +84,7 @@ export const counter = Bdd.feature("Counter").pipe(
   }),
   Bdd.tap((state) => Effect.log(`[Counter] step state: ${JSON.stringify(state)}`)),
   Bdd.scenario("Creating a counter").pipe(
-    Bdd.given`no counter exists`(() => Effect.succeed(initialScenarioState)),
+    Bdd.given`no counter exists`(() => Effect.sync(() => initialScenarioState)),
     Bdd.when`the counter is created`((state) => Effect.sync(() => createCounter(state))),
     Bdd.then`the counter value is ${expectedValue}`(({ expectedValue }, state) =>
       Effect.gen(function* () {
@@ -169,7 +169,7 @@ export const counter = Bdd.feature("Counter").pipe(
     ),
   ),
   Bdd.scenario("A missing counter cannot change").pipe(
-    Bdd.given`no counter exists`(() => Effect.succeed(initialScenarioState)),
+    Bdd.given`no counter exists`(() => Effect.sync(() => initialScenarioState)),
     Bdd.when`the counter is incremented`((state) => Effect.sync(() => incrementCounter(state))),
     Bdd.then`the change is rejected because the counter does not exist`((state) =>
       expectRejection(state, "DoesNotExist"),
