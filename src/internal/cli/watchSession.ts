@@ -1,156 +1,164 @@
-import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
+import type * as FileSystemTypes from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
-import * as FileSystem from "effect/FileSystem";
-import * as Fn from "effect/Function";
-import * as Option from "effect/Option";
+import * as Match from "effect/Match";
+import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
-import * as Str from "effect/String";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type { PlatformError } from "effect/PlatformError";
-import type { CliOptions } from "./models.ts";
+import * as Stdio from "effect/Stdio";
+import * as Stream from "effect/Stream";
+import type { CliOptions, CliRunResult } from "./models.ts";
+import type { ModuleLoader } from "./moduleLoader.ts";
+import type { ReporterError } from "./errors.ts";
+import type { GherkinCompiler } from "../parser.ts";
+import type { CliRunError } from "./runner.ts";
+import type { GlobResolver } from "./glob.ts";
+import * as Reporter from "./reporter.ts";
+import * as Runner from "./runner.ts";
 import * as Watch from "./watch.ts";
+import { reloadableModuleLoader } from "./watchModuleLoader.ts";
 
 /** @internal */
-export type WatchSessionError = PlatformError;
+export type WatchSessionError = PlatformError | ReporterError;
 
 /**
- * Everything the watch session needs that does not change between reruns:
- * the parsed CLI options, and the child process invocation (interpreter, script
- * path, and the user's flags with `--watch` removed).
+ * The services an in-process watch session needs on top of the platform
+ * services the entrypoint already provides.
+ *
+ * @internal
+ */
+export type SessionServices =
+  | FileSystemTypes.FileSystem
+  | GlobResolver
+  | GherkinCompiler
+  | ModuleLoader
+  | Path.Path
+  | Stdio.Stdio;
+
+/**
+ * Everything the watch session needs: the parsed CLI options. The session runs
+ * in this process, so reruns reuse the loaded runtime instead of re-executing
+ * the CLI.
  *
  * @internal
  */
 export interface WatchSessionOptions {
   readonly cli: CliOptions;
-  readonly invocation: {
-    readonly executable: string;
-    readonly script: string;
-    readonly args: ReadonlyArray<string>;
-  };
 }
 
 /**
- * The exit status of one child CLI run.
+ * Run one in-process run for a plan and emit its full report. A narrowed plan
+ * replaces the feature patterns with the changed feature files; every other
+ * option (tag/title filters, reporters, timeouts) forwards unchanged, so a
+ * rerun behaves identically to a normal CLI run.
  *
  * @internal
  */
-interface RunOutcome {
-  readonly failed: boolean;
-}
-
-/**
- * Build the child process invocation from the raw process argv: the
- * interpreter, the script path, and the user's flags with `--watch` removed so
- * a child process does not start its own watcher.
- *
- * @internal
- */
-export const childInvocation = (argv: ReadonlyArray<string>): WatchSessionOptions["invocation"] => {
-  const [executable, script, ...flags] = argv;
-  return {
-    executable: executable ?? process.execPath,
-    script: script ?? "",
-    args: Arr.filter(flags, (token) => token !== "--watch"),
-  };
+export const runPlanOnce = (
+  session: WatchSessionOptions,
+  plan: Watch.WatchRunPlan,
+  reporters: ReadonlyArray<Reporter.Reporter>,
+): Effect.Effect<CliRunResult, CliRunError | ReporterError, SessionServices> => {
+  const features = plan.full ? session.cli.features : plan.features;
+  const runOptions: CliOptions = { ...session.cli, features };
+  return Effect.gen(function* () {
+    const result = yield* Runner.run(runOptions, {
+      onEvent: (event) =>
+        Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
+    });
+    yield* Reporter.emitAll(reporters, result);
+    yield* writeStderrLine(
+      `[watch] ${result.summary.passed} passed, ${result.summary.failed} failed (${result.summary.total} scenario(s))`,
+    );
+    return result;
+  });
 };
 
 /**
- * The flag arguments for one child CLI run. A narrowed plan replaces the
- * `--features` values with the changed feature files; every other flag
- * forwards unchanged, so tag/title filters, reporters, and timeouts behave
- * identically to a normal run.
+ * Make the reporters for the whole session. They are constructed once and
+ * reused; a reporter holds no per-run state.
  *
  * @internal
  */
-export const childRunArgv = (
+const makeSessionReporters: (
   session: WatchSessionOptions,
-  plan: Watch.WatchRunPlan,
-): ReadonlyArray<string> => replaceFlagValues("--features", plan.features)(session.invocation.args);
-
-/**
- * Replace the values of an existing repeated flag in an argv, or append the
- * flag when it is absent.
- *
- * @internal
- */
-export const replaceFlagValues =
-  (
-    flag: string,
-    values: ReadonlyArray<string>,
-  ): ((argv: ReadonlyArray<string>) => ReadonlyArray<string>) =>
-  (argv) => {
-    const flagIndex = Fn.pipe(
-      argv,
-      Arr.findFirstIndex((token) => token === flag),
-    );
-    if (Option.isNone(flagIndex)) {
-      return Arr.appendAll(argv, Watch.repeatFlag(flag, values));
-    }
-    const nextFlagIndex = Fn.pipe(
-      argv,
-      Arr.findFirstIndex(
-        (token, index) => index > flagIndex.value && Fn.pipe(token, Str.startsWith("--")),
-      ),
-    );
-    const before = Fn.pipe(argv, Arr.splitAt(flagIndex.value + 1))[0];
-    const after = Option.match(nextFlagIndex, {
-      onNone: (): ReadonlyArray<string> => [],
-      onSome: (index) => Fn.pipe(argv, Arr.splitAt(index))[1],
-    });
-    return Arr.appendAll(Arr.appendAll(before, values), after);
-  };
-
-/**
- * Execute one child CLI run with inherited stdio, so reports stream to the
- * user's terminal as they are produced.
- *
- * @internal
- */
-const runChildOnce: (
-  session: WatchSessionOptions,
-  plan: Watch.WatchRunPlan,
-) => Effect.Effect<RunOutcome, WatchSessionError, ChildProcessSpawner.ChildProcessSpawner> = (
-  session,
-  plan,
-) =>
-  Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const { executable, script } = session.invocation;
-    const exitCode = yield* spawner.exitCode(
-      ChildProcess.make(executable, [script, ...childRunArgv(session, plan)], {
-        stdout: "inherit",
-        stderr: "inherit",
-      }),
-    );
-    return { failed: exitCode !== 0 };
+) => Effect.Effect<ReadonlyArray<Reporter.Reporter>, ReporterError> = (session) =>
+  Reporter.makeReporters(session.cli.reporters, session.cli.outputFiles, {
+    verbose: session.cli.verbose,
   });
 
 /**
- * Run the watch loop: execute the initial full run, then consume trigger
- * batches from the queue, executing one child run per batch until the queue
- * ends.
+ * The layers a watch session supplies itself: the re-loadable module loader,
+ * which cache-busts step modules on every rerun so edits are seen in this
+ * process.
  *
  * @internal
  */
-export const watchLoop: (
+export const sessionLayers: Layer.Layer<ModuleLoader, never, Path.Path> = reloadableModuleLoader;
+
+/**
+ * Run the watch loop: execute the initial full run, then consume trigger
+ * batches from the queue, running one in-process rerun per batch. A failed
+ * rerun (broken edit, unloadable module, no matches) prints and keeps
+ * watching; the next change retries. The loop never fails, so a watcher pump
+ * defect is what ends the session — a broken watcher must not silently stop
+ * rerunning.
+ *
+ * @internal
+ */
+const watchLoop: (
   session: WatchSessionOptions,
   triggers: Queue.Dequeue<ReadonlyArray<Watch.WatchTrigger>>,
-) => Effect.Effect<void, WatchSessionError, ChildProcessSpawner.ChildProcessSpawner> = (
-  session,
-  triggers,
-) =>
+  reporters: ReadonlyArray<Reporter.Reporter>,
+) => Effect.Effect<void, never, SessionServices> = (session, triggers, reporters) =>
+  watchLoopWith((plan) =>
+    Effect.asVoid(
+      Effect.result(runPlanOnce(session, plan, reporters)).pipe(
+        Effect.flatMap((outcome) =>
+          Match.value(outcome).pipe(
+            Match.when({ _tag: "Success" }, () => Effect.void),
+            Match.orElse((failure) =>
+              Effect.map(writeStderrLine(failureMessage(plan, failure.failure)), () => undefined),
+            ),
+          ),
+        ),
+      ),
+    ),
+  )(session.cli.features, triggers);
+
+/**
+ * The watch loop with the run step replaced by `onRun`, which receives each
+ * plan. Exposes the loop's scheduling (initial full run, then one run per
+ * trigger batch) for tests without real runs.
+ *
+ * @internal
+ */
+export const watchLoopWith: <R>(
+  onRun: (plan: Watch.WatchRunPlan) => Effect.Effect<void, never, R>,
+) => (
+  featurePatterns: ReadonlyArray<string>,
+  triggers: Queue.Dequeue<ReadonlyArray<Watch.WatchTrigger>>,
+) => Effect.Effect<void, never, R> = (onRun) => (featurePatterns, triggers) =>
   Effect.gen(function* () {
-    yield* runChildOnce(session, { full: true, features: session.cli.features });
+    yield* onRun({ full: true, features: featurePatterns });
     yield* Watch.rerunLoop(triggers, Schedule.spaced("100 millis"), (batch) =>
-      Effect.gen(function* () {
-        const plan = Watch.planForTriggers(batch, session.cli.features);
-        yield* runChildOnce(session, plan);
-      }),
+      onRun(Watch.planForTriggers(batch, featurePatterns)),
     );
+  });
+
+const errorMessage = (error: CliRunError | ReporterError): string => error.message;
+
+const failureMessage = (plan: Watch.WatchRunPlan, error: CliRunError | ReporterError): string =>
+  plan.full
+    ? `[watch] initial run failed: ${errorMessage(error)}`
+    : `[watch] rerun failed, still watching: ${errorMessage(error)}`;
+
+const writeStderrLine = (line: string): Effect.Effect<void, never, Stdio.Stdio> =>
+  Effect.gen(function* () {
+    const stdio = yield* Stdio.Stdio;
+    yield* Stream.run(Stream.make(`${line}\n`), stdio.stderr()).pipe(Effect.ignore);
   });
 
 /**
@@ -163,12 +171,9 @@ export const watchLoop: (
  */
 export const watchSession: (
   session: WatchSessionOptions,
-) => Effect.Effect<
-  void,
-  WatchSessionError,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
-> = (session) =>
+) => Effect.Effect<void, WatchSessionError, SessionServices> = (session) =>
   Effect.gen(function* () {
+    const reporters = yield* makeSessionReporters(session);
     const paths = Watch.watchPaths({ features: session.cli.features, steps: session.cli.steps });
     const events = yield* Watch.mergedWatchEvents(paths);
     const triggers = yield* Watch.makeTriggerQueue;
@@ -178,7 +183,7 @@ export const watchSession: (
     yield* Effect.all(
       [
         Effect.flatMap(Effect.forkScoped(Watch.pumpTriggerQueue(events, triggers)), Fiber.join),
-        watchLoop(session, triggers),
+        watchLoop(session, triggers, reporters),
       ],
       { concurrency: 2 },
     ).pipe(Effect.asVoid);
