@@ -1,5 +1,4 @@
 import * as Arr from "effect/Array";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
@@ -266,24 +265,4 @@ export const rerunLoop: <E, R>(
         }
       }),
     ),
-  );
-
-/**
- * Render a step timeout for the child CLI's `--step-timeout` flag, which only
- * accepts finite durations of the form "N millis" or the literal "Infinity".
- *
- * @internal
- */
-export const stepTimeoutArg = (duration: Duration.Duration): string =>
-  Duration.isFinite(duration) ? `${Duration.toMillis(duration)} millis` : "Infinity";
-
-/**
- * Repeat a flag once per value, the shape effect-bdd's own CLI flags expect.
- *
- * @internal
- */
-export const repeatFlag = (name: string, values: ReadonlyArray<string>): ReadonlyArray<string> =>
-  Fn.pipe(
-    values,
-    Arr.flatMap((value) => [name, value] as const),
   );

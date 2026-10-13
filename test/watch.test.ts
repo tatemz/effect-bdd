@@ -1,6 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -8,8 +7,6 @@ import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
-import * as Sink from "effect/Sink";
-import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { fileURLToPath } from "node:url";
@@ -18,20 +15,20 @@ import {
   globMatcher,
   makeTriggerQueue,
   planForTriggers,
-  repeatFlag,
-  stepTimeoutArg,
   takePendingTriggers,
   type WatchTrigger,
   watchPaths,
   watchRoot,
 } from "../src/internal/cli/watch.ts";
 import {
-  childInvocation,
-  childRunArgv,
-  replaceFlagValues,
+  runPlanOnce,
   type WatchSessionOptions,
-  watchLoop,
+  watchLoopWith,
 } from "../src/internal/cli/watchSession.ts";
+import * as Reporter from "../src/internal/cli/reporter.ts";
+import { ModuleLoader } from "../src/internal/cli/moduleLoader.ts";
+import { GlobResolver } from "../src/internal/cli/glob.ts";
+import { layerCucumber } from "../src/internal/cucumberCompiler.ts";
 
 const update = (path: string): WatchTrigger => ({ _tag: "Update", path });
 const remove = (path: string): WatchTrigger => ({ _tag: "Remove", path });
@@ -144,108 +141,6 @@ describe("glob matcher", () => {
   });
 });
 
-describe("child argv assembly", () => {
-  const session: Parameters<typeof childRunArgv>[0] = {
-    cli: {
-      features: ["features/*.feature"],
-      steps: ["steps/*.ts"],
-      reporters: ["text"],
-      outputFiles: {},
-      verbose: false,
-      strict: false,
-      filters: { tags: ["@smoke"], titles: ["login"], failFast: false },
-      parallel: 1,
-    },
-    invocation: {
-      executable: "node",
-      script: "bin.ts",
-      args: [
-        "--features",
-        "features/*.feature",
-        "--steps",
-        "steps/*.ts",
-        "--tags",
-        "@smoke",
-        "--title",
-        "login",
-      ],
-    },
-  };
-
-  it("replaces --features values for a narrowed plan", () => {
-    const argv = childRunArgv(session, { full: false, features: ["features/login.feature"] });
-    assert.deepStrictEqual(argv, [
-      "--features",
-      "features/login.feature",
-      "--steps",
-      "steps/*.ts",
-      "--tags",
-      "@smoke",
-      "--title",
-      "login",
-    ]);
-  });
-
-  it("uses the original patterns for a full plan", () => {
-    const argv = childRunArgv(session, { full: true, features: ["features/*.feature"] });
-    assert.deepStrictEqual(argv, session.invocation.args);
-  });
-
-  it("strips --watch from the child invocation", () => {
-    assert.deepStrictEqual(childInvocation(["node", "bin.ts", "--watch", "--tags", "@smoke"]), {
-      executable: "node",
-      script: "bin.ts",
-      args: ["--tags", "@smoke"],
-    });
-  });
-
-  it("falls back to the running interpreter when argv is empty", () => {
-    const invocation = childInvocation([]);
-    assert.strictEqual(invocation.executable, process.execPath);
-    assert.strictEqual(invocation.script, "");
-  });
-
-  it("replaces flag values in the middle of argv", () => {
-    assert.deepStrictEqual(
-      replaceFlagValues("--tags", ["@nightly"])([
-        "--features",
-        "a",
-        "--tags",
-        "@smoke",
-        "--parallel",
-        "2",
-      ]),
-      ["--features", "a", "--tags", "@nightly", "--parallel", "2"],
-    );
-  });
-
-  it("appends the flag when absent", () => {
-    assert.deepStrictEqual(replaceFlagValues("--tags", ["@nightly"])(["--features", "a"]), [
-      "--features",
-      "a",
-      "--tags",
-      "@nightly",
-    ]);
-  });
-});
-
-describe("repeatFlag", () => {
-  it("emits one flag per value", () => {
-    assert.deepStrictEqual(repeatFlag("--tags", ["@a", "@b"]), ["--tags", "@a", "--tags", "@b"]);
-    assert.deepStrictEqual(repeatFlag("--tags", []), []);
-  });
-});
-
-describe("stepTimeoutArg", () => {
-  it("renders finite durations as millis", () => {
-    assert.strictEqual(stepTimeoutArg(Duration.seconds(5)), "5000 millis");
-  });
-
-  it("renders infinite durations literally", () => {
-    assert.strictEqual(stepTimeoutArg(Duration.infinity), "Infinity");
-  });
-});
-
 describe("trigger queue batching", () => {
   it.effect("takePendingTriggers merges batches that arrived while waiting", () =>
     Effect.gen(function* () {
@@ -262,85 +157,99 @@ describe("trigger queue batching", () => {
   );
 });
 
-describe("watchLoop", () => {
-  // The stub handle resolves its exit code immediately; the loop never needs
-  // the real process streams.
-  const stubHandle = ChildProcessSpawner.makeHandle({
-    pid: ChildProcessSpawner.ProcessId(0),
-    exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
-    isRunning: Effect.succeed(false),
-    kill: () => Effect.void,
-    stdin: Sink.drain,
-    stdout: Stream.empty,
-    stderr: Stream.empty,
-    all: Stream.empty,
-    getInputFd: () => Sink.drain,
-    getOutputFd: () => Stream.empty,
-    unref: Effect.void,
-    reref: Effect.void,
-  });
-
-  const recordingSpawner = (commands: Ref.Ref<Array<ReadonlyArray<string>>>) =>
-    ChildProcessSpawner.make((command) => {
-      if (command._tag !== "StandardCommand") {
-        return Effect.die("unexpected command form");
-      }
-      return Effect.as(
-        Ref.update(commands, (recorded) => [...recorded, command.args]),
-        stubHandle,
-      );
-    });
-
+describe("watchLoopWith", () => {
   it.live(
     "runs the initial full run, then one run per poll batch",
     () =>
       Effect.gen(function* () {
-        const commands = yield* Ref.make<Array<ReadonlyArray<string>>>([]);
-        const session: WatchSessionOptions = {
-          cli: {
-            features: ["features/*.feature"],
-            steps: [],
-            reporters: ["text"],
-            outputFiles: {},
-            verbose: false,
-            strict: false,
-            filters: { tags: [], titles: [], failFast: false },
-            parallel: 1,
-          },
-          invocation: {
-            executable: "node",
-            script: "bin.ts",
-            args: ["--features", "features/*.feature"],
-          },
-        };
+        const plans = yield* Ref.make<Array<{ full: boolean; features: ReadonlyArray<string> }>>(
+          [],
+        );
         const triggers = yield* makeTriggerQueue;
         yield* Queue.offer(triggers, [update("a/one.feature")]);
         yield* Queue.offer(triggers, [update("steps/x.step.ts")]);
-        yield* Effect.forkScoped(
-          watchLoop(session, triggers).pipe(
-            Effect.provide(
-              Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, recordingSpawner(commands)),
-            ),
-          ),
-        );
+        const recordRun = (plan: { full: boolean; features: ReadonlyArray<string> }) =>
+          Ref.update(plans, (recorded) => [...recorded, plan]);
+        yield* Effect.forkScoped(watchLoopWith(recordRun)(["features/*.feature"], triggers));
         // Wait for the initial run plus at least one poll tick, then stop.
         yield* Effect.sleep("600 millis");
-        const recorded = yield* Ref.get(commands);
-        // The interpreter and script lead every invocation; the poll drains both
-        // batches at once, so the narrowed feature run and the widened step run
-        // collapse into a single full rerun after the initial run.
+        const recorded = yield* Ref.get(plans);
+        // The poll drains both batches at once, so the narrowed feature run and
+        // the widened step run collapse into a single full rerun after the
+        // initial run.
         assert.deepStrictEqual(recorded, [
-          ["bin.ts", "--features", "features/*.feature"],
-          ["bin.ts", "--features", "features/*.feature"],
+          { full: true, features: ["features/*.feature"] },
+          { full: true, features: ["features/*.feature"] },
         ]);
       }),
     15000,
   );
 });
 
+describe("runPlanOnce", () => {
+  it.live(
+    "runs a feature through the real runner and emits one report",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const testDir = path.dirname(fileURLToPath(import.meta.url));
+          const directory = yield* fs.makeTempDirectoryScoped({
+            directory: testDir,
+            prefix: ".effect-bdd-watch-",
+          });
+          const featurePath = path.join(directory, "counter.feature");
+          const stepsPath = path.join(directory, "steps.mjs");
+          yield* fs.writeFileString(
+            featurePath,
+            "Feature: Counter\n\n  Scenario: Increment\n    When increment\n    Then the counter is 1\n",
+          );
+          yield* fs.writeFileString(stepsPath, watchSteps("Increment"));
+
+          const emitted: Array<string> = [];
+          const reporters: ReadonlyArray<Reporter.Reporter> = [
+            {
+              name: "text",
+              emit: (result) =>
+                Effect.sync(() => {
+                  emitted.push(`${result.summary.passed} passed, ${result.summary.failed} failed`);
+                }),
+            },
+          ];
+          const session: WatchSessionOptions = {
+            cli: {
+              features: [path.join(directory, "*.feature")],
+              steps: [stepsPath],
+              reporters: ["text"],
+              outputFiles: {},
+              verbose: false,
+              strict: false,
+              filters: { tags: [], titles: [], failFast: false },
+              parallel: 1,
+            },
+          };
+
+          const result = yield* runPlanOnce(
+            session,
+            { full: true, features: session.cli.features },
+            reporters,
+          );
+
+          assert.deepStrictEqual(emitted, ["1 passed, 0 failed"]);
+          assert.strictEqual(result.summary.total, 1);
+        }),
+      ).pipe(
+        Effect.provide(Layer.mergeAll(GlobResolver.layer, ModuleLoader.layer, layerCucumber)),
+        Effect.provide(NodeServices.layer),
+      ),
+    30000,
+  );
+});
+
 describe("watch session end to end", () => {
   it.live(
-    "reruns through the real CLI when a feature file changes",
+    "reruns in-process when a feature file changes",
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -388,7 +297,9 @@ describe("watch session end to end", () => {
 
           // Rename the scenario in the feature and its matching step chain; the
           // watch should rerun (the steps change widens it to a full run) and
-          // the report should pick up the new title.
+          // the report should pick up the new title. This is the assertion a
+          // cold module cache fails: the in-process session must re-import the
+          // step module to see the new chain title.
           yield* Effect.sleep("400 millis");
           yield* Effect.all([writeFeature("Renamed"), writeSteps("Renamed")]);
           yield* waitForReport(textReport, "Counter / Renamed");

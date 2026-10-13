@@ -183,10 +183,12 @@ export const cli = Command.make(
   Effect.fnUntraced(function* (args) {
     const options = cliOptions(args);
     if (args.watch) {
-      yield* WatchSession.watchSession({
-        cli: options,
-        invocation: WatchSession.childInvocation(yield* processArgv),
-      }).pipe(Effect.mapError(toUserError));
+      yield* WatchSession.watchSession({ cli: options }).pipe(
+        // In-process reruns re-import step modules, so this loader must
+        // cache-bust; the command-level cold loader would return stale modules.
+        Effect.provide(WatchSession.sessionLayers),
+        Effect.mapError(toUserError),
+      );
       return;
     }
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
@@ -226,8 +228,6 @@ export const run = Command.run(cli, {
 
 const toUserError = (error: { readonly message: string }): CliError.UserError =>
   new CliError.UserError({ cause: error.message });
-
-const processArgv: Effect.Effect<ReadonlyArray<string>> = Effect.sync(() => process.argv);
 
 const timedMillis: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<number, E, R> =
   Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {
