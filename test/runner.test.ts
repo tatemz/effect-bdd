@@ -773,6 +773,64 @@ Feature: Scenario providers
     });
   });
 
+  it.effect("closes earlier scenario providers when a later provider fails setup", () => {
+    class Resource extends Context.Service<Resource, { readonly open: boolean }>()("Resource") {}
+    class Greeting extends Context.Service<Greeting, { readonly message: string }>()("Greeting") {}
+    class SetupFailure extends Schema.TaggedError<SetupFailure>()("SetupFailure", {}) {}
+
+    const events: Array<string> = [];
+    const setupFailure = new SetupFailure();
+    const resource = Layer.effect(
+      Resource,
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push("acquire");
+          return { open: true };
+        }),
+        () =>
+          Effect.sync(() => {
+            events.push("release");
+          }),
+      ),
+    );
+    const feature = Bdd.feature("Scenario providers").pipe(
+      Bdd.scenario("Later provider setup fails").pipe(
+        Bdd.given`the scenario runs`(() =>
+          Effect.sync(() => {
+            events.push("step");
+          }),
+        ),
+        Bdd.provide(resource),
+        Bdd.provide(Layer.effect(Greeting, Effect.fail(setupFailure))),
+        Bdd.tapError(() =>
+          Effect.sync(() => {
+            events.push("tapError");
+          }),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `
+Feature: Scenario providers
+
+  Scenario: Later provider setup fails
+    Given the scenario runs
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "ScenarioSetupError");
+      if (error._tag === "ScenarioSetupError") {
+        assert.strictEqual(error.cause, setupFailure);
+      }
+      assert.deepStrictEqual(events, ["acquire", "release"]);
+    });
+  });
+
   it.effect("reports scenario provider finalizer failures as teardown errors", () => {
     class Greeting extends Context.Service<
       Greeting,
