@@ -14,6 +14,7 @@ running the steps.
 - [How It Works](#how-it-works)
 - [CLI Workflows](#cli-workflows)
 - [Writing Step Modules](#writing-step-modules)
+- [Given, When, Then](#given-when-then)
 - [Step Patterns](#step-patterns)
 - [Reference](#reference)
 - [Development Benchmarks](#development-benchmarks)
@@ -29,9 +30,12 @@ pnpm add effect-bdd effect
 pnpm add -D tsx
 ```
 
+`tsx` is only needed when the CLI must load TypeScript step modules. Bun loads
+them directly; a compiled project can use plain Node.
+
 ## Quick Start
 
-Start with a feature:
+Start with a feature file. Save this as `features/counter.feature`:
 
 ```gherkin
 Feature: Counter
@@ -42,7 +46,8 @@ Feature: Counter
     Then the counter value is 0
 ```
 
-Then declare the scenario chain in TypeScript:
+Then declare the same scenario chain in TypeScript. Save this as
+`features/counter.steps.ts`:
 
 ```ts
 import { Bdd } from "effect-bdd";
@@ -67,32 +72,55 @@ const creatingACounter = Bdd.scenario("Creating a counter").pipe(
   thenCounterValueIs,
 );
 
-const counter = Bdd.feature("Counter").pipe(creatingACounter);
+export const counter = Bdd.feature("Counter").pipe(creatingACounter);
+```
 
-const program = Bdd.run(
-  counter,
-  `
+Export the feature. The CLI discovers definitions by reading each exported value,
+so a module-local `const` is invisible to it.
+
+Run both files through the CLI:
+
+```sh
+NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
+  --features "features/*.feature" \
+  --steps "features/*.steps.ts"
+```
+
+You should see three passing steps and one passing scenario. If the `.feature`
+text and the chain disagree, the run fails before any step executes. That is the
+point of the pairing; see [How It Works](#how-it-works).
+
+You can also run a feature from a test with `Bdd.run`. It takes the feature
+definition and the Gherkin source as a string:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Effect } from "effect";
+
+declare const counter: Bdd.Feature;
+
+const source = `
 Feature: Counter
 
   Scenario: Creating a counter
     Given no counter exists
     When the counter is created
     Then the counter value is 0
-`,
-).pipe(Effect.provide(Bdd.layerCucumber));
+`;
+
+const program = Bdd.run(counter, source).pipe(Effect.provide(Bdd.layerCucumber));
 ```
 
-Most projects run feature files through the CLI:
+`Bdd.run` returns `Effect<Bdd.Report, Bdd.RunError>`, so it composes with your
+existing Effect tests. Providing `Bdd.layerCucumber` supplies the default
+Gherkin compiler.
+
+There is a fuller counter example in [`examples/counter`](examples/counter), and
+one that boots a real HTTP server in [`examples/greeter-api`](examples/greeter-api).
+Run both from the repository root:
 
 ```sh
-NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
-  --features "features/**/*.feature" \
-  --steps "features/**/*.steps.ts"
-```
-
-There is a fuller counter example in [`examples/`](examples/):
-
-```sh
+pnpm build
 pnpm --dir examples install
 pnpm --dir examples test
 ```
@@ -177,9 +205,47 @@ Bun can load `.ts` step modules directly:
 bunx --bun effect-bdd --features "features/**/*.feature" --steps "features/**/*.steps.ts"
 ```
 
+### Watch Mode
+
+`--watch` keeps the process alive and reruns when a feature or step file changes:
+
+```sh
+NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
+  --features "features/**/*.feature" \
+  --steps "features/**/*.steps.ts" \
+  --watch
+```
+
+The first run covers every selected feature. After that, editing one feature file
+reruns only that file, while editing a step module reruns everything, because a
+shared step change can affect any feature. `--tags` and `--title` apply to every
+rerun. Stop the session with Ctrl+C.
+
+Each rerun starts a fresh child process, so step modules are reloaded and Node's
+module cache cannot serve you stale definitions.
+
+### Reporters
+
+`--reporter` accepts `text`, `html`, `json`, and `junit`, and repeats for several
+at once. `text` defaults to stdout. The `html` and `junit` reporters require an
+output file:
+
+```sh
+NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
+  --features "features/**/*.feature" \
+  --steps "features/**/*.steps.ts" \
+  --reporter text \
+  --reporter junit \
+  --output-file.junit reports/junit.xml
+```
+
+When several reporters are selected, the exits of all of them decide the run
+result, so a failing reporter still fails the CLI.
+
 ## Writing Step Modules
 
-Keep step modules boring:
+A step module is an ordinary ES module that exports a `Bdd.feature(...)`. Keep
+it boring and top-to-bottom:
 
 ```text
 imports
@@ -191,40 +257,65 @@ scenario chains
 one exported Bdd.feature(...)
 ```
 
-One Gherkin `Feature:` should map to one exported `Bdd.feature("Feature name")`. Reusable
-steps can live anywhere, but compose them into a single feature export per feature name.
-When the CLI loads shared step modules, every exported `Bdd.feature(...)` is considered
-during discovery.
+One Gherkin `Feature:` should map to one exported `Bdd.feature("Feature name")`, and
+the titles must match exactly. A title mismatch is a `MatchError`, not a silent
+skip. Reusable steps can live anywhere, but compose them into a single feature
+export per feature name.
+
+The CLI treats every exported `Bdd.feature(...)` from the matched step modules as
+a candidate, so export only definitions you want discovered. Helper exports are
+fine; they are ignored unless they are features.
 
 Scenario state flows through the chain. There is no feature-level `initial` state; the
-first step sets up the first useful state.
+first step sets up the first useful state. Each step receives the previous step's
+state and returns the next one.
 
-Steps declared inside a scenario chain infer captures, decoded arguments, and state from
-the surrounding `pipe`:
+Here is a complete module for the feature below:
+
+```gherkin
+Feature: Counter
+
+  Scenario: Counting up
+    Given a counter at 0
+    When the counter is incremented
+    Then the counter value is 1
+```
 
 ```ts
 import { Bdd } from "effect-bdd";
 import { Effect, Schema } from "effect";
 
+interface Counter {
+  readonly value: number;
+}
+
 const count = Bdd.capture("count", Schema.FiniteFromString);
 const expected = Bdd.capture("expected", Schema.FiniteFromString);
 
 const scenario = Bdd.scenario("Counting up").pipe(
-  Bdd.given`a counter at ${count}`(({ count }) => Effect.succeed({ value: count })),
-  Bdd.when`the counter is incremented`((state) => Effect.succeed({ value: state.value + 1 })),
-  Bdd.then`the counter value is ${expected}`(({ expected }, state) =>
+  Bdd.given`a counter at ${count}`(({ count }) => Effect.succeed<Counter>({ value: count })),
+  Bdd.when`the counter is incremented`((state: Counter) =>
+    Effect.succeed<Counter>({ value: state.value + 1 }),
+  ),
+  Bdd.then`the counter value is ${expected}`(({ expected }, state: Counter) =>
     state.value === expected
       ? Effect.succeed(state)
       : Effect.fail(`expected ${expected}, got ${state.value}` as const),
   ),
 );
+
+export const counter = Bdd.feature("Counter").pipe(scenario);
 ```
+
+Captures and decoded arguments are inferred from the tagged template, and the
+state type flows from step to step through the `pipe`. Annotate a parameter when
+you need to name the state type, as with `state: Counter` above.
 
 ## Given, When, Then
 
 The runner pairs steps position by position, but it does not police what each step
 does. That discipline is yours, and it is what makes a scenario readable and its
-failures meaningful. Hold every scenario to three rules.
+failures meaningful. Hold every scenario to these rules.
 
 **Every scenario has at least one `Given`, one `When`, and one `Then`.** A scenario
 without a `When` describes no behavior; one without a `Then` asserts nothing.
@@ -241,12 +332,16 @@ along, so later steps still have something to work with. It makes no calls of it
 if a `Then` starts a server, sends a request, or mutates state, the behavior moved
 into the assertion and the failure message will point at the wrong place.
 
-One consequence worth stating plainly: a `Then` must not provide services to itself.
-If an assertion needs a service, put `Bdd.provide(...)` on the scenario, where the
-setup and action can see it too.
+A `Then` must not provide services to itself. If an assertion needs a service, put
+`Bdd.provide(...)` on the scenario, where the setup and action can see it too.
 
-Captures and DataTables still work in any step, but prefer them where they belong:
+Captures and DataTables work in any step, but prefer them where they belong:
 inputs to a `Given`, or expected values in a `Then`.
+
+These rules are style, not enforcement. `effect-bdd` accepts a scenario with no
+`When`, and the fixtures under `test/fixtures/` do exactly that to test the parser.
+The [fixture README](test/fixtures/README.md) explains why those are not models to
+copy.
 
 ## Step Patterns
 
@@ -269,13 +364,22 @@ const thenTotalIs = Bdd.then`the cart total is ${expected}`(
 );
 ```
 
-Prefer strict schemas. `Schema.FiniteFromString` rejects `"abc"`, `""`, and `"Infinity"`
-as `MatchError`s.
+Prefer strict schemas. `Schema.FiniteFromString` rejects `"abc"`, `"Infinity"`, and other
+non-numeric text as `MatchError`s. An empty capture fails earlier, as a text
+mismatch, because the pattern requires at least one character.
 
 ### DataTables and DocStrings
 
-Use `Bdd.table(schema)` for Gherkin DataTables. The first row is headers; each later row
-is decoded by the row schema.
+Use `Bdd.table(schema)` for Gherkin DataTables. The first row supplies the column
+headers. Each later row becomes an object keyed by those headers and is decoded by
+the row schema:
+
+```gherkin
+Given the following items are added:
+  | sku      | qty |
+  | book     | 2   |
+  | notebook | 3   |
+```
 
 ```ts
 import { Bdd } from "effect-bdd";
@@ -293,7 +397,17 @@ const whenItemsAreAdded = Bdd.when`the following items are added:`(
 );
 ```
 
-Use `Bdd.docString(schema)` for larger step arguments, including JSON payloads.
+Header names must match the row schema's field names. A DataTable with no rows
+decodes to an empty array.
+
+Use `Bdd.docString(schema)` for larger step arguments, including JSON payloads:
+
+```gherkin
+Given the request body is:
+  """json
+  { "sku": "book", "qty": 2 }
+  """
+```
 
 ```ts
 import { Bdd } from "effect-bdd";
@@ -304,14 +418,14 @@ const Payload = Schema.Struct({
   qty: Schema.Number,
 });
 
-const whenRequestBodyIs = Bdd.when`the request body is:`(
+const givenRequestBody = Bdd.given`the request body is:`(
   Bdd.docString(Schema.fromJsonString(Payload)),
   (payload: typeof Payload.Type) => Effect.succeed(Option.some(payload)),
 );
 ```
 
 Schema decode failures for captures, DataTables, and DocStrings are preserved on
-`MatchError.cause`.
+`MatchError.cause`, so you can inspect the underlying `SchemaError`.
 
 ### Services
 
@@ -342,6 +456,59 @@ const thenTaxedTotalIs = Bdd.then`the taxed total is ${expected}`(
     }),
 );
 ```
+
+This step needs `TaxRate` in its environment. `Bdd.run` excludes `Scope` from the
+required environment (`Exclude<R, Scope.Scope>`) and adds `Bdd.GherkinCompiler`, so
+your `R` becomes part of the returned Effect's requirements. You can satisfy it two
+ways.
+
+At run level, around `Bdd.run`, when every scenario should share one instance. Build
+the feature, then provide the service at the end of the pipe:
+
+```ts
+import { Bdd } from "effect-bdd";
+import { Context, Effect, Schema } from "effect";
+
+class TaxRate extends Context.Service<
+  TaxRate,
+  {
+    readonly rate: number;
+  }
+>()("TaxRate") {}
+
+const expected = Bdd.capture("expected", Schema.FiniteFromString);
+
+const thenTaxedTotalIs = Bdd.then`the taxed total is ${expected}`(
+  ({ expected }: { readonly expected: number }, subtotal: number) =>
+    Effect.gen(function* () {
+      const taxRate = yield* TaxRate;
+      const actual = Math.round(subtotal * (1 + taxRate.rate));
+      return actual === expected
+        ? subtotal
+        : yield* Effect.fail(`expected ${expected}, got ${actual}` as const);
+    }),
+);
+
+const feature = Bdd.feature("Cart").pipe(
+  Bdd.scenario("Taxed total").pipe(
+    Bdd.given`a subtotal of 10`(() => Effect.succeed(10)),
+    thenTaxedTotalIs,
+  ),
+);
+
+declare const source: string;
+
+const program = Bdd.run(feature, source).pipe(
+  Effect.provide(Bdd.layerCucumber),
+  Effect.provideService(TaxRate, { rate: 0.1 }),
+);
+```
+
+At scenario level, with `Bdd.provide`, when the service holds resources that belong
+to a single scenario. See [Scenario Resources](#scenario-resources).
+
+`Bdd.provide` accepts a scenario, not a feature. Apply it to the scenarios that need
+the layer rather than to the whole feature.
 
 ### Scenario Resources
 
@@ -559,19 +726,40 @@ If a tap handler itself fails, the scenario fails with a `TapError` — the same
 
 - `--features`, `-f`: required, repeatable, supports `*`, `?`, and `**`.
 - `--steps`, `-s`: required, repeatable.
-- `--reporter`, `-r`: repeatable; `text`, `html`, `json`, or `junit`.
-- `--output-file.<reporter>`: write a reporter to a file.
-- `--tags`: Cucumber-style tag expression with `and`, `or`, `not`, and parentheses.
-- `--title`, `-n`: run scenarios whose `Feature / Scenario` title contains the text.
-- `--parallel`: run scenarios concurrently.
-- `--fail-fast`: stop after the first failed scenario.
+- `--reporter`, `-r`: repeatable; `text`, `html`, `json`, or `junit`. Defaults to `text`.
+- `--output-file.text`, `--output-file.json`: write that reporter to a file. Falls back
+  to stdout.
+- `--output-file.html`, `--output-file.junit`: required when that reporter is selected.
+- `--tags`, `-t`: repeatable Cucumber-style tag expression with `and`, `or`, `not`, and
+  parentheses. Repeating the flag combines expressions with `and`.
+- `--title`, `-n`: repeatable; run scenarios whose `Feature / Scenario` title contains
+  the text.
+- `--parallel`, `-p`: number of scenarios to run concurrently. Defaults to `1`.
+- `--fail-fast`: stop after the first failed scenario. Runs sequentially when enabled.
 - `--step-timeout`: maximum duration for each step, using Effect Duration input such as
   `"500 millis"` or `"5 seconds"`.
 - `--strict`: fail the CLI on unused feature or scenario definitions.
-- `--verbose`: show passing scenarios in text output.
+- `--verbose`, `-v`: show passing scenarios in text output.
+- `--watch`: rerun on file changes. See [Watch Mode](#watch-mode).
 
 Without `--strict`, failed scenarios and unmatched selected feature files/scenarios still
 fail the run. Unused definitions are reported but do not fail the run.
+
+`-v` is `--verbose` here, not `--version`. Use `--version` for the version number.
+
+### Step Timeout Format
+
+`--step-timeout` accepts `<number> <unit>` with a space, plus the literal `Infinity`.
+Units are `nano`, `nanos`, `micro`, `micros`, `milli`, `millis`, `second`, `seconds`,
+`minute`, `minutes`, `hour`, `hours`, `day`, `days`, `week`, and `weeks`.
+
+```sh
+--step-timeout "500 millis"   # ok
+--step-timeout "1.5 seconds"  # ok
+--step-timeout "5s"           # error: no space and not a known unit
+--step-timeout "500ms"        # error: same reason
+--step-timeout "0 seconds"    # error: must be positive
+```
 
 ### Glob Syntax
 
@@ -599,12 +787,29 @@ scenario chain independently.
 
 `Bdd.run` fails with:
 
-- `ParseError`: invalid Gherkin.
-- `MatchError`: feature/scenario/step verification or argument decoding failed.
+- `ParseError`: invalid Gherkin. Carries `line` and `column`.
+- `MatchError`: feature/scenario/step verification or argument decoding failed. Carries
+  `scenario`, `step`, `line`, and `candidates` — the step expressions that were
+  considered.
 - `ScenarioSetupError`: scenario-level provider setup failed before steps ran.
 - `StepError`: a matched step implementation failed or exceeded its configured timeout.
 - `ScenarioTeardownError`: scenario scope finalization failed.
 - `TapError`: a `Bdd.tap` or `Bdd.tapError` handler failed.
+
+These types are exported from `effect-bdd` and from `effect-bdd/Errors`.
+
+`Bdd.run` stops at the first problem in deterministic source order. Use the CLI when
+you want every discovery problem in one report.
+
+The CLI adds its own diagnostics, which are separate from `Bdd.RunError`:
+
+- **unmatched source**: a `.feature` file or scenario has no matching definition. This
+  is fatal.
+- **unused definitions**: an exported `Bdd.feature` or scenario has no matching source.
+  Reported by default, fatal only with `--strict`.
+
+A step failure is a `StepError` whose `cause` holds the original failure. For a
+timeout, that `cause` is a `StepTimeoutError` carrying the configured `timeout`.
 
 ### Public API
 
