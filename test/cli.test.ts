@@ -138,15 +138,18 @@ describe("cli", () => {
 Feature: Counter
 
   Scenario: Increment
+    Given a clean counter
     When increment
     Then the counter is 1
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Increment").pipe(givenCleanCounter, whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
 
@@ -195,10 +198,12 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Fails
+    Given a clean counter
+    When the counter is read
     Then the counter is 1
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Fails").pipe(thenCounterIs)
+  Bdd.scenario("Fails").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const textReport = fixture.path("failure.txt");
@@ -237,6 +242,8 @@ Feature: Scenario providers
 
   Scenario: Later provider setup fails
     Given the scenario runs
+    When the scenario acts
+    Then the scenario finishes
 `,
           steps: providerCleanupSteps,
         });
@@ -267,7 +274,9 @@ Feature: Scenario providers
 Feature: Timeouts
 
   Scenario: Hangs
+    Given a step that hangs
     When the step hangs
+    Then the step completes
 `,
           steps: `
 import { Bdd } from "effect-bdd"
@@ -275,7 +284,9 @@ import { Effect } from "effect"
 
 export const timeouts = Bdd.feature("Timeouts").pipe(
   Bdd.scenario("Hangs").pipe(
-    Bdd.when\`the step hangs\`(() => Effect.sleep("50 millis"))
+    Bdd.given\`a step that hangs\`(() => Effect.succeed(0)),
+    Bdd.when\`the step hangs\`(() => Effect.sleep("50 millis")),
+    Bdd.then\`the step completes\`((state) => Effect.succeed(state))
   )
 )
 `,
@@ -319,10 +330,12 @@ export const timeouts = Bdd.feature("Timeouts").pipe(
 Feature: Missing source
 
   Scenario: Cannot run
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const textReport = fixture.path("unmatched-feature.txt");
@@ -373,15 +386,17 @@ Feature: Missing source
 Feature: Counter
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: `${counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs),
-  Bdd.scenario("Unused counter chain").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs),
+  Bdd.scenario("Unused counter chain").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `)}
 
 export const other = Bdd.feature("Other").pipe(
-  Bdd.scenario("Unused other chain").pipe(thenCounterIs)
+  Bdd.scenario("Unused other chain").pipe(givenCleanCounter, whenRead, thenCounterIs)
 )
 `,
         });
@@ -424,15 +439,17 @@ export const other = Bdd.feature("Other").pipe(
 Feature: Counter
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: `${counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs),
-  Bdd.scenario("Unused counter chain").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs),
+  Bdd.scenario("Unused counter chain").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `)}
 
 export const other = Bdd.feature("Other").pipe(
-  Bdd.scenario("Unused other chain").pipe(thenCounterIs)
+  Bdd.scenario("Unused other chain").pipe(givenCleanCounter, whenRead, thenCounterIs)
 )
 `,
         });
@@ -464,10 +481,11 @@ export const other = Bdd.feature("Other").pipe(
 Feature: Counter
 
   Scenario: Unknown step
+    Given a clean counter
     Then a missing transition runs
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Unknown step").pipe(thenCounterIs)
+  Bdd.scenario("Unknown step").pipe(givenCleanCounter, thenCounterIs)
 `),
         });
         const textReport = fixture.path("unmatched-step.txt");
@@ -491,7 +509,7 @@ Feature: Counter
         const text = yield* fs.readFileString(textReport);
 
         assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Unknown step/);
-        assert.match(text, /Step 1 text mismatch/);
+        assert.match(text, /Step 2 text mismatch/);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -504,10 +522,11 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Wrong keyword
+    Given a clean counter
     Given increment
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Wrong keyword").pipe(whenIncrement)
+  Bdd.scenario("Wrong keyword").pipe(givenCleanCounter, whenIncrement)
 `),
         });
         const textReport = fixture.path("wrong-keyword.txt");
@@ -545,16 +564,19 @@ Feature: Counter
 
   @fast
   Scenario: Increment
+    Given a clean counter
     When increment
     Then the counter is 1
 
   @slow
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then a missing transition runs
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Increment").pipe(givenCleanCounter, whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const textReport = fixture.path("tags.txt");
@@ -596,15 +618,18 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Increment
+    Given a clean counter
     When increment
     Then the counter is 1
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Increment").pipe(givenCleanCounter, whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const textReport = fixture.path("name.txt");
@@ -641,14 +666,18 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Fails first
+    Given a clean counter
+    When the counter is read
     Then the counter is 1
 
   Scenario: Fails later
+    Given a clean counter
+    When the counter is read
     Then the counter is 2
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Fails first").pipe(thenCounterIs),
-  Bdd.scenario("Fails later").pipe(thenCounterIs)
+  Bdd.scenario("Fails first").pipe(givenCleanCounter, whenRead, thenCounterIs),
+  Bdd.scenario("Fails later").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const textReport = fixture.path("fail-fast.txt");
@@ -688,15 +717,18 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Increment
+    Given a clean counter
     When increment
     Then the counter is 1
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Increment").pipe(whenIncrement, thenCounterIs),
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Increment").pipe(givenCleanCounter, whenIncrement, thenCounterIs),
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const jsonReport = fixture.path("report.json");
@@ -743,10 +775,12 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const path = yield* Path.Path;
@@ -850,17 +884,19 @@ export const scopedResources = Bdd.feature("Scoped resources").pipe(
 Feature: Counter
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
         const fs = yield* FileSystem.FileSystem;
         yield* fs.writeFileString(
           fixture.path("duplicate.mjs"),
           counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         );
 
@@ -897,13 +933,17 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Duplicate
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 
   Scenario: Duplicate
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Duplicate").pipe(thenCounterIs)
+  Bdd.scenario("Duplicate").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
 
@@ -940,6 +980,8 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: `throw new Error("boom while importing step module")`,
@@ -980,10 +1022,12 @@ Feature: Counter
 Feature: Counter
 
   Scenario: Starts clean
+    Given a clean counter
+    When the counter is read
     Then the counter is 0
 `,
           steps: counterStepsFor(`
-  Bdd.scenario("Starts clean").pipe(thenCounterIs)
+  Bdd.scenario("Starts clean").pipe(givenCleanCounter, whenRead, thenCounterIs)
 `),
         });
 
@@ -1040,6 +1084,8 @@ import { Bdd } from "effect-bdd"
 import { Effect, Schema } from "effect"
 
 const expected = Bdd.capture("expected", Schema.NumberFromString)
+const givenCleanCounter = Bdd.given\`a clean counter\`(() => Effect.succeed(0))
+const whenRead = Bdd.when\`the counter is read\`((state) => Effect.succeed(state ?? 0))
 const whenIncrement = Bdd.when\`increment\`((state) => Effect.succeed((state ?? 0) + 1))
 const thenCounterIs = Bdd.then\`the counter is \${expected}\`(({ expected }, state) =>
   (state ?? 0) === expected
@@ -1084,6 +1130,8 @@ const message = Layer.effect(
 export const providers = Bdd.feature("Scenario providers").pipe(
   Bdd.scenario("Later provider setup fails").pipe(
     Bdd.given\`the scenario runs\`(() => record("step")),
+    Bdd.when\`the scenario acts\`(() => record("step")),
+    Bdd.then\`the scenario finishes\`(() => record("step")),
     Bdd.provide(database),
     Bdd.provide(message),
     Bdd.tapError(() => record("tapError"))

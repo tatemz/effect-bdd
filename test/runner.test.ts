@@ -345,7 +345,7 @@ Feature: Keyword inheritance
     };
     const initialState: State = { cart: emptyCart };
     const givenEmpty = Bdd.given`an empty cart`(() => Effect.succeed(initialState));
-    const whenItems = Bdd.when`the following items are added:`(
+    const givenItems = Bdd.given`the following items are added:`(
       Bdd.table(Item),
       (items, state: State) =>
         Effect.succeed({
@@ -356,9 +356,12 @@ Feature: Keyword inheritance
           ),
         }),
     );
-    const whenPayload = Bdd.when`the request body is:`(
+    const givenPayload = Bdd.given`the request body is:`(
       Bdd.docString(Schema.fromJsonString(Payload)),
       (payload, state: State) => Effect.succeed({ ...state, payload }),
+    );
+    const whenOrderSubmitted = Bdd.when`the order is submitted`((state: State) =>
+      Effect.succeed(state),
     );
     const thenAccepted = Bdd.then`the payload is accepted`((state: State) =>
       Effect.sync(() => {
@@ -368,7 +371,13 @@ Feature: Keyword inheritance
       }),
     );
     const feature = Bdd.feature("Shopping cart").pipe(
-      Bdd.scenario("Structured arguments").pipe(givenEmpty, whenItems, whenPayload, thenAccepted),
+      Bdd.scenario("Structured arguments").pipe(
+        givenEmpty,
+        givenItems,
+        givenPayload,
+        whenOrderSubmitted,
+        thenAccepted,
+      ),
     );
 
     return runBdd(
@@ -378,14 +387,15 @@ Feature: Shopping cart
 
   Scenario: Structured arguments
     Given an empty cart
-    When the following items are added:
+    And the following items are added:
       | sku      | qty | price |
       | book     | 2   | 21    |
       | notebook | 3   | 5     |
-    When the request body is:
+    And the request body is:
       """json
       { "sku": "book", "qty": 2 }
       """
+    When the order is submitted
     Then the payload is accepted
 `,
     );
@@ -666,11 +676,12 @@ Feature: Scoped resources
     const givenBadResource = Bdd.given`a bad resource is open`(() =>
       Effect.acquireRelease(Effect.succeed({}), () => Effect.die("teardown failed")),
     );
+    const whenAssertionRuns = Bdd.when`the assertion runs`((state: {}) => Effect.succeed(state));
     const thenAssertionPasses = Bdd.then`the assertion passes`((state: {}) =>
       Effect.succeed(state),
     );
     const feature = Bdd.feature("Scoped resources").pipe(
-      Bdd.scenario("Teardown fails").pipe(givenBadResource, thenAssertionPasses),
+      Bdd.scenario("Teardown fails").pipe(givenBadResource, whenAssertionRuns, thenAssertionPasses),
     );
 
     return Effect.gen(function* () {
@@ -682,6 +693,7 @@ Feature: Scoped resources
 
   Scenario: Teardown fails
     Given a bad resource is open
+    When the assertion runs
     Then the assertion passes
 `,
         ),
@@ -706,6 +718,7 @@ Feature: Scoped resources
       }
     >()("Greeting") {}
 
+    const givenGreeterIsConfigured = Bdd.given`a greeter is configured`(() => Effect.succeed(true));
     const whenGreetingRead = Bdd.when`the greeting is read`(() =>
       Effect.gen(function* () {
         const greeting = yield* Greeting;
@@ -720,6 +733,7 @@ Feature: Scoped resources
     );
     const feature = Bdd.feature("Scenario providers").pipe(
       Bdd.scenario("Uses a provider").pipe(
+        givenGreeterIsConfigured,
         whenGreetingRead,
         thenGreetingMatches,
         Bdd.provide(Layer.succeed(Greeting, { message: "hello" })),
@@ -732,6 +746,7 @@ Feature: Scoped resources
 Feature: Scenario providers
 
   Scenario: Uses a provider
+    Given a greeter is configured
     When the greeting is read
     Then the greeting is hello
 `,

@@ -7,7 +7,7 @@ Feature: Counter
     Then the counter value is 0
 
   Scenario: Counting up
-    Given a counter was created
+    Given a counter at value 0
     When the counter is incremented 2 times
     Then the counter value is 2
 

@@ -1,5 +1,5 @@
 import { Bdd } from "effect-bdd";
-import { Context, Effect, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
 class TaxRate extends Context.Service<
   TaxRate,
@@ -7,6 +7,9 @@ class TaxRate extends Context.Service<
     readonly rate: number;
   }
 >()("TaxRate") {}
+
+/** The rate the taxed-total scenario runs with. */
+const TaxRateLive = Layer.succeed(TaxRate, { rate: 0.1 });
 
 const Item = Schema.Struct({
   sku: Schema.String,
@@ -64,7 +67,7 @@ const whenTableItemsAdded = Bdd.when`the following items are added:`(
       items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state),
     ),
 );
-const whenRequestBody = Bdd.when`the request body is:`(
+const givenRequestBody = Bdd.given`the request body is:`(
   Bdd.docString(Schema.fromJsonString(Payload)),
   (payload, state: Cart) => Effect.succeed({ ...state, payload }),
 );
@@ -76,11 +79,12 @@ const thenSubtotal = Bdd.then`the subtotal is ${expected}`(({ expected }, state:
 const thenTaxedTotal = Bdd.then`the taxed total is ${expected}`(({ expected }, state: Cart) =>
   Effect.gen(function* () {
     const taxRate = yield* TaxRate;
-    const actual = Math.round(subtotalOf(state) * (1 + taxRate.rate));
+    const rate = state.taxEnabled ? taxRate.rate : 0;
+    const actual = Math.round(subtotalOf(state) * (1 + rate));
     return actual === expected
       ? state
       : yield* Effect.fail(`expected taxed total ${expected}, got ${actual}` as const);
-  }).pipe(Effect.provideService(TaxRate, { rate: state.taxEnabled ? 0.1 : 0 })),
+  }),
 );
 const thenPayloadAccepted = Bdd.then`the payload is accepted`((state: Cart) => {
   if (state.payload?.sku === "book" && state.payload.qty === 2) {
@@ -88,13 +92,9 @@ const thenPayloadAccepted = Bdd.then`the payload is accepted`((state: Cart) => {
   }
   return Effect.fail("expected payload to be accepted" as const);
 });
-const thenAnyKeyword = Bdd.then`the scenario can finish with any keyword`((state: Cart) =>
-  subtotalOf(state) === 0
-    ? Effect.succeed(state)
-    : Effect.fail(`expected empty cart, got ${subtotalOf(state)}` as const),
-);
 
 const captureTotals = Bdd.scenario("capture totals include tax").pipe(
+  Bdd.provide(TaxRateLive),
   givenEmptyCart,
   givenTaxEnabled,
   whenItemAdded,
@@ -105,8 +105,8 @@ const captureTotals = Bdd.scenario("capture totals include tax").pipe(
 const structuredArguments = Bdd.scenario("structured arguments update state").pipe(
   givenEmptyCart,
   givenTaxEnabled,
+  givenRequestBody,
   whenTableItemsAdded,
-  whenRequestBody,
   thenSubtotal,
   thenPayloadAccepted,
 );
@@ -118,11 +118,12 @@ const outlineExamples = Bdd.scenario("outline examples start from initial state"
   thenSubtotal,
 );
 
-const keywordAgnostic = Bdd.scenario("keyword agnostic setup").pipe(
+const keywordAgnostic = Bdd.scenario("a wildcard step satisfies the given keyword").pipe(
   givenEmptyCart,
   givenTaxEnabled,
   givenCartStartsEmpty,
-  thenAnyKeyword,
+  whenTableItemsAdded,
+  thenSubtotal,
 );
 
 export const kitchenSink = Bdd.feature("Effect BDD kitchen sink").pipe(

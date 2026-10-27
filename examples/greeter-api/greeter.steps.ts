@@ -26,41 +26,52 @@ const apiApp = (language: Language) =>
     HttpApiBuilder.layer(Api).pipe(Layer.provide(HealthHandlers)),
   );
 
+/** The health payload the server answered with. */
+type Health = { readonly status: string; readonly greeting: string };
+
+/** The scenario state: the running app plus the response it answered with. */
+type AppState = Effect.Success<ReturnType<typeof startApp>> & { readonly health: Health };
+
 /**
  * The Greeter API behavior as executable BDD.
  *
+ * The scenario follows one `Given`, one `When`, one `Then`, and each keyword
+ * does only its own job:
+ *
+ * - `Given` starts the real server on an ephemeral port with the chosen
+ *   Greeter implementation. This is setup, so it does not touch the endpoint
+ *   under test.
+ * - `When` issues the single HTTP request the scenario is about and keeps the
+ *   response.
+ * - `Then` asserts on that response and makes no calls of its own.
+ *
  * Steps are defined inline in each scenario pipe; only captures and the app
- * composition live at the top level. Every step body is an `Effect.gen`
- * generator or a braced arrow body. Each scenario composes the app for its
- * chosen Greeter implementation, boots it on an ephemeral port with
- * `startApp`, and asserts through the typed client. `Bdd.tap` runs at its
- * declared position in the scenario chain, reporting the state so far.
- * `Bdd.tapError` observes the scenario's failure and logs its tag and
- * message; the scenario still fails with the original error.
+ * composition live at the top level. `Bdd.tap` runs at its declared position
+ * in the scenario chain, reporting the state so far. `Bdd.tapError` observes
+ * the scenario's failure and logs its tag and message; the scenario still
+ * fails with the original error.
  */
 export const greeterApi = Bdd.feature("Greeter API").pipe(
   Bdd.scenario("The health check greets in the chosen language").pipe(
     Bdd.tapError((failure) => {
       return Effect.logError(`[GreeterApi] ${failure._tag} - ${failure.message}`);
     }),
-    Bdd.given`the app is using the ${language} greeter`(({ language }) => {
-      return Effect.sync(() => {
-        return { language };
-      });
+    Bdd.given`the app is running with the ${language} greeter`(({ language }) => {
+      return startApp(apiApp(language));
     }),
-    Bdd.when`the app is running`((state) => {
+    Bdd.when`the health check is requested`((app) => {
       return Effect.gen(function* () {
-        const { port, client } = yield* startApp(apiApp(state.language));
-        return { ...state, port, client };
+        const health: Health = yield* app.client.health();
+        return { ...app, health };
       });
     }),
-    Bdd.tap((state) => {
-      return Effect.log(`[GreeterApi] step state: ${JSON.stringify(state)}`);
+    Bdd.tap((state: AppState) => {
+      return Effect.log(`[GreeterApi] step state: ${JSON.stringify(state.health)}`);
     }),
-    Bdd.then`the health check says status ${status} and greeting ${greeting}`(
+    Bdd.then`the response says status ${status} and greeting ${greeting}`(
       ({ status, greeting }, state) => {
         return Effect.gen(function* () {
-          const health = yield* state.client.health();
+          const { health } = state;
           if (health.status !== status) {
             return yield* Effect.fail(`health status was ${health.status}, expected ${status}`);
           }

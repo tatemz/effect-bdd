@@ -50,8 +50,10 @@ import { Effect, Schema } from "effect";
 
 const expected = Bdd.capture("expected", Schema.FiniteFromString);
 
-const givenNoCounter = Bdd.given`no counter exists`(() => Effect.void);
-const whenCounterIsCreated = Bdd.when`the counter is created`(() => Effect.succeed(0));
+const givenNoCounter = Bdd.given`no counter exists`(() => Effect.succeed(0));
+const whenCounterIsCreated = Bdd.when`the counter is created`((state: number) =>
+  Effect.succeed(state),
+);
 const thenCounterValueIs = Bdd.then`the counter value is ${expected}`(
   ({ expected }: { readonly expected: number }, state: number) =>
     state === expected
@@ -205,13 +207,46 @@ import { Bdd } from "effect-bdd";
 import { Effect, Schema } from "effect";
 
 const count = Bdd.capture("count", Schema.FiniteFromString);
+const expected = Bdd.capture("expected", Schema.FiniteFromString);
 
 const scenario = Bdd.scenario("Counting up").pipe(
   Bdd.given`a counter at ${count}`(({ count }) => Effect.succeed({ value: count })),
   Bdd.when`the counter is incremented`((state) => Effect.succeed({ value: state.value + 1 })),
-  Bdd.then`the counter value is correct`((state) => Effect.succeed(state)),
+  Bdd.then`the counter value is ${expected}`(({ expected }, state) =>
+    state.value === expected
+      ? Effect.succeed(state)
+      : Effect.fail(`expected ${expected}, got ${state.value}` as const),
+  ),
 );
 ```
+
+## Given, When, Then
+
+The runner pairs steps position by position, but it does not police what each step
+does. That discipline is yours, and it is what makes a scenario readable and its
+failures meaningful. Hold every scenario to three rules.
+
+**Every scenario has at least one `Given`, one `When`, and one `Then`.** A scenario
+without a `When` describes no behavior; one without a `Then` asserts nothing.
+
+**`Given` is setup.** It builds the starting state and never asserts. A failing
+`Given` means the scenario could not start, which is a different problem from the
+behavior under test being wrong.
+
+**`When` is the action.** It performs the single behavior the scenario is about and
+returns the result as state. If you need two `When` steps, you have two scenarios.
+
+**`Then` is the assertion.** It inspects the state the `When` produced and passes it
+along, so later steps still have something to work with. It makes no calls of its own:
+if a `Then` starts a server, sends a request, or mutates state, the behavior moved
+into the assertion and the failure message will point at the wrong place.
+
+One consequence worth stating plainly: a `Then` must not provide services to itself.
+If an assertion needs a service, put `Bdd.provide(...)` on the scenario, where the
+setup and action can see it too.
+
+Captures and DataTables still work in any step, but prefer them where they belong:
+inputs to a `Given`, or expected values in a `Then`.
 
 ## Step Patterns
 
@@ -419,9 +454,11 @@ Override the run-level timeout for a single slow step with `Bdd.withTimeout`:
 import { Bdd } from "effect-bdd";
 import { Duration, Effect } from "effect";
 
-const thenProjectionCatchesUp = Bdd.then`the projection catches up`(() => Effect.void).pipe(
-  Bdd.withTimeout(Duration.seconds(30)),
-);
+const thenProjectionCatchesUp = Bdd.then`the projection catches up`((state: "caught-up") =>
+  state === "caught-up"
+    ? Effect.succeed(state)
+    : Effect.fail(`expected the projection to catch up, got ${state}` as const),
+).pipe(Bdd.withTimeout(Duration.seconds(30)));
 ```
 
 Timeouts fail as `StepError`s whose `cause` is a `StepTimeoutError`. Effect timeouts
@@ -451,7 +488,11 @@ const addItem = Bdd.scenario("Add item").pipe(
   showCart,
   Bdd.when`an item is added`((state: Cart) => Effect.succeed({ items: ["sku"] })),
   showCart,
-  Bdd.then`the cart has one item`((state: Cart) => Effect.succeed(state)),
+  Bdd.then`the cart has one item`((state: Cart) =>
+    state.items.length === 1
+      ? Effect.succeed(state)
+      : Effect.fail(`expected 1 item, got ${state.items.length}` as const),
+  ),
 );
 ```
 
@@ -467,10 +508,21 @@ different state types, feature tap handlers must accept `unknown` state:
 import { Bdd } from "effect-bdd";
 import { Effect } from "effect";
 
+interface Cart {
+  readonly items: ReadonlyArray<string>;
+}
+
+const emptyCart: Cart = { items: [] };
+
 const feature = Bdd.feature("Shopping cart").pipe(
   Bdd.scenario("Add item").pipe(
-    Bdd.given`an empty cart`(() => Effect.succeed({ items: [] as ReadonlyArray<string> })),
-    Bdd.when`an item is added`((state) => Effect.succeed({ items: ["sku"] })),
+    Bdd.given`an empty cart`(() => Effect.succeed(emptyCart)),
+    Bdd.when`an item is added`((state: Cart) => Effect.succeed({ items: ["sku"] })),
+    Bdd.then`the cart has one item`((state: Cart) =>
+      state.items.length === 1
+        ? Effect.succeed(state)
+        : Effect.fail(`expected 1 item, got ${state.items.length}` as const),
+    ),
   ),
   Bdd.tap((state) => Effect.log(`state after Add item: ${JSON.stringify(state)}`)),
 );
@@ -490,7 +542,10 @@ import { Bdd } from "effect-bdd";
 import { Effect } from "effect";
 
 const feature = Bdd.feature("Shopping cart").pipe(
-  Bdd.scenario("Add item").pipe(Bdd.when`an item is added`(() => Effect.succeed(undefined))),
+  Bdd.scenario("Add item").pipe(
+    Bdd.given`an empty cart`(() => Effect.succeed({ items: [] })),
+    Bdd.when`an item is added`(() => Effect.fail("out of stock" as const)),
+  ),
   Bdd.tapError((failure) => Effect.logError(`${failure._tag}: ${failure.message}`)),
 );
 ```

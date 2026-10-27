@@ -29,6 +29,7 @@ type Cart = {
 const emptyCart: Cart = { items: [] };
 
 const addItem = (cart: Cart, sku: string, qty: number, price: number): Cart => ({
+  ...cart,
   items: [...cart.items, { sku, qty, price }],
 });
 
@@ -48,17 +49,17 @@ const Item = Schema.Struct({
 
 const givenEmptyCart = Bdd.given`an empty cart`(() => Effect.succeed(emptyCart));
 const givenCartStartsEmpty = Bdd.step`the cart starts empty`(() => Effect.succeed(emptyCart));
-const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(
-  ({ qty, sku, price }, state: Cart) => Effect.succeed(addItem(state, sku, qty, price)),
-);
-const whenItemsAdded = Bdd.when`the following items are added:`(
+const givenTableItems = Bdd.given`the following items are added:`(
   Bdd.table(Item),
   (items, state: Cart) =>
     Effect.succeed(
       items.reduce((cart, item) => addItem(cart, item.sku, item.qty, item.price), state),
     ),
 );
-const whenRequestBody = Bdd.when`the request body is:`(
+const whenItemAdded = Bdd.when`${qty} ${sku} are added at ${price} each`(
+  ({ qty, sku, price }, state: Cart) => Effect.succeed(addItem(state, sku, qty, price)),
+);
+const givenRequestBody = Bdd.given`the request body is:`(
   Bdd.docString(Schema.fromJsonString(Payload)),
   (payload, state: Cart) => Effect.succeed({ ...state, payload }),
 );
@@ -82,12 +83,10 @@ const thenPayloadAccepted = Bdd.then`the payload is accepted`((state: Cart) => {
   return Effect.succeed(state);
 });
 const thenNoDuplicate = Bdd.then`no duplicate charge is made`((state: Cart) =>
-  Effect.succeed(state),
+  state.items.length === 3
+    ? Effect.succeed(state)
+    : Effect.fail(`expected 3 charged items, got ${state.items.length}` as const),
 );
-const thenAnyKeyword = Bdd.then`the scenario can finish with any keyword`((state: Cart) => {
-  assert.strictEqual(subtotalOf(state), 0);
-  return Effect.succeed(state);
-});
 
 const shoppingCart = Bdd.feature("Shopping cart").pipe(
   Bdd.scenario("Capture based item with a service-backed assertion").pipe(
@@ -98,16 +97,22 @@ const shoppingCart = Bdd.feature("Shopping cart").pipe(
   ),
   Bdd.scenario("DataTable plus And / But keyword inheritance").pipe(
     givenEmptyCart,
-    whenItemsAdded,
+    givenTableItems,
     whenItemAdded,
     thenSubtotal,
     thenNoDuplicate,
   ),
-  Bdd.scenario("DocString JSON payload").pipe(givenEmptyCart, whenRequestBody, thenPayloadAccepted),
+  Bdd.scenario("DocString JSON payload").pipe(
+    givenEmptyCart,
+    givenRequestBody,
+    whenItemAdded,
+    thenPayloadAccepted,
+  ),
   Bdd.scenario("Bdd.step can match any concrete keyword").pipe(
     givenEmptyCart,
     givenCartStartsEmpty,
-    thenAnyKeyword,
+    whenItemAdded,
+    thenSubtotal,
   ),
 );
 
@@ -132,6 +137,10 @@ const runSingleScenarioShoppingCart = (source: string) =>
     Effect.provideService(TaxRate, { rate: 0.1 }),
   );
 
+/**
+ * Deliberately malformed: `And` opens the scenario before any concrete keyword.
+ * The parser rejects it, so this chain is never executed.
+ */
 const parseFailureShoppingCart = Bdd.feature("Shopping cart").pipe(
   Bdd.scenario("Capture based item with a service-backed assertion").pipe(givenEmptyCart),
 );
@@ -151,26 +160,28 @@ Feature: Shopping cart
 
   @happy-path
   Scenario: DataTable plus And / But keyword inheritance
-    When the following items are added:
+    Given the following items are added:
       | sku      | qty | price |
       | book     | 2   | 21    |
       | notebook | 3   | 5     |
-    And 1 pen are added at 15 each
+    When 1 pen are added at 15 each
     Then the subtotal is 72
     But no duplicate charge is made
 
   @json
   Scenario: DocString JSON payload
-    When the request body is:
+    Given the request body is:
       """json
       { "sku": "book", "qty": 2 }
       """
+    When 1 pen are added at 15 each
     Then the payload is accepted
 
   @keyword-agnostic
   Scenario: Bdd.step can match any concrete keyword
-    Given the cart starts empty
-    Then the scenario can finish with any keyword
+    And the cart starts empty
+    When 2 book are added at 21 each
+    Then the subtotal is 42
 `;
 
 const stepFailureFeature = `
@@ -218,10 +229,10 @@ describe("developer experience", () => {
             steps: 5,
             tags: ["@checkout", "@happy-path"],
           },
-          { title: "DocString JSON payload", steps: 3, tags: ["@checkout", "@json"] },
+          { title: "DocString JSON payload", steps: 4, tags: ["@checkout", "@json"] },
           {
             title: "Bdd.step can match any concrete keyword",
-            steps: 3,
+            steps: 4,
             tags: ["@checkout", "@keyword-agnostic"],
           },
         ],

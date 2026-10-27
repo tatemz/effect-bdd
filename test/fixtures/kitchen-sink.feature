@@ -19,14 +19,14 @@ Feature: Effect BDD kitchen sink
 
     @table @docstring
     Scenario: structured arguments update state
+      Given the request body is:
+        """json
+        { "sku": "book", "qty": 2 }
+        """
       When the following items are added:
         | sku      | qty | price |
         | book     | 2   | 20    |
         | notebook | 1   | 5     |
-      And the request body is:
-        """json
-        { "sku": "book", "qty": 2 }
-        """
       Then the subtotal is 45
       And the payload is accepted
 
@@ -41,6 +41,9 @@ Feature: Effect BDD kitchen sink
       | 3   | book | 4     | 12       |
 
   @keyword_agnostic
-  Scenario: keyword agnostic setup
+  Scenario: a wildcard step satisfies the given keyword
     Given the cart starts empty
-    Then the scenario can finish with any keyword
+    When the following items are added:
+      | sku | qty | price |
+      | pen | 1   | 3     |
+    Then the subtotal is 3

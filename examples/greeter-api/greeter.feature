@@ -5,9 +5,9 @@ Feature: Greeter API
   typed client.
 
   Scenario Outline: The health check greets in the chosen language
-    Given the app is using the <language> greeter
-    When the app is running
-    Then the health check says status ok and greeting <expected>
+    Given the app is running with the <language> greeter
+    When the health check is requested
+    Then the response says status ok and greeting <expected>
 
     Examples:
       | language | expected |
