@@ -1,3 +1,4 @@
+@counter
 Feature: Counter
   A user creates counters and changes them.
 
