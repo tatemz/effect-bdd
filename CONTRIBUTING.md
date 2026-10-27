@@ -57,11 +57,8 @@ pnpm format:check
 
 ## Documentation and Examples
 
-- `README.md` is the user guide. Every public API addition or behavior change
-  needs a README update in the same pull request.
-- `docs/` holds design and planning notes, for example the
-  [CLI ingestion plan](docs/cli-ingestion-improvement-plan.md). Notes there
-  describe intent and remaining work; the README describes current behavior.
+- `README.md` is the user guide. It describes current behavior, so every public
+  API addition or behavior change needs a README update in the same pull request.
 - `examples/` holds runnable workspaces. `examples/counter` covers the basic API,
   and `examples/greeter-api` covers a real server with typed HTTP handlers.
 - `test/fixtures/` holds Gherkin parser fixtures. They exercise the parser, not
