@@ -21,7 +21,7 @@ body:
     attributes:
       label: Effect version
       description: The exact installed Effect version.
-      placeholder: 4.0.0-rc.112
+      placeholder: 4.0.6
     validations:
       required: true
   - type: input

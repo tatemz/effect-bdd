@@ -21,11 +21,11 @@ running the steps.
 
 ## Install
 
-`effect-bdd` requires Node `>=22.12.0` and currently tracks the Effect v4 release
-candidate train. Use matching `4.0.0-rc.x` versions of `effect` and Effect platform packages.
+`effect-bdd` requires Node `>=22.12.0` and tracks Effect v4. Install `effect-bdd`
+with a matching `effect` version.
 
 ```sh
-pnpm add effect-bdd effect@4.0.0-rc.115
+pnpm add effect-bdd effect
 pnpm add -D tsx
 ```
 
