@@ -333,7 +333,8 @@ const whenUserClicks = Bdd.when`the user clicks submit`((page: Page) => Effect.s
 
 Use `Bdd.provide` when infrastructure should be available to steps but should not appear as
 a Gherkin step. It mirrors `Effect.provide`, but provision is applied once per matched
-scenario after the scenario program is built.
+scenario after the scenario program is built. Resources acquired by earlier providers
+are finalized even if a later provider fails during setup.
 
 ```ts
 import { Bdd } from "effect-bdd";
@@ -547,7 +548,7 @@ scenario chain independently.
 - `MatchError`: feature/scenario/step verification or argument decoding failed.
 - `ScenarioSetupError`: scenario-level provider setup failed before steps ran.
 - `StepError`: a matched step implementation failed or exceeded its configured timeout.
-- `ScenarioTeardownError`: scenario scope finalization failed after steps finished.
+- `ScenarioTeardownError`: scenario scope finalization failed.
 - `TapError`: a `Bdd.tap` or `Bdd.tapError` handler failed.
 
 ### Public API

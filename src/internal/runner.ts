@@ -131,32 +131,38 @@ export const runScenarioTask = <E, R>(
   task: ScenarioTask<E, R>,
   options: RunOptions = {},
 ): Effect.Effect<ScenarioReport, RunError, Exclude<R, Scope.Scope>> =>
-  Effect.gen(function* () {
-    const scope = yield* Scope.make();
-    const context = yield* Fn.pipe(
-      buildScenarioProviders(task, scope),
-      Scope.provide(scope),
-      Effect.mapError((error) => scenarioSetupError(task, error)),
-    );
-    const program = Fn.pipe(
-      runSteps(task, options),
-      provideScenarioContext(context),
-      Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
-      tapScenarioFailures(task),
-      Scope.provide(scope),
-    );
-    const stepExit = yield* Effect.exit(program);
-    const closeExit = yield* Effect.exit(closeScenarioScope(task, scope, stepExit, options));
-    if (closeExit._tag === "Failure") {
-      return yield* Effect.fail(scenarioTeardownErrorFromCause(task, stepExit, closeExit.cause));
-    }
-    yield* stepExit;
-    return {
-      title: task.scenarioTitle,
-      steps: task.pickle.steps.length,
-      tags: task.tags,
-    };
-  });
+  Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make();
+      const program = Fn.pipe(
+        buildScenarioProviders(task, scope),
+        Scope.provide(scope),
+        Effect.mapError((error) => scenarioSetupError(task, error)),
+        Effect.flatMap((context) =>
+          Fn.pipe(
+            runSteps(task, options),
+            provideScenarioContext(context),
+            Effect.mapError((error) =>
+              isRunError(error) ? error : scenarioSetupError(task, error),
+            ),
+            tapScenarioFailures(task),
+            Scope.provide(scope),
+          ),
+        ),
+      );
+      const stepExit = yield* Effect.exit(restore(program));
+      const closeExit = yield* Effect.exit(closeScenarioScope(task, scope, stepExit, options));
+      if (closeExit._tag === "Failure") {
+        return yield* Effect.fail(scenarioTeardownErrorFromCause(task, stepExit, closeExit.cause));
+      }
+      yield* stepExit;
+      return {
+        title: task.scenarioTitle,
+        steps: task.pickle.steps.length,
+        tags: task.tags,
+      };
+    }),
+  );
 
 const buildScenarioProviders = <R>(
   task: ScenarioTask<unknown, R>,
