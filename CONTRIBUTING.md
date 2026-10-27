@@ -55,6 +55,32 @@ pnpm lint
 pnpm format:check
 ```
 
+## Documentation and Examples
+
+- `README.md` is the user guide. Every public API addition or behavior change
+  needs a README update in the same pull request.
+- `docs/` holds design and planning notes, for example the
+  [CLI ingestion plan](docs/cli-ingestion-improvement-plan.md). Notes there
+  describe intent and remaining work; the README describes current behavior.
+- `examples/` holds runnable workspaces. `examples/counter` covers the basic API,
+  and `examples/greeter-api` covers a real server with typed HTTP handlers.
+- `test/fixtures/` holds Gherkin parser fixtures. They exercise the parser, not
+  scenario design, so do not copy them as models. See the
+  [fixture README](test/fixtures/README.md).
+
+Write examples that compile and run. The `pnpm test:examples` check extracts every
+`ts` code block from `README.md`, `src/index.ts`, `src/Bdd.ts`, and `src/Errors.ts`
+and typechecks each one against the package types. Two rules follow from that:
+
+- Each `ts` block is typechecked as its own file. A block cannot reference values
+  from another block. Use `declare const` for a value the snippet does not build.
+- A block that shows a step module must export its `Bdd.feature(...)`, because the
+  CLI discovers only exported features.
+
+When a user-facing behavior changes, update the example that demonstrates it.
+The counter example is also used by the benchmark suite, so a change there needs
+`pnpm bench:smoke` in the pull request.
+
 ## Before Opening a Pull Request
 
 Run the same checks as the pull request workflow:

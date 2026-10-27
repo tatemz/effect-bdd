@@ -105,6 +105,16 @@ What to improve:
   - duplicate paths removed
   - total file-read time
 
+Completed:
+
+- The resolver deduplicates and sorts matches across overlapping patterns.
+- `test/glob.test.ts` covers `*`, `?`, `**`, intermediate wildcards, literal
+  paths, directories, missing roots, and overlapping patterns.
+
+Still future:
+
+- Optional debug output for discovery counts.
+
 What not to do yet:
 
 Do not replace globbing with a dependency unless the local resolver becomes a maintenance burden.
@@ -212,7 +222,7 @@ Acceptance criteria:
 - Markdown/HTML benchmark report displays reporter timing when present.
 - Existing tests still pass.
 
-## Phase 2: Improve Feature Discovery
+## Phase 2: Improve Feature Discovery (Completed)
 
 Tighten glob/path behavior.
 
@@ -222,6 +232,15 @@ Work items:
 - Add focused tests for glob resolver behavior.
 - Confirm deterministic output ordering.
 - Benchmark `discovery-scale` before and after.
+
+Completed:
+
+- Matches are deduplicated and sorted, so overlapping globs read each file once.
+- `test/glob.test.ts` covers the pattern language and its boundaries.
+
+Not done:
+
+- Discovery-count debug output.
 
 Acceptance criteria:
 
