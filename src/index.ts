@@ -121,7 +121,7 @@ export declare namespace Bdd {
   export type ScenarioSetupError = ScenarioSetupError_;
 
   /**
-   * Error raised when scenario teardown fails after Gherkin steps finish.
+   * Error raised when scenario teardown fails.
    *
    * @category errors
    * @since 0.5.0

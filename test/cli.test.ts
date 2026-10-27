@@ -228,6 +228,37 @@ Feature: Counter
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("closes earlier scenario providers when a later provider fails setup", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Scenario providers
+
+  Scenario: Later provider setup fails
+    Given the scenario runs
+`,
+          steps: providerCleanupSteps,
+        });
+
+        const exit = yield* Effect.exit(
+          runCli(["--features", fixture.path("*.feature"), "--steps", fixture.path("*.mjs")]).pipe(
+            Effect.provide(NodeServices.layer),
+          ),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+
+        const fs = yield* FileSystem.FileSystem;
+        const events = yield* fs.readFileString(fixture.path("events.log"));
+
+        // The earlier provider is released, the failing provider never reaches
+        // its steps, and the error tap does not run for setup failures.
+        assert.strictEqual(events, "database:acquire\nmessage:setup\ndatabase:release\n");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("fails a scenario when a step exceeds --step-timeout", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -1019,4 +1050,43 @@ const thenCounterIs = Bdd.then\`the counter is \${expected}\`(({ expected }, sta
 export const counter = Bdd.feature("Counter").pipe(
 ${scenarios}
 )
+`;
+
+/**
+ * Steps that acquire one provider, then fail a later provider's setup. Each
+ * provider event is appended to `events.log` beside this module, so the CLI
+ * test can inspect what ran after the child process exits.
+ */
+const providerCleanupSteps = `
+import { Bdd } from "effect-bdd"
+import { Context, Effect, Layer } from "effect";
+import { appendFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const eventsLog = join(dirname(fileURLToPath(import.meta.url)), "events.log");
+const record = (event) => Effect.sync(() => appendFileSync(eventsLog, event + "\\n"));
+
+class Database extends Context.Service("Database") {}
+class Message extends Context.Service("Message") {}
+
+const database = Layer.effect(
+  Database,
+  Effect.acquireRelease(record("database:acquire"), () => record("database:release")).pipe(
+    Effect.as({ inUse: true })
+  )
+);
+const message = Layer.effect(
+  Message,
+  Effect.andThen(record("message:setup"), Effect.fail("message provider is not available"))
+);
+
+export const providers = Bdd.feature("Scenario providers").pipe(
+  Bdd.scenario("Later provider setup fails").pipe(
+    Bdd.given\`the scenario runs\`(() => record("step")),
+    Bdd.provide(database),
+    Bdd.provide(message),
+    Bdd.tapError(() => record("tapError"))
+  )
+);
 `;

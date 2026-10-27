@@ -134,24 +134,22 @@ export const runScenarioTask = <E, R>(
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
-      const program = Fn.pipe(
-        buildScenarioProviders(task, scope),
-        Scope.provide(scope),
-        Effect.mapError((error) => scenarioSetupError(task, error)),
-        Effect.flatMap((context) =>
-          Fn.pipe(
-            runSteps(task, options),
-            provideScenarioContext(context),
-            Effect.mapError((error) =>
-              isRunError(error) ? error : scenarioSetupError(task, error),
-            ),
-            tapScenarioFailures(task),
-            Scope.provide(scope),
-          ),
-        ),
-      );
+      const program = Effect.gen(function* () {
+        const context = yield* Fn.pipe(
+          buildScenarioProviders(task, scope),
+          Scope.provide(scope),
+          Effect.mapError((error) => scenarioSetupError(task, error)),
+        );
+        return yield* Fn.pipe(
+          runSteps(task, options),
+          provideScenarioContext(context),
+          Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
+          tapScenarioFailures(task),
+          Scope.provide(scope),
+        );
+      });
       const stepExit = yield* Effect.exit(restore(program));
-      const closeExit = yield* Effect.exit(closeScenarioScope(task, scope, stepExit, options));
+      const closeExit = yield* Effect.exit(closeScenarioScope(scope, stepExit));
       if (closeExit._tag === "Failure") {
         return yield* Effect.fail(scenarioTeardownErrorFromCause(task, stepExit, closeExit.cause));
       }
@@ -233,10 +231,8 @@ const tapScenarioFailures = <E, R>(
 };
 
 const closeScenarioScope = <A, E>(
-  _task: ScenarioTask<unknown, unknown>,
   scope: Scope.Closeable,
   exit: Exit.Exit<A, E>,
-  _options: RunOptions,
 ): Effect.Effect<void, ScenarioTeardownError> => Scope.close(scope, exit);
 
 const isRunError = (u: unknown): u is RunError => isDiscoveryRunError(u) || isExecutionRunError(u);

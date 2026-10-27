@@ -127,7 +127,7 @@ export class ScenarioSetupError extends Schema.TaggedError<ScenarioSetupError>()
 ) {}
 
 /**
- * An error raised when scenario-level teardown fails after Gherkin steps finish.
+ * An error raised when scenario-level teardown fails.
  *
  * **Details**
  *

@@ -831,6 +831,58 @@ Feature: Scenario providers
     });
   });
 
+  it.effect("finishes provider cleanup when a step is interrupted", () => {
+    class Resource extends Context.Service<Resource, { readonly open: boolean }>()("Resource") {}
+
+    const events: Array<string> = [];
+    const resource = Layer.effect(
+      Resource,
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push("acquire");
+          return { open: true };
+        }),
+        () =>
+          Effect.gen(function* () {
+            events.push("release-start");
+            yield* Effect.sleep(Duration.millis(10));
+            events.push("release-end");
+          }),
+      ),
+    );
+    const feature = Bdd.feature("Scenario providers").pipe(
+      Bdd.scenario("The step hangs").pipe(
+        Bdd.when`the step hangs`(() =>
+          Effect.gen(function* () {
+            yield* Resource;
+            return yield* Effect.never;
+          }),
+        ),
+        Bdd.provide(resource),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const fiber = yield* Effect.forkChild(
+        runBdd(
+          feature,
+          `
+Feature: Scenario providers
+
+  Scenario: The step hangs
+    When the step hangs
+`,
+        ),
+      );
+      yield* TestClock.adjust(Duration.millis(1));
+      yield* Effect.forkChild(Fiber.interrupt(fiber));
+      yield* TestClock.adjust(Duration.millis(10));
+      yield* Fiber.await(fiber);
+
+      assert.deepStrictEqual(events, ["acquire", "release-start", "release-end"]);
+    });
+  });
+
   it.effect("reports scenario provider finalizer failures as teardown errors", () => {
     class Greeting extends Context.Service<
       Greeting,
