@@ -53,7 +53,7 @@ const causeLocation = (
 
 const isObject = (value: unknown): value is object => typeof value === "object" && value !== null;
 
-const firstNestedError = (cause: unknown): unknown | undefined =>
+const firstNestedError = (cause: unknown): unknown =>
   isObject(cause) && "errors" in cause && Arr.isArray(cause.errors) ? cause.errors[0] : undefined;
 
 const locationFromCause = (

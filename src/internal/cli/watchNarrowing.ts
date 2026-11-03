@@ -36,7 +36,7 @@ export const narrowFromEnv = (
   if (value === undefined) {
     return Option.none();
   }
-  return Schema.decodeUnknownOption(featurePathsJson)(value);
+  return Schema.decodeOption(featurePathsJson)(value);
 };
 
 /**

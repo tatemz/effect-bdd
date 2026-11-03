@@ -123,11 +123,9 @@ const buildScenarioTasks: (
     const parsed = yield* Parser.parse(source.source, source.path);
     const matches = definitions.byTitle[parsed.name] ?? [];
     if (matches.length > 1) {
-      return yield* Effect.fail(
-        new DiscoveryError({
-          message: `Multiple feature definitions matched "${parsed.name}"`,
-        }),
-      );
+      return yield* new DiscoveryError({
+        message: `Multiple feature definitions matched "${parsed.name}"`,
+      });
     }
     const definition = matches[0];
     if (definition === undefined) {
@@ -160,11 +158,9 @@ const buildScenarioTasks: (
     const discovered = Discovery.buildScenarioTasks(definition, parsed);
     const fatalIssue = Arr.findFirst(discovered.issues, isFatalDiscoveryIssue);
     if (fatalIssue._tag === "Some") {
-      return yield* Effect.fail(
-        new DiscoveryError({
-          message: discoveryIssueMessage(fatalIssue.value, definition.title),
-        }),
-      );
+      return yield* new DiscoveryError({
+        message: discoveryIssueMessage(fatalIssue.value, definition.title),
+      });
     }
     const diagnostics = Arr.filterMap(discovered.issues, (issue) =>
       discoveryIssueDiagnostic(source, parsed, definition, issue),
@@ -319,17 +315,15 @@ const filterTasks = (
 ): Effect.Effect<ReadonlyArray<ScenarioTask>, DiscoveryError> =>
   Fn.pipe(
     TagExpression.compileAll(options.filters.tags),
-    Effect.map((tagPredicate) => {
-      const filtered = Arr.filter(
+    Effect.map((tagPredicate) =>
+      Arr.filter(
         tasks,
         (task) => tagPredicate(task.core.tags) && matchesTitleFilter(options.filters.titles, task),
-      );
-      return filtered;
-    }),
-    Effect.flatMap((filtered) =>
-      tasks.length > 0 && filtered.length === 0
-        ? Effect.fail(new DiscoveryError({ message: "No scenarios matched the provided filters" }))
-        : Effect.succeed(filtered),
+      ),
+    ),
+    Effect.filterOrFail(
+      (filtered) => tasks.length === 0 || filtered.length > 0,
+      () => new DiscoveryError({ message: "No scenarios matched the provided filters" }),
     ),
   );
 
