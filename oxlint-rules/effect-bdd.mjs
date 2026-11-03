@@ -1,21 +1,20 @@
+import { noAnyAnnotation, noAnyAnnotationRuleName } from "./rules/no-any-annotation/rule.mjs";
+import {
+  noAsyncAwaitInSrc,
+  noAsyncAwaitInSrcRuleName,
+} from "./rules/no-async-await-in-src/rule.mjs";
+import {
+  noEffectDefectApisInSrc,
+  noEffectDefectApisInSrcRuleName,
+} from "./rules/no-effect-defect-apis-in-src/rule.mjs";
 import {
   noEffectNamedImportsInSrc,
   noEffectNamedImportsInSrcRuleName,
 } from "./rules/no-effect-named-imports-in-src/rule.mjs";
 import {
-  noEffectDefectApisInSrc,
-  noEffectDefectApisInSrcRuleName,
-} from "./rules/no-effect-defect-apis-in-src/rule.mjs";
-import { noEffectOrDie, noEffectOrDieRuleName } from "./rules/no-effect-or-die/rule.mjs";
-import {
   noEffectRunnersInSrc,
   noEffectRunnersInSrcRuleName,
 } from "./rules/no-effect-runners-in-src/rule.mjs";
-import {
-  noAsyncAwaitInSrc,
-  noAsyncAwaitInSrcRuleName,
-} from "./rules/no-async-await-in-src/rule.mjs";
-import { noAnyAnnotation, noAnyAnnotationRuleName } from "./rules/no-any-annotation/rule.mjs";
 import { noForLoopsInSrc, noForLoopsInSrcRuleName } from "./rules/no-for-loops-in-src/rule.mjs";
 import {
   noInlineNestedEffectGen,
@@ -39,12 +38,7 @@ import {
   noNativeStringMethodsInSrc,
   noNativeStringMethodsInSrcRuleName,
 } from "./rules/no-native-string-methods-in-src/rule.mjs";
-import { noProcessEnv, noProcessEnvRuleName } from "./rules/no-process-env/rule.mjs";
 import { noSchemaOptional, noSchemaOptionalRuleName } from "./rules/no-schema-optional/rule.mjs";
-import {
-  noSyncSchemaBoundaries,
-  noSyncSchemaBoundariesRuleName,
-} from "./rules/no-sync-schema-boundaries/rule.mjs";
 import {
   noTagEqualityDiscrimination,
   noTagEqualityDiscriminationRuleName,
@@ -56,17 +50,12 @@ import {
   noUntracedEffectFnInPublic,
   noUntracedEffectFnInPublicRuleName,
 } from "./rules/no-untraced-effect-fn-in-public/rule.mjs";
-import {
-  noUntypedTryPromise,
-  noUntypedTryPromiseRuleName,
-} from "./rules/no-untyped-try-promise/rule.mjs";
 
 export const rules = {
   [noAnyAnnotationRuleName]: noAnyAnnotation,
   [noAsyncAwaitInSrcRuleName]: noAsyncAwaitInSrc,
   [noEffectDefectApisInSrcRuleName]: noEffectDefectApisInSrc,
   [noEffectNamedImportsInSrcRuleName]: noEffectNamedImportsInSrc,
-  [noEffectOrDieRuleName]: noEffectOrDie,
   [noEffectRunnersInSrcRuleName]: noEffectRunnersInSrc,
   [noForLoopsInSrcRuleName]: noForLoopsInSrc,
   [noInlineNestedEffectGenRuleName]: noInlineNestedEffectGen,
@@ -76,15 +65,12 @@ export const rules = {
   [noNativeObjectMethodsInSrcRuleName]: noNativeObjectMethodsInSrc,
   [noNativeSetInSrcRuleName]: noNativeSetInSrc,
   [noNativeStringMethodsInSrcRuleName]: noNativeStringMethodsInSrc,
-  [noProcessEnvRuleName]: noProcessEnv,
   [noSchemaOptionalRuleName]: noSchemaOptional,
-  [noSyncSchemaBoundariesRuleName]: noSyncSchemaBoundaries,
   [noTagEqualityDiscriminationRuleName]: noTagEqualityDiscrimination,
   [noThrowStatementsRuleName]: noThrowStatements,
   [noTryCatchRuleName]: noTryCatch,
   [noTypeAssertionsRuleName]: noTypeAssertions,
   [noUntracedEffectFnInPublicRuleName]: noUntracedEffectFnInPublic,
-  [noUntypedTryPromiseRuleName]: noUntypedTryPromise,
 };
 
 export default {
