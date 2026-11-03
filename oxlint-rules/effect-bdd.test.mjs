@@ -20,7 +20,7 @@ describe("effect-bdd oxlint config scoping", () => {
         JSON.stringify({
           jsPlugins: [plugin],
           rules: {
-            "effect-bdd/no-process-env": "error",
+            "effect-bdd/no-schema-optional": "error",
           },
           overrides: [
             {
@@ -41,7 +41,10 @@ describe("effect-bdd oxlint config scoping", () => {
           ],
         }),
       );
-      writeFileSync(join(temporaryRoot, "test", "env.ts"), "const home = process.env.HOME\n");
+      writeFileSync(
+        join(temporaryRoot, "test", "env.ts"),
+        "const optional = Schema.optional(Schema.String)\n",
+      );
       writeFileSync(
         join(temporaryRoot, "test", "throw.ts"),
         'throw new Error("allowed outside src")\n',
@@ -68,7 +71,7 @@ describe("effect-bdd oxlint config scoping", () => {
           .map((diagnostic) => diagnostic.code);
 
       expect(result.status).not.toBe(0);
-      expect(codes.has("effect-bdd(no-process-env)")).toBe(true);
+      expect(codes.has("effect-bdd(no-schema-optional)")).toBe(true);
       expect(codes.has("effect-bdd(no-throw-statements)")).toBe(true);
       expect(codes.has("effect-bdd(no-native-date-url-json-boundaries)")).toBe(true);
       expect(

@@ -41,6 +41,8 @@ pnpm build
 - Run `pnpm format` instead of formatting files manually.
 - Preserve typed Effect errors and Effect-returning boundaries in production
   code. See [the custom Oxlint rule guide](oxlint-rules/README.md).
+- Let `@effect/tsgo` report the generic Effect mistakes; add a local rule only
+  when it encodes a convention the Effect diagnostics cannot express.
 - Treat benchmark results as diagnostic evidence, not marketing claims. See
   [the benchmark guide](benchmarks/README.md).
 
