@@ -25,7 +25,7 @@ When("the following items are added:", function (this: BenchmarkWorld, table: Da
   this.cart = table
     .hashes()
     .reduce(
-      (cart, item) => addItem(cart, String(item.sku), Number(item.qty), Number(item.price)),
+      (cart, item) => addItem(cart, item.sku, Number(item.qty), Number(item.price)),
       this.cart,
     );
 });

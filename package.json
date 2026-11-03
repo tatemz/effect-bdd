@@ -64,7 +64,7 @@
     "bench:smoke": "pnpm --dir benchmarks run smoke",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "pnpm lint:oxlint && pnpm lint:package-boundaries && pnpm lint:knip",
-    "lint:oxlint": "oxlint . --deny-warnings",
+    "lint:oxlint": "effect-tsgo oxlint . --deny-warnings",
     "lint:package-boundaries": "depcruise --config .dependency-cruiser.js --output-type err src test scripts examples benchmarks oxlint-rules",
     "lint:knip": "knip --config knip.jsonc",
     "format": "oxfmt .",
@@ -83,6 +83,7 @@
   },
   "devDependencies": {
     "@babel/cli": "^7.29.7",
+    "@effect/tsgo": "0.64.1",
     "@effect/vitest": "^4.0.6",
     "@types/node": "^26.6.5",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
@@ -90,7 +91,8 @@
     "effect": "^4.0.6",
     "knip": "^6.43.0",
     "oxfmt": "^0.75.0",
-    "oxlint": "^1.90.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "tstyche": "^7.2.5",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"

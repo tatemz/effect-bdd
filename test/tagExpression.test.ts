@@ -49,7 +49,7 @@ describe("tagExpression", () => {
         const error = Option.getOrThrow(Cause.findErrorOption(result.cause));
         assert.strictEqual(error instanceof Error, true);
         if (error instanceof Error) {
-          assert.match(String(error.message), /Could not parse tag expression/);
+          assert.match(error.message, /Could not parse tag expression/);
         }
       }
     }),

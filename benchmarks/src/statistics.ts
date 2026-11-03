@@ -6,15 +6,13 @@ const mean = (values: ReadonlyArray<number>): number =>
 const median = (values: ReadonlyArray<number>): number => {
   const sorted = [...values].sort((a, b) => a - b);
   const midpoint = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[midpoint - 1]! + sorted[midpoint]!) / 2
-    : sorted[midpoint]!;
+  return sorted.length % 2 === 0 ? (sorted[midpoint - 1] + sorted[midpoint]) / 2 : sorted[midpoint];
 };
 
 const percentile = (values: ReadonlyArray<number>, percentileValue: number): number => {
   const sorted = [...values].sort((a, b) => a - b);
   const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, Math.min(sorted.length - 1, index))]!;
+  return sorted[Math.max(0, Math.min(sorted.length - 1, index))];
 };
 
 const standardDeviation = (values: ReadonlyArray<number>): number => {

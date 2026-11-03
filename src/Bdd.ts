@@ -34,13 +34,12 @@ const StepArgTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/StepArg");
 const TapTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Tap");
 
 const hideTypeId = (self: object, typeId: symbol): void => {
-  // oxlint-disable-next-line effect-bdd/no-native-object-methods-in-src
   Object.defineProperty(self, typeId, {
     enumerable: false,
   });
 };
 
-const hasTypeId = <const TypeId extends symbol>(u: unknown, typeId: TypeId): boolean =>
+const hasTypeId = (u: unknown, typeId: symbol): boolean =>
   Predicate.hasProperty(u, typeId) && u[typeId] === typeId;
 
 /**

@@ -9,7 +9,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
 import * as CliError from "effect/cli/CliError";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
@@ -215,18 +214,13 @@ export const cli = Command.make(
     );
     const failure = resultFailure(result, options.strict);
     if (Option.isSome(failure)) {
-      return yield* Effect.fail(failure.value);
+      return yield* failure.value;
     }
   }),
 ).pipe(
   Command.withDescription("Run effect-bdd feature files"),
   Command.provide(
-    Layer.mergeAll(
-      GlobResolver.layer,
-      ModuleLoader.layer,
-      CucumberCompiler.layerCucumber,
-      Path.layer,
-    ),
+    Layer.mergeAll(GlobResolver.layer, ModuleLoader.layer, CucumberCompiler.layerCucumber),
   ),
 );
 

@@ -1,11 +1,12 @@
 {
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
   "categories": {
     "correctness": "error",
     "suspicious": "error",
     "perf": "error"
   },
   "plugins": ["typescript", "unicorn", "oxc", "node", "promise", "import", "vitest"],
+  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"],
   "jsPlugins": ["./oxlint-rules/effect-bdd.mjs"],
   "env": {
     "node": true,
@@ -23,16 +24,50 @@
       }
     ],
     "unicorn/no-array-sort": "off",
+
+    // Fires on every FileSystem, Path, Stdio, cli and vite-test API this
+    // package deliberately builds on, which buries the actionable diagnostics.
+    "effecttsgo/unstable-api-usage": "off",
+    // The public generics (Scenario/Feature error and requirements) are open
+    // on purpose: library users choose their own error and service types.
+    "effecttsgo/any-unknown-in-error-context": "off",
+    // ParseError and friends are structural on purpose; callers discriminate
+    // on `_tag`, and branding would reject hand-built errors in user suites.
+    "effecttsgo/schema-class-missing-brand": "off",
+    // Gherkin line and column counts are non-negative integers, and the
+    // decoded contract has to keep matching the Cucumber message types.
+    "effecttsgo/schema-number": "off",
+    // Explicit default type arguments (`Feature<unknown, never>`) record which
+    // channel is deliberately empty in this library's public signatures.
+    "typescript/no-unnecessary-type-arguments": "off",
+    // Oxlint's own message defers to TypeScript's noImplicitReturns, which this
+    // repo enables and which understands exhaustive switches.
+    "typescript/consistent-return": "off",
+    // Exported fixed-arity helpers are declared through `Fn.dual` overloads, so
+    // the pipeable signature the rule looks for lives on the overload set.
+    "effecttsgo/missing-pipeable-signature": "off",
+    // Test suites provide layers per case on purpose; the production entry
+    // point composes its layers once in src/main.ts.
+    "effecttsgo/strict-effect-provide": "off",
+
+    // These are default-off in the preset. They replace the local effect-bdd
+    // rules deleted in favour of the Effect diagnostics, so they stay at the
+    // severity those rules had to keep `src` equally strict. The in-effect
+    // variants cover the same call inside a generator, which the plain rules
+    // do not.
+    "effecttsgo/process-env": "error",
+    "effecttsgo/process-env-in-effect": "error",
+    "effecttsgo/schema-sync": "error",
+    "effecttsgo/schema-sync-in-effect": "error",
+    "effecttsgo/effect-try-without-catch": "error",
+
     "effect-bdd/no-inline-nested-effect-gen": "error",
-    "effect-bdd/no-process-env": "error",
-    "effect-bdd/no-effect-or-die": "error",
     "effect-bdd/no-type-assertions": "error"
   },
   "overrides": [
     {
       "files": ["src/**"],
       "rules": {
-        "effect-bdd/no-async-await-in-src": "error",
         "effect-bdd/no-effect-defect-apis-in-src": "error",
         "effect-bdd/no-effect-runners-in-src": "error",
         "effect-bdd/no-for-loops-in-src": "error",
@@ -43,7 +78,6 @@
         "effect-bdd/no-native-set-in-src": "error",
         "effect-bdd/no-effect-named-imports-in-src": "error",
         "effect-bdd/no-schema-optional": "error",
-        "effect-bdd/no-sync-schema-boundaries": "error",
         "effect-bdd/no-tag-equality-discrimination": [
           "error",
           {
@@ -58,7 +92,7 @@
         ],
         "effect-bdd/no-throw-statements": "error",
         "effect-bdd/no-try-catch": "error",
-        "effect-bdd/no-untyped-try-promise": "error"
+        "effect-bdd/no-async-await-in-src": "error"
       }
     },
     {

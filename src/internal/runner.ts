@@ -151,7 +151,7 @@ export const runScenarioTask = <E, R>(
       const stepExit = yield* Effect.exit(restore(program));
       const closeExit = yield* Effect.exit(closeScenarioScope(scope, stepExit));
       if (closeExit._tag === "Failure") {
-        return yield* Effect.fail(scenarioTeardownErrorFromCause(task, stepExit, closeExit.cause));
+        return yield* scenarioTeardownErrorFromCause(task, stepExit, closeExit.cause);
       }
       yield* stepExit;
       return {
@@ -167,7 +167,7 @@ const buildScenarioProviders = <R>(
   scope: Scope.Scope,
 ): Effect.Effect<Option.Option<Context.Context<unknown>>, unknown, R> =>
   Arr.matchLeft(task.scenarioDefinition.providers, {
-    onEmpty: () => Effect.succeed(Option.none()),
+    onEmpty: () => Effect.succeedNone,
     onNonEmpty: (first, rest) =>
       Fn.pipe(
         Layer.buildWithScope(first, scope),
@@ -183,7 +183,7 @@ const buildScenarioProviders = <R>(
             ),
           );
         }),
-        Effect.map(Option.some),
+        Effect.asSome,
       ),
   });
 
@@ -322,7 +322,7 @@ const runSteps: <E, R>(
     Arr.flatMap((node) => node.taps),
   );
   const sourceSteps = task.pickle.steps;
-  const initialState: Effect.Effect<unknown, RunError, R> = Effect.succeed(undefined);
+  const initialState: Effect.Effect<unknown, RunError, R> = Effect.undefined;
   return yield* Fn.pipe(
     chain,
     Arr.reduce(initialState, (state, node, chainIndex) =>
@@ -335,14 +335,14 @@ const runSteps: <E, R>(
     // A feature tap anchored before this scenario observes the run's start;
     // one anchored after it observes the scenario's final state, exactly as an
     // `Effect.tap` placed after the scenario would.
-    Effect.flatMap((finalState) =>
-      beforeScenario.length === 0 && afterScenario.length === 0
-        ? Effect.succeed(finalState)
-        : Fn.pipe(
-            runFeatureTaps(task, beforeScenario, undefined),
-            Effect.flatMap(() => runFeatureTaps(task, afterScenario, finalState)),
-            Effect.as(finalState),
-          ),
+    Effect.filterOrElse(
+      () => beforeScenario.length === 0 && afterScenario.length === 0,
+      (finalState) =>
+        Fn.pipe(
+          runFeatureTaps(task, beforeScenario, undefined),
+          Effect.flatMap(() => runFeatureTaps(task, afterScenario, finalState)),
+          Effect.as(finalState),
+        ),
     ),
   );
 });
@@ -598,7 +598,7 @@ const decodeNoArgument = (
 ): Effect.Effect<unknown, MatchError> =>
   hasStepArgument(step)
     ? failStep(`Step "${step.text}" has an unexpected argument`, scenario, step, source, candidates)
-    : Effect.succeed(undefined);
+    : Effect.undefined;
 
 const decodeExpectedArgument = (
   argument: StepArg<unknown>,
@@ -716,6 +716,10 @@ const matchErrorFromDiscoveryIssue = (
 
 /** @internal */
 const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => {
+  // The PickleStepType enum is a runtime value owned by the Cucumber adapter;
+  // core stays free of `@cucumber/*` imports, so the discriminant is matched
+  // against its wire value here.
+  /* oxlint-disable typescript/no-unsafe-enum-comparison */
   switch (step.type) {
     case "Context": {
       return Option.some("Given");
@@ -730,6 +734,7 @@ const concreteStepKind = (step: PickleStep): Option.Option<ConcreteStepKind> => 
       return Option.none();
     }
   }
+  /* oxlint-enable typescript/no-unsafe-enum-comparison */
 };
 
 const rowObject = (
@@ -750,17 +755,14 @@ const stepKind = (
 ): Effect.Effect<ConcreteStepKind, ParseError> =>
   Fn.pipe(
     concreteStepKind(step),
-    Option.match({
-      onNone: () =>
-        Effect.fail(
-          new ParseError({
-            message: `${Parser.stepKeyword(step, source)} found before a Given, When, or Then step`,
-            line: Parser.stepLine(step, source),
-            column: 1,
-          }),
-        ),
-      onSome: Effect.succeed,
-    }),
+    Effect.fromOption(
+      () =>
+        new ParseError({
+          message: `${Parser.stepKeyword(step, source)} found before a Given, When, or Then step`,
+          line: Parser.stepLine(step, source),
+          column: 1,
+        }),
+    ),
   );
 
 const failStep = (

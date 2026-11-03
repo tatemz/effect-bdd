@@ -54,7 +54,7 @@ const expectValue = (
 export const counter = Bdd.feature("Counter").pipe(
   Bdd.scenario("Creating a counter").pipe(
     Bdd.given`no counter exists`(() => {
-      return Effect.succeed(undefined);
+      return Effect.undefined;
     }),
     Bdd.when`the counter is created`((counter: Counter.Counter | undefined) => {
       return Effect.sync(() => (counter === undefined ? Counter.create() : counter));

@@ -304,7 +304,7 @@ const featureTitle = (source: string): string => {
   if (match === null) {
     throw new Error("Feature source does not contain a Feature title");
   }
-  return match[1]!;
+  return match[1];
 };
 
 const cucumberScenario = (

@@ -1,10 +1,10 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
+import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -368,11 +368,9 @@ describe("watchLoop", () => {
         yield* Queue.offer(triggers, [update("features/one.feature")]);
         yield* Effect.forkScoped(
           watchLoop(session, triggers, testWatchPatterns).pipe(
-            Effect.provide(
-              Layer.succeed(
-                ChildProcessSpawner.ChildProcessSpawner,
-                recordingSpawner(commands, envs),
-              ),
+            Effect.provideService(
+              ChildProcessSpawner.ChildProcessSpawner,
+              recordingSpawner(commands, envs),
             ),
           ),
         );
@@ -517,12 +515,14 @@ describe("watch session end to end", () => {
   );
 });
 
+class ReportNotReady extends Data.TaggedError("ReportNotReady")<{ readonly contains: string }> {}
+
 const waitForReport = Effect.fnUntraced(function* (file: string, contains: string) {
   const fs = yield* FileSystem.FileSystem;
   yield* fs.readFileString(file).pipe(
     Effect.filterOrFail(
       (text) => text.includes(contains),
-      () => new Error(`report never contained "${contains}"`),
+      () => new ReportNotReady({ contains }),
     ),
     // 75 attempts spaced 200ms apart bounds the wait at ~15 seconds.
     Effect.retry(Schedule.addDelay(Schedule.recurs(75), () => Effect.succeed("200 millis"))),

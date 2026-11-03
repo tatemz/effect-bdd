@@ -105,12 +105,10 @@ export const emitAll: (
       Arr.map((exit) => exit.cause),
     );
     if (failures.length > 0) {
-      return yield* Effect.fail(
-        new ReporterError({
-          message: "One or more reporters failed",
-          cause: failures,
-        }),
-      );
+      return yield* new ReporterError({
+        message: "One or more reporters failed",
+        cause: failures,
+      });
     }
   });
 
@@ -138,12 +136,10 @@ export const emitEventAll: (
     Arr.map((exit) => exit.cause),
   );
   if (failures.length > 0) {
-    return yield* Effect.fail(
-      new ReporterError({
-        message: "One or more reporters failed",
-        cause: failures,
-      }),
-    );
+    return yield* new ReporterError({
+      message: "One or more reporters failed",
+      cause: failures,
+    });
   }
 });
 

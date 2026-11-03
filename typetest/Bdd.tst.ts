@@ -280,7 +280,7 @@ describe("Bdd", () => {
   });
 
   test("tap preserves scenario state and typechecks the annotated state", () => {
-    const showCount = Bdd.tap((_state: number) => Effect.succeed(undefined));
+    const showCount = Bdd.tap((_state: number) => Effect.undefined);
     const scenario = Bdd.scenario("Counter").pipe(
       Bdd.given`one`(() => Effect.succeed(1)),
       showCount,
@@ -290,7 +290,7 @@ describe("Bdd", () => {
 
     expect(scenario).type.toBe<Bdd.Scenario<number, never, never>>();
 
-    const stringTap = Bdd.tap((_state: string) => Effect.succeed(undefined));
+    const stringTap = Bdd.tap((_state: string) => Effect.undefined);
     expect(stringTap).type.not.toBeCallableWith(
       Bdd.scenario("Wrong state").pipe(Bdd.given`one`(() => Effect.succeed(1))),
     );
@@ -298,7 +298,7 @@ describe("Bdd", () => {
 
   test("feature taps accept unannotated handlers", () => {
     const feature = Bdd.feature("Counter").pipe(
-      Bdd.tap((_state) => Effect.succeed(undefined)),
+      Bdd.tap((_state) => Effect.undefined),
       Bdd.scenario("One").pipe(Bdd.given`one`(() => Effect.succeed(1))),
     );
 
@@ -316,7 +316,7 @@ describe("Bdd", () => {
           | "ScenarioTeardownError"
           | "TapError"
         >();
-        return Effect.succeed(undefined);
+        return Effect.undefined;
       }),
       Bdd.scenario("Failure").pipe(
         Bdd.given`zero`((): Effect.Effect<number, "given failed"> => Effect.succeed(0)),
