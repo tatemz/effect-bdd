@@ -10,10 +10,7 @@ import { cli } from "../src/main.ts";
 
 const execFilePromise = promisify(execFile);
 
-const runCli = (args: ReadonlyArray<string>) =>
-  Effect.gen(function* () {
-    return yield* Command.runWith(cli, { version: "0.0.0" })(args);
-  });
+const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
 
 describe("cli", () => {
   it.effect("runs through the Node bin entrypoint", () =>

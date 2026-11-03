@@ -5,7 +5,7 @@ import * as Counter from "../counter-domain.ts";
 const count = Bdd.capture("count", Schema.FiniteFromString);
 const expectedValue = Bdd.capture("expectedValue", Schema.FiniteFromString);
 
-const givenNoCounterExists = Bdd.given`no counter exists`(() => Effect.succeed(undefined));
+const givenNoCounterExists = Bdd.given`no counter exists`(() => Effect.undefined);
 const givenCounterAtZero = Bdd.given`a counter at value 0`(() => Effect.succeed(Counter.create()));
 const givenCounterAtValue = Bdd.given`a counter at value ${count}`(({ count }) =>
   Effect.succeed(incrementTimes(Counter.create(), count)),
