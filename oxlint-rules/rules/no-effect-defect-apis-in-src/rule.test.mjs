@@ -5,7 +5,11 @@ import { noEffectDefectApisInSrc, noEffectDefectApisInSrcRuleName } from "./rule
 bindRuleTesterToVitest({ describe, it });
 
 createRuleTester().run(noEffectDefectApisInSrcRuleName, noEffectDefectApisInSrc, {
-  valid: ["const program = Effect.fail(new ExpectedFailure())"],
+  valid: [
+    "const program = Effect.fail(new ExpectedFailure())",
+    "const program = fallible.pipe(Effect.orDie)",
+    "const program = Effect.orDie(fallible)",
+  ],
   invalid: [
     { code: 'Effect.die("boom")', errors: error("defectApi") },
     { code: 'Effect.dieMessage("boom")', errors: error("defectApi") },
