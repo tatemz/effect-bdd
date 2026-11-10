@@ -201,15 +201,12 @@ export const cli = Command.make(
       }).pipe(Effect.mapError(toUserError));
       return;
     }
-    const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
-      verbose: options.verbose,
-      cwd: process.cwd(),
-      progress: process.stdout.isTTY === true ? "scenario" : "none",
-      color:
-        process.env.NO_COLOR === undefined &&
-        (process.stdout.isTTY === true ||
-          (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== "0")),
-    }).pipe(Effect.mapError(toUserError));
+    const reportOptions = yield* reporterOptions(options.verbose);
+    const reporters = yield* Reporter.makeReporters(
+      options.reporters,
+      options.outputFiles,
+      reportOptions,
+    ).pipe(Effect.mapError(toUserError));
     const result = yield* Runner.run(options, {
       onEvent: (event) =>
         Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
@@ -252,6 +249,11 @@ const watchEnvironmentConfig = Config.all({
   narrowedFeatures: Config.option(Config.String(narrowEnvName)),
 });
 
+const colorConfig = Config.all({
+  noColor: Config.option(Config.String("NO_COLOR")),
+  forceColor: Config.option(Config.String("FORCE_COLOR")),
+});
+
 const readWatchEnvironment = Effect.gen(function* () {
   const provider = yield* ConfigProvider.ConfigProvider;
   const configured = yield* watchEnvironmentConfig.parse(provider);
@@ -260,6 +262,25 @@ const readWatchEnvironment = Effect.gen(function* () {
     [narrowEnvName]: Option.getOrUndefined(configured.narrowedFeatures),
   };
 });
+
+const reporterOptions = Effect.fnUntraced(function* (verbose: boolean) {
+  const provider = yield* ConfigProvider.ConfigProvider;
+  const configured = yield* colorConfig.parse(provider);
+  const isTTY = process.stdout.isTTY ?? false;
+  return {
+    verbose,
+    cwd: process.cwd(),
+    progress: isTTY ? "scenario" : "none",
+    color: useColor(configured.noColor, configured.forceColor, isTTY),
+  } as const;
+});
+
+const useColor = (
+  noColor: Option.Option<string>,
+  forceColor: Option.Option<string>,
+  isTTY: boolean,
+): boolean =>
+  Option.isNone(noColor) && (isTTY || Option.exists(forceColor, (value) => value !== "0"));
 
 const timedMillis: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<number, E, R> =
   Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {

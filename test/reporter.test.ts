@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
 import { Command } from "effect/cli";
-import { Effect, FileSystem, Path } from "effect";
+import { Effect, FileSystem, Path, Schema } from "effect";
 import { fileURLToPath } from "node:url";
 import { cli } from "../src/main.ts";
 import { renderDefectError } from "../src/internal/cli/reporter.ts";
@@ -110,6 +110,7 @@ describe("text reporter", () => {
 
   it.effect("writes structured failure data to JSON", () =>
     Effect.scoped(
+      // oxlint-disable-next-line complexity
       Effect.gen(function* () {
         const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
         const report = fixture.path("report.json");
@@ -128,7 +129,9 @@ describe("text reporter", () => {
         );
 
         const fs = yield* FileSystem.FileSystem;
-        const json = JSON.parse(yield* fs.readFileString(report)) as JsonFailureReport;
+        const json = yield* Schema.decodeUnknownEffect(JsonFailureReport)(
+          JSON.parse(yield* fs.readFileString(report)),
+        );
         const outcome = json.scenarios[0]?.outcome;
 
         assert.strictEqual(outcome?.status, "failed");
@@ -370,20 +373,29 @@ export const defects = Bdd.feature("Defects").pipe(
 )
 `;
 
-interface JsonFailureReport {
-  readonly scenarios: ReadonlyArray<{
-    readonly outcome: {
-      readonly status: string;
-      readonly error?: string;
-      readonly failure?: {
-        readonly _tag: string;
-        readonly error?: {
-          readonly _tag: string;
-          readonly step?: string;
-          readonly line?: number;
-          readonly cause?: string;
-        };
-      };
-    };
-  }>;
-}
+const JsonFailureReport = Schema.Struct({
+  scenarios: Schema.Array(
+    Schema.Struct({
+      outcome: Schema.Struct({
+        status: Schema.String,
+        error: Schema.optionalKey(Schema.String),
+        failure: Schema.optionalKey(
+          Schema.Struct({
+            _tag: Schema.String,
+            error: Schema.optionalKey(
+              Schema.Struct({
+                _tag: Schema.String,
+                message: Schema.String,
+                scenario: Schema.String,
+                step: Schema.optionalKey(Schema.String),
+                line: Schema.optionalKey(Schema.Number),
+                cause: Schema.optionalKey(Schema.String),
+                definition: Schema.optionalKey(Schema.Unknown),
+              }),
+            ),
+          }),
+        ),
+      }),
+    }),
+  ),
+});

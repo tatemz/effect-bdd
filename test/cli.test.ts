@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, FileSystem, Option, Path } from "effect";
+import { Cause, Effect, Exit, FileSystem, Option, Path, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import { CliError, Command } from "effect/cli";
 import { execFile } from "node:child_process";
@@ -11,6 +11,19 @@ import { cli } from "../src/main.ts";
 const execFilePromise = promisify(execFile);
 
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
+
+const childOutput = (error: unknown): { readonly stdout: string; readonly stderr: string } => ({
+  stdout: stringProperty(error, "stdout") ?? "",
+  stderr: stringProperty(error, "stderr") ?? "",
+});
+
+const stringProperty = (value: unknown, key: string): string | undefined => {
+  if (!Predicate.hasProperty(value, key)) {
+    return undefined;
+  }
+  const property = value[key];
+  return Predicate.isString(property) ? property : undefined;
+};
 
 describe("cli", () => {
   it.effect("runs through the Node bin entrypoint", () =>
@@ -114,7 +127,7 @@ Feature: Counter
               { cwd: bddRoot },
             );
           } catch (error) {
-            return error as { readonly stdout?: string; readonly stderr?: string };
+            return childOutput(error);
           }
         });
 
@@ -161,11 +174,11 @@ Feature: Counter
               { cwd: bddRoot, env },
             );
           } catch (error) {
-            return error as { readonly stdout?: string; readonly stderr?: string };
+            return childOutput(error);
           }
         });
 
-        assert.match(result.stdout ?? "", /\u001b\[31mFAIL\u001b\[0m/);
+        assert.ok((result.stdout ?? "").includes("\u001b[31mFAIL\u001b[0m"));
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );

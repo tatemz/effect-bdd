@@ -8,6 +8,7 @@ import * as Inspectable from "effect/Inspectable";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
+import * as Record from "effect/Record";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stdio from "effect/Stdio";
@@ -260,23 +261,32 @@ const renderText = (
   const failureList =
     failed.length === 0
       ? ""
-      : [
-          "Failed scenarios:",
-          ...Arr.map(failed, (scenario) => renderFailureListItem(scenario, displayPath)),
-        ].join("\n");
-  return [
-    renderDiscoveryText(result.discovery, verbose, displayPath),
-    scenarioLines.join("\n\n"),
-    renderDiagnosticsText(result.diagnostics, displayPath),
-    `Scenarios: ${result.summary.total} total, ${result.summary.failed} failed, ${result.summary.passed} passed (${result.summary.durationMillis}ms)`,
-    failureList,
-  ]
-    .filter((section) => section.length > 0)
-    .join("\n\n");
+      : Arr.join(
+          [
+            "Failed scenarios:",
+            ...Arr.map(failed, (scenario) => renderFailureListItem(scenario, displayPath)),
+          ],
+          "\n",
+        );
+  return Arr.join(
+    Arr.filter(
+      [
+        renderDiscoveryText(result.discovery, verbose, displayPath),
+        Arr.join(scenarioLines, "\n\n"),
+        renderDiagnosticsText(result.diagnostics, displayPath),
+        `Scenarios: ${result.summary.total} total, ${result.summary.failed} failed, ${result.summary.passed} passed (${result.summary.durationMillis}ms)`,
+        failureList,
+      ],
+      (section) => section.length > 0,
+    ),
+    "\n\n",
+  );
 };
 
-const featureSourceMap = (result: CliRunResult): ReadonlyMap<string, string> =>
-  new Map(Arr.map(result.featureSources, (source) => [source.path, source.source] as const));
+const featureSourceMap = (result: CliRunResult): Readonly<Record<string, string>> =>
+  Record.fromEntries(
+    Arr.map(result.featureSources, (source) => [source.path, source.source] as const),
+  );
 
 const renderFailureListItem = (
   result: ScenarioResult,
@@ -295,19 +305,22 @@ const renderDiscoveryText = (
     return "";
   }
   const summary = `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`;
-  return [
-    summary,
-    "Feature files:",
-    ...Arr.map(discovery.featurePaths, (path) => `  ${displayPath(path)}`),
-    "Step modules:",
-    ...Arr.map(discovery.stepModulePaths, (path) => `  ${displayPath(path)}`),
-    "Feature definitions:",
-    ...Arr.map(discovery.featureDefinitions, (title) => `  ${title}`),
-    "Selected scenarios:",
-    ...Arr.map(discovery.selectedScenarios, (scenario) =>
-      renderDiscoveredScenario(scenario, displayPath),
-    ),
-  ].join("\n");
+  return Arr.join(
+    [
+      summary,
+      "Feature files:",
+      ...Arr.map(discovery.featurePaths, (path) => `  ${displayPath(path)}`),
+      "Step modules:",
+      ...Arr.map(discovery.stepModulePaths, (path) => `  ${displayPath(path)}`),
+      "Feature definitions:",
+      ...Arr.map(discovery.featureDefinitions, (title) => `  ${title}`),
+      "Selected scenarios:",
+      ...Arr.map(discovery.selectedScenarios, (scenario) =>
+        renderDiscoveredScenario(scenario, displayPath),
+      ),
+    ],
+    "\n",
+  );
 };
 
 const renderDiscoveredScenario = (
@@ -323,7 +336,7 @@ const renderScenarioStartedEvent = (
 
 const renderScenarioText = (
   result: ScenarioResult,
-  featureSources: ReadonlyMap<string, string>,
+  featureSources: Readonly<Record<string, string>>,
   displayPath: (path: string) => string,
   color: boolean,
 ): string => {
@@ -335,14 +348,17 @@ const renderScenarioText = (
   if (result.outcome._tag === "Passed") {
     return base;
   }
-  const frame = renderFrame(featureSources.get(result.task.featurePath), line);
+  const frame = renderFrame(featureSources[result.task.featurePath], line);
   const error = indentText(
     addStepDefinition(result, displayPath, renderFailure(result.outcome.failure)),
     2,
   );
-  return frame.length === 0 ? `${base}\n\n${error}` : `${base}\n\n${frame.join("\n")}\n\n${error}`;
+  return frame.length === 0
+    ? `${base}\n\n${error}`
+    : `${base}\n\n${Arr.join(frame, "\n")}\n\n${error}`;
 };
 
+// oxlint-disable-next-line complexity
 const addStepDefinition = (
   result: ScenarioResult,
   displayPath: (path: string) => string,
@@ -374,13 +390,14 @@ const renderFrame = (source: string | undefined, line: number): ReadonlyArray<st
   if (source === undefined) {
     return [];
   }
-  const lines = source.split("\n");
+  const lines = Str.split(source, "\n");
   const start = Math.max(1, line - 2);
   const end = Math.min(lines.length, line + 2);
-  const width = String(end).length;
+  const width = Str.length(Inspectable.toStringUnknown(end, 0));
   return Arr.map(Arr.range(start, end), (current) => {
     const marker = current === line ? ">" : " ";
-    return `${marker} ${String(current).padStart(width)} | ${lines[current - 1] ?? ""}`;
+    const lineNumber = Inspectable.toStringUnknown(current, 0);
+    return `${marker} ${Str.padStart(width)(lineNumber)} | ${lines[current - 1] ?? ""}`;
   });
 };
 
@@ -438,6 +455,7 @@ const renderScenarioHtml = (result: ScenarioResult): string => {
         </tr>`;
 };
 
+// oxlint-disable-next-line complexity
 const renderDiagnosticsText = (
   diagnostics: ReadonlyArray<CliDiagnostic>,
   displayPath: (path: string) => string = identityPath,
@@ -460,22 +478,34 @@ const renderDiagnosticsText = (
         diagnostic._tag === "UnusedScenarioDefinition",
     ),
   );
-  return [
-    unmatched.length === 0
-      ? ""
-      : [
-          "Unmatched source:",
-          ...Arr.map(unmatched, (diagnostic) => renderDiagnosticText(diagnostic, displayPath)),
-        ].join("\n"),
-    unused.length === 0
-      ? ""
-      : [
-          "Unused definitions:",
-          ...Arr.map(unused, (diagnostic) => renderDiagnosticText(diagnostic, displayPath)),
-        ].join("\n"),
-  ]
-    .filter((section) => section.length > 0)
-    .join("\n\n");
+  return Arr.join(
+    Arr.filter(
+      [
+        unmatched.length === 0
+          ? ""
+          : Arr.join(
+              [
+                "Unmatched source:",
+                ...Arr.map(unmatched, (diagnostic) =>
+                  renderDiagnosticText(diagnostic, displayPath),
+                ),
+              ],
+              "\n",
+            ),
+        unused.length === 0
+          ? ""
+          : Arr.join(
+              [
+                "Unused definitions:",
+                ...Arr.map(unused, (diagnostic) => renderDiagnosticText(diagnostic, displayPath)),
+              ],
+              "\n",
+            ),
+      ],
+      (section) => section.length > 0,
+    ),
+    "\n\n",
+  );
 };
 
 const renderDiagnosticText = (
@@ -556,6 +586,7 @@ const failureData = (failure: ScenarioFailure): Record<string, unknown> =>
     ? { _tag: "RunError", error: errorData(failure.error) }
     : { _tag: "Defect", cause: renderDefect(failure.cause) };
 
+// oxlint-disable-next-line complexity
 const errorData = (error: RunError): Record<string, unknown> => {
   switch (error._tag) {
     case "ParseError": {
@@ -679,36 +710,46 @@ const renderDefect = (cause: Cause.Cause<unknown>): string => {
     return renderDefectError(die.value.defect);
   }
   const [first, ...rest] = splitLines(Cause.pretty(cause));
-  const head = first.startsWith("Error: ") ? `Defect: ${first.slice(7)}` : `Defect: ${first}`;
-  return [head, ...rest.map((line) => `  ${line}`)].join("\n");
+  const head = Str.startsWith("Error: ")(first)
+    ? `Defect: ${Str.slice(7)(first)}`
+    : `Defect: ${first}`;
+  return Arr.join([head, ...Arr.map(rest, (line) => `  ${line}`)], "\n");
 };
 
 /** @internal */
 export const renderDefectError = (error: Error): string => {
   const [first, ...rest] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
-  const head = first.startsWith("Error: ") ? `Defect: ${first.slice(7)}` : `Defect: ${first}`;
-  const frames = rest
-    .filter((line) => !isNoiseFrame(line))
-    .map(frameLabel)
-    .slice(0, 5);
-  return [head, ...frames.map((line) => `  ${line}`)].join("\n");
+  const head = Str.startsWith("Error: ")(first)
+    ? `Defect: ${Str.slice(7)(first)}`
+    : `Defect: ${first}`;
+  const frames = Fn.pipe(
+    rest,
+    Arr.filter((line) => !isNoiseFrame(line)),
+    Arr.map((line) => frameLabel(line)),
+    Arr.take(5),
+  );
+  return Arr.join([head, ...Arr.map(frames, (line) => `  ${line}`)], "\n");
 };
 
 const frameLocation = (line: string): string | undefined => {
-  const open = line.lastIndexOf("(");
-  return open === -1 ? line.replace(/^at /, "") : line.slice(open + 1, -1);
+  const open = Str.lastIndexOf("(")(line);
+  return Option.isSome(open)
+    ? Str.slice(open.value + 1, -1)(line)
+    : Fn.pipe(line, Str.trim, Str.replace(/^at /, ""));
 };
 
 const isNoiseFrame = (line: string): boolean => {
   const location = frameLocation(line);
   return (
-    location === undefined || location.includes("node_modules/") || location.startsWith("node:")
+    location === undefined ||
+    Str.includes("node_modules/")(location) ||
+    Str.startsWith("node:")(location)
   );
 };
 
 const frameLabel = (line: string): string => {
   const location = frameLocation(line);
-  return location === undefined ? line : `at ${location.replace(/^file:\/\//, "")}`;
+  return location === undefined ? line : `at ${Str.replace(/^file:\/\//, "")(location)}`;
 };
 
 const renderCause = (cause: unknown): string | undefined => {
@@ -716,9 +757,10 @@ const renderCause = (cause: unknown): string | undefined => {
     return undefined;
   }
   const [first, ...rest] = renderCauseLines(cause);
-  return [`Cause: ${first}`, ...rest.map((line) => `  ${line}`)].join("\n");
+  return Arr.join([`Cause: ${first}`, ...Arr.map(rest, (line) => `  ${line}`)], "\n");
 };
 
+// oxlint-disable-next-line complexity
 const renderCauseLines = (cause: unknown): ReadonlyArray<string> => {
   if (Schema.is(StepTimeoutError)(cause)) {
     return [`${cause._tag}: ${cause.message} (timeout: ${Duration.format(cause.timeout)})`];
@@ -742,47 +784,46 @@ const renderCauseLines = (cause: unknown): ReadonlyArray<string> => {
   );
 };
 
+// oxlint-disable-next-line complexity
 const renderTaggedCause = (cause: { readonly _tag: string }): ReadonlyArray<string> => {
   const message =
     Predicate.hasProperty(cause, "message") && Predicate.isString(cause.message)
       ? cause.message
       : undefined;
   const head = message === undefined ? cause._tag : `${cause._tag}: ${message}`;
-  const fields = Object.entries(cause).filter(([key]) => !causeMetadataKeys.has(key));
-  return [head, ...fields.map(([key, value]) => `${key}: ${renderCauseValue(value)}`)];
+  const fields = Fn.pipe(
+    Record.toEntries<string, unknown>(cause),
+    Arr.filter(([key]) => !Arr.contains(key)(causeMetadataKeys)),
+  );
+  return [head, ...Arr.map(fields, ([key, value]) => `${key}: ${renderCauseValue(value)}`)];
 };
 
 const renderCauseValue = (value: unknown): string =>
-  Predicate.isString(value) ||
-  Predicate.isNumber(value) ||
-  Predicate.isBoolean(value) ||
-  Predicate.isBigInt(value)
-    ? String(value)
-    : Predicate.isError(value)
-      ? value.message
+  Predicate.isError(value)
+    ? value.message
+    : Predicate.isString(value)
+      ? value
       : Inspectable.toStringUnknown(value, 0);
 
 const hasStringTag = (u: unknown): u is { readonly _tag: string } =>
   Predicate.isObject(u) && Predicate.hasProperty(u, "_tag") && Predicate.isString(u._tag);
 
 const splitLines = (text: string): ReadonlyArray<string> =>
-  text.split("\n").map((line) => line.trimStart());
+  Fn.pipe(
+    Str.split(text, "\n"),
+    Arr.map((line) => Str.trimStart(line)),
+  );
 
 const indentText = (text: string, spaces: number): string =>
-  text
-    .split("\n")
-    .map((line) => `${" ".repeat(spaces)}${line}`)
-    .join("\n");
+  Fn.pipe(
+    Str.split(text, "\n"),
+    Arr.map((line) => `${Str.repeat(spaces)(" ")}${line}`),
+    Arr.join("\n"),
+  );
 
 const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
 
-const causeMetadataKeys: ReadonlySet<string> = new Set([
-  "_tag",
-  "message",
-  "name",
-  "stack",
-  "cause",
-]);
+const causeMetadataKeys: ReadonlyArray<string> = ["_tag", "message", "name", "stack", "cause"];
 
 const escapeHtml = (text: string): string =>
   Fn.pipe(

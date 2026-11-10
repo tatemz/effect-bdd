@@ -6,12 +6,14 @@ import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
-import type * as Option from "effect/Option";
+import * as Option from "effect/Option";
 import type { Pipeable } from "effect/Pipeable";
 import * as PipeableRuntime from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
 import type * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
+import * as Str from "effect/String";
 import {
   MatchError,
   ParseError,
@@ -1172,7 +1174,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     }
     return makeScenario(self.title, [...self.steps, step], self.providers);
   }
-  const definition = options.definition ?? captureStepDefinition();
+  const definition = resolveStepDefinition(options.definition);
   const properties: Pick<
     Step<Kind, In, Out, E, R, Captures, Argument>,
     typeof StepTypeId | "kind" | "expression" | "run" | "pipe"
@@ -1184,9 +1186,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     [StepTypeId]: StepTypeId,
     kind: options.kind,
     expression: options.expression,
-    ...(options.argument === undefined ? {} : { argument: options.argument }),
-    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
-    ...(definition === undefined ? {} : { definition }),
+    ...optionalStepFields(options, definition),
     run: options.run,
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
@@ -1198,38 +1198,63 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   return Object.freeze(step);
 };
 
+const resolveStepDefinition = (
+  definition: StepDefinition | undefined,
+): StepDefinition | undefined => (definition === undefined ? captureStepDefinition() : definition);
+
+const optionalStepFields = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+  options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
+  definition: StepDefinition | undefined,
+): {
+  readonly argument?: StepArg<Argument>;
+  readonly timeout?: Duration.Duration;
+  readonly definition?: StepDefinition;
+} => ({
+  ...(options.argument === undefined ? {} : { argument: options.argument }),
+  ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+  ...(definition === undefined ? {} : { definition }),
+});
+
 const captureStepDefinition = (): StepDefinition | undefined => {
   const stack = new Error().stack;
   if (stack === undefined) {
     return undefined;
   }
-  for (const line of stack.split("\n").slice(1)) {
-    const location = stackLocation(line);
-    if (location === undefined || isInternalDefinitionLocation(location)) {
-      continue;
-    }
-    const match = /^(.*):(\d+):(\d+)$/.exec(location);
-    if (match === null) {
-      continue;
-    }
-    return {
-      path: match[1].replace(/^file:\/\//, ""),
-      line: Number(match[2]),
-    };
+  return Fn.pipe(
+    Str.split(stack, "\n"),
+    Arr.drop(1),
+    Arr.filterMap((line) => stepDefinitionFromLine(line)),
+    Arr.head,
+    Option.getOrUndefined,
+  );
+};
+
+const stepDefinitionFromLine = (line: string): Result.Result<StepDefinition, undefined> => {
+  const location = stackLocation(line);
+  if (location === undefined || isInternalDefinitionLocation(location)) {
+    return Result.fail(undefined);
   }
-  return undefined;
+  const match = /^(.*):(\d+):(\d+)$/.exec(location);
+  return match === null
+    ? Result.fail(undefined)
+    : Result.succeed({
+        path: Str.replace(/^file:\/\//, "")(match[1]),
+        line: Number(match[2]),
+      });
 };
 
 const stackLocation = (line: string): string | undefined => {
-  const open = line.lastIndexOf("(");
-  return open === -1 ? line.trim().replace(/^at /, "") : line.slice(open + 1, -1);
+  const open = Str.lastIndexOf("(")(line);
+  return Option.isSome(open)
+    ? Str.slice(open.value + 1, -1)(line)
+    : Fn.pipe(line, Str.trim, Str.replace(/^at /, ""));
 };
 
 const isInternalDefinitionLocation = (location: string): boolean =>
-  location.includes("/Bdd.") ||
-  location.includes("\\Bdd.") ||
-  location.includes("/internal/") ||
-  location.includes("\\internal\\");
+  Str.includes("/Bdd.")(location) ||
+  Str.includes("\\Bdd.")(location) ||
+  Str.includes("/internal/")(location) ||
+  Str.includes("\\internal\\")(location);
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
   function stepTag(strings: TemplateStringsArray): EmptyStepFactory<Kind>;
