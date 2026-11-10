@@ -496,7 +496,7 @@ describe("watch session end to end", () => {
           // from the rewritten report.
           yield* Effect.sleep("400 millis");
           yield* writeFeature("Increment", 2);
-          yield* waitForReport(textReport, "Features: 1, Scenarios: 1, passed: 0, failed: 1");
+          yield* waitForReport(textReport, "Scenarios: 1 total, 1 failed, 0 passed");
           const narrowedReport = yield* fs.readFileString(textReport);
           assert.strictEqual(narrowedReport.includes("Other / Untouched"), false);
 

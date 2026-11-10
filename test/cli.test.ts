@@ -38,7 +38,7 @@ describe("cli", () => {
           ),
         );
 
-        assert.match(result.stdout, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.match(result.stdout, /Scenarios: 27 total, 0 failed, 27 passed \(\d+ms\)/);
         assert.match(
           result.stdout,
           /Discovery: 9 feature file\(s\), 2 step module\(s\), 9 feature definition\(s\), 27 scenario\(s\) \(27 selected\)/,
@@ -75,7 +75,7 @@ describe("cli", () => {
           ),
         );
 
-        assert.match(result.stdout, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.match(result.stdout, /Scenarios: 27 total, 0 failed, 27 passed \(\d+ms\)/);
         assert.strictEqual(/PASS .*Minimal \/ minimalistic/.test(result.stdout), false);
         assert.match(result.stderr, /RUNNING .*Minimal \/ minimalistic/);
         assert.match(result.stderr, /PASS .*Minimal \/ minimalistic/);
@@ -107,7 +107,7 @@ describe("cli", () => {
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 9, Scenarios: 27, passed: 27, failed: 0/);
+        assert.match(text, /Scenarios: 27 total, 0 failed, 27 passed \(\d+ms\)/);
         assert.match(text, /Feature files:/);
         assert.match(text, /Step modules:/);
         assert.match(text, /Feature definitions:/);
@@ -175,7 +175,7 @@ Feature: Counter
         const text = yield* fs.readFileString(textReport);
         const html = yield* fs.readFileString(htmlReport);
 
-        assert.match(text, /Features: 1, Scenarios: 2, passed: 2, failed: 0/);
+        assert.match(text, /Scenarios: 2 total, 0 failed, 2 passed \(\d+ms\)/);
         assert.match(
           text,
           /Discovery: 1 feature file\(s\), 1 step module\(s\), 1 feature definition\(s\), 2 scenario\(s\) \(2 selected\)/,
@@ -223,7 +223,7 @@ Feature: Counter
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /Scenarios: 1 total, 1 failed, 0 passed \(\d+ms\)/);
         assert.match(text, /FAIL .*counter\.feature:\d+ Counter \/ Fails/);
         assert.match(text, /Cause: expected 1, got 0/);
       }),
@@ -312,7 +312,7 @@ export const timeouts = Bdd.feature("Timeouts").pipe(
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /Scenarios: 1 total, 1 failed, 0 passed \(\d+ms\)/);
         assert.match(text, /StepError: Step timed out after .*: the step hangs/);
         assert.match(text, /Cause: StepTimeoutError: Timed out after .* \(timeout: .*\)/);
       }),
@@ -419,7 +419,7 @@ export const other = Bdd.feature("Other").pipe(
         const text = yield* fs.readFileString(textReport);
         const junit = yield* fs.readFileString(junitReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(text, /Scenarios: 1 total, 0 failed, 1 passed \(\d+ms\)/);
         assert.match(text, /Unused definitions:/);
         assert.match(text, /Scenario chain exported but no source scenario matched/);
         assert.match(text, /Feature definition exported but no feature file matched: Other/);
@@ -595,7 +595,7 @@ Feature: Counter
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(text, /Scenarios: 1 total, 0 failed, 1 passed \(\d+ms\)/);
         assert.match(
           text,
           /Discovery: 1 feature file\(s\), 1 step module\(s\), 1 feature definition\(s\), 2 scenario\(s\) \(1 selected\)/,
@@ -648,7 +648,7 @@ Feature: Counter
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 1, failed: 0/);
+        assert.match(text, /Scenarios: 1 total, 0 failed, 1 passed \(\d+ms\)/);
         assert.match(text, /Starts clean/);
         assert.strictEqual(/Increment/.test(text), false);
       }),
@@ -699,7 +699,7 @@ Feature: Counter
         const fs = yield* FileSystem.FileSystem;
         const text = yield* fs.readFileString(textReport);
 
-        assert.match(text, /Features: 1, Scenarios: 1, passed: 0, failed: 1/);
+        assert.match(text, /Scenarios: 1 total, 1 failed, 0 passed \(\d+ms\)/);
         assert.match(text, /Fails first/);
         assert.strictEqual(/(?:PASS|FAIL) .*Fails later/.test(text), false);
       }),
