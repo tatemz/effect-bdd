@@ -49,6 +49,7 @@ export const makeReporters = (
     readonly verbose: boolean;
     readonly cwd: string;
     readonly progress: "none" | "scenario";
+    readonly color: boolean;
   },
 ): Effect.Effect<ReadonlyArray<Reporter>, ReporterError> =>
   Effect.forEach(names, (name) => makeReporter(name, outputFiles, options));
@@ -64,6 +65,7 @@ type ReporterOptions = {
   readonly verbose: boolean;
   readonly cwd: string;
   readonly progress: "none" | "scenario";
+  readonly color: boolean;
 };
 
 type ReporterFactory = (
@@ -154,7 +156,12 @@ const textReporter = (outputFile: string | undefined, options: ReporterOptions):
   emit: Effect.fnUntraced(function* (result: CliRunResult) {
     const path = yield* Path.Path;
     const displayPath = (value: string) => path.relative(options.cwd, value);
-    const text = `${renderText(result, options.verbose, displayPath)}\n`;
+    const text = `${renderText(
+      result,
+      options.verbose,
+      displayPath,
+      options.color && outputFile === undefined,
+    )}\n`;
     if (outputFile === undefined) {
       yield* writeStdout(text);
     } else {
@@ -242,12 +249,13 @@ const renderText = (
   result: CliRunResult,
   verbose: boolean,
   displayPath: (path: string) => string,
+  color: boolean,
 ): string => {
   const featureSources = featureSourceMap(result);
   const failed = Arr.filter(result.results, (scenario) => scenario.outcome._tag === "Failed");
   const selected = verbose ? result.results : failed;
   const scenarioLines = Arr.map(selected, (scenario) =>
-    renderScenarioText(scenario, featureSources, displayPath),
+    renderScenarioText(scenario, featureSources, displayPath, color),
   );
   const failureList =
     failed.length === 0
@@ -317,8 +325,9 @@ const renderScenarioText = (
   result: ScenarioResult,
   featureSources: ReadonlyMap<string, string>,
   displayPath: (path: string) => string,
+  color: boolean,
 ): string => {
-  const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
+  const prefix = renderStatus(result.outcome._tag === "Passed" ? "PASS" : "FAIL", color);
   const line = failureLine(result);
   const base = `${prefix} ${displayPath(result.task.featurePath)}:${line} ${renderScenarioName(
     result,
@@ -374,6 +383,9 @@ const renderFrame = (source: string | undefined, line: number): ReadonlyArray<st
     return `${marker} ${String(current).padStart(width)} | ${lines[current - 1] ?? ""}`;
   });
 };
+
+const renderStatus = (status: "PASS" | "FAIL", color: boolean): string =>
+  color ? `\u001b[${status === "FAIL" ? "31" : "32"}m${status}\u001b[0m` : status;
 
 const renderTaskName = (task: ScenarioTask): string =>
   task.core.ruleTitle === undefined

@@ -205,6 +205,10 @@ export const cli = Command.make(
       verbose: options.verbose,
       cwd: process.cwd(),
       progress: process.stdout.isTTY === true ? "scenario" : "none",
+      color:
+        process.env.NO_COLOR === undefined &&
+        (process.stdout.isTTY === true ||
+          (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== "0")),
     }).pipe(Effect.mapError(toUserError));
     const result = yield* Runner.run(options, {
       onEvent: (event) =>
