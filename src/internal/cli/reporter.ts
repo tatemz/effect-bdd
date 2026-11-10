@@ -45,6 +45,7 @@ export const makeReporters = (
   },
   options: {
     readonly verbose: boolean;
+    readonly cwd: string;
   },
 ): Effect.Effect<ReadonlyArray<Reporter>, ReporterError> =>
   Effect.forEach(names, (name) => makeReporter(name, outputFiles, options));
@@ -58,6 +59,7 @@ type ReporterOutputFiles = {
 
 type ReporterOptions = {
   readonly verbose: boolean;
+  readonly cwd: string;
 };
 
 type ReporterFactory = (
@@ -66,7 +68,7 @@ type ReporterFactory = (
 ) => Effect.Effect<Reporter, ReporterError>;
 
 const reporterFactories: { readonly [Name in ReporterName]: ReporterFactory } = {
-  text: (outputFiles, options) => Effect.succeed(textReporter(outputFiles.text, options.verbose)),
+  text: (outputFiles, options) => Effect.succeed(textReporter(outputFiles.text, options)),
   html: (outputFiles) => requireOutputFile("html", outputFiles.html).pipe(Effect.map(htmlReporter)),
   json: (outputFiles) => Effect.succeed(jsonReporter(outputFiles.json)),
   junit: (outputFiles) =>
@@ -144,22 +146,28 @@ export const emitEventAll: (
   }
 });
 
-const textReporter = (outputFile: string | undefined, verbose: boolean): Reporter => {
+const textReporter = (outputFile: string | undefined, options: ReporterOptions): Reporter => {
   const streamProgress = outputFile === undefined;
   return {
     name: "text",
     ...(streamProgress
       ? {
           onEvent: (event: RunEvent) => {
-            const text = renderRunEvent(event, verbose);
+            const text = renderRunEvent(event, options.verbose);
             return text === undefined ? Effect.void : writeStderr(`${text}\n`);
           },
         }
       : {}),
-    emit: (result) =>
-      outputFile === undefined
-        ? writeStdout(`${renderText(result, verbose, false)}\n`)
-        : writeFile(outputFile, renderText(result, verbose, true)),
+    emit: Effect.fnUntraced(function* (result: CliRunResult) {
+      const path = yield* Path.Path;
+      const displayPath = (value: string) => path.relative(options.cwd, value);
+      const text = renderText(result, options.verbose, outputFile !== undefined, displayPath);
+      if (outputFile === undefined) {
+        yield* writeStdout(`${text}\n`);
+      } else {
+        yield* writeFile(outputFile, text);
+      }
+    }),
   };
 };
 
@@ -242,21 +250,25 @@ const renderText = (
   result: CliRunResult,
   verbose: boolean,
   includeScenarioLines: boolean,
+  displayPath: (path: string) => string,
 ): string => {
   const featureSources = featureSourceMap(result);
   const failed = Arr.filter(result.results, (scenario) => scenario.outcome._tag === "Failed");
   const selected = verbose ? result.results : failed;
   const scenarioLines = includeScenarioLines
-    ? Arr.map(selected, (scenario) => renderScenarioText(scenario, featureSources))
+    ? Arr.map(selected, (scenario) => renderScenarioText(scenario, featureSources, displayPath))
     : [];
   const failureList =
     failed.length === 0
       ? ""
-      : ["Failed scenarios:", ...Arr.map(failed, renderFailureListItem)].join("\n");
+      : [
+          "Failed scenarios:",
+          ...Arr.map(failed, (scenario) => renderFailureListItem(scenario, displayPath)),
+        ].join("\n");
   return [
-    renderDiscoveryText(result.discovery, verbose),
+    renderDiscoveryText(result.discovery, verbose, displayPath),
     scenarioLines.join("\n\n"),
-    renderDiagnosticsText(result.diagnostics),
+    renderDiagnosticsText(result.diagnostics, displayPath),
     `Scenarios: ${result.summary.total} total, ${result.summary.failed} failed, ${result.summary.passed} passed (${result.summary.durationMillis}ms)`,
     failureList,
   ]
@@ -267,10 +279,19 @@ const renderText = (
 const featureSourceMap = (result: CliRunResult): ReadonlyMap<string, string> =>
   new Map(Arr.map(result.featureSources, (source) => [source.path, source.source] as const));
 
-const renderFailureListItem = (result: ScenarioResult): string =>
-  `  ${result.task.featurePath}:${result.task.core.scenarioLine} ${renderScenarioName(result)}`;
+const renderFailureListItem = (
+  result: ScenarioResult,
+  displayPath: (path: string) => string,
+): string =>
+  `  ${displayPath(result.task.featurePath)}:${result.task.core.scenarioLine} ${renderScenarioName(
+    result,
+  )}`;
 
-const renderDiscoveryText = (discovery: DiscoverySummary, verbose: boolean): string => {
+const renderDiscoveryText = (
+  discovery: DiscoverySummary,
+  verbose: boolean,
+  displayPath: (path: string) => string,
+): string => {
   const summary = `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`;
   if (!verbose) {
     return summary;
@@ -278,20 +299,23 @@ const renderDiscoveryText = (discovery: DiscoverySummary, verbose: boolean): str
   return [
     summary,
     "Feature files:",
-    ...Arr.map(discovery.featurePaths, (path) => `  ${path}`),
+    ...Arr.map(discovery.featurePaths, (path) => `  ${displayPath(path)}`),
     "Step modules:",
-    ...Arr.map(discovery.stepModulePaths, (path) => `  ${path}`),
+    ...Arr.map(discovery.stepModulePaths, (path) => `  ${displayPath(path)}`),
     "Feature definitions:",
     ...Arr.map(discovery.featureDefinitions, (title) => `  ${title}`),
     "Selected scenarios:",
-    ...Arr.map(discovery.selectedScenarios, renderDiscoveredScenario),
+    ...Arr.map(discovery.selectedScenarios, (scenario) =>
+      renderDiscoveredScenario(scenario, displayPath),
+    ),
   ].join("\n");
 };
 
 const renderDiscoveredScenario = (
   scenario: DiscoverySummary["selectedScenarios"][number],
+  displayPath: (path: string) => string,
 ): string =>
-  `  ${scenario.featurePath}:${scenario.scenarioLine} ${scenario.featureTitle} / ${scenario.scenarioTitle}`;
+  `  ${displayPath(scenario.featurePath)}:${scenario.scenarioLine} ${scenario.featureTitle} / ${scenario.scenarioTitle}`;
 
 const renderRunEvent = (event: RunEvent, verbose: boolean): string | undefined =>
   event._tag === "ScenarioStarted"
@@ -309,16 +333,17 @@ const renderScenarioFinishedEvent = (
 ): string | undefined =>
   event.result.outcome._tag === "Passed" && !verbose
     ? undefined
-    : renderScenarioText(event.result, emptyFeatureSources);
+    : renderScenarioText(event.result, emptyFeatureSources, identityPath);
 
 const renderScenarioText = (
   result: ScenarioResult,
   featureSources: ReadonlyMap<string, string>,
+  displayPath: (path: string) => string,
 ): string => {
   const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
   const line =
     result.outcome._tag === "Passed" ? result.task.core.scenarioLine : result.outcome.error.line;
-  const base = `${prefix} ${result.task.featurePath}:${line} ${renderScenarioName(
+  const base = `${prefix} ${displayPath(result.task.featurePath)}:${line} ${renderScenarioName(
     result,
   )} (${result.durationMillis}ms)`;
   if (result.outcome._tag === "Passed") {
@@ -396,7 +421,10 @@ const renderScenarioHtml = (result: ScenarioResult): string => {
         </tr>`;
 };
 
-const renderDiagnosticsText = (diagnostics: ReadonlyArray<CliDiagnostic>): string => {
+const renderDiagnosticsText = (
+  diagnostics: ReadonlyArray<CliDiagnostic>,
+  displayPath: (path: string) => string = identityPath,
+): string => {
   if (diagnostics.length === 0) {
     return "";
   }
@@ -418,20 +446,29 @@ const renderDiagnosticsText = (diagnostics: ReadonlyArray<CliDiagnostic>): strin
   return [
     unmatched.length === 0
       ? ""
-      : ["Unmatched source:", ...Arr.map(unmatched, renderDiagnosticText)].join("\n"),
+      : [
+          "Unmatched source:",
+          ...Arr.map(unmatched, (diagnostic) => renderDiagnosticText(diagnostic, displayPath)),
+        ].join("\n"),
     unused.length === 0
       ? ""
-      : ["Unused definitions:", ...Arr.map(unused, renderDiagnosticText)].join("\n"),
+      : [
+          "Unused definitions:",
+          ...Arr.map(unused, (diagnostic) => renderDiagnosticText(diagnostic, displayPath)),
+        ].join("\n"),
   ]
     .filter((section) => section.length > 0)
     .join("\n\n");
 };
 
-const renderDiagnosticText = (diagnostic: CliDiagnostic): string => {
+const renderDiagnosticText = (
+  diagnostic: CliDiagnostic,
+  displayPath: (path: string) => string = identityPath,
+): string => {
   if (isUnusedDiagnostic(diagnostic)) {
     return `  ${diagnostic.message}`;
   }
-  return renderUnmatchedDiagnosticText(diagnostic);
+  return renderUnmatchedDiagnosticText(diagnostic, displayPath);
 };
 
 type UnusedDiagnostic = Extract<
@@ -444,16 +481,19 @@ const isUnusedDiagnostic = (diagnostic: CliDiagnostic): diagnostic is UnusedDiag
 
 const renderUnmatchedDiagnosticText = (
   diagnostic: Exclude<CliDiagnostic, UnusedDiagnostic>,
+  displayPath: (path: string) => string,
 ): string => {
   switch (diagnostic._tag) {
     case "UnmatchedFeature": {
-      return `  ${diagnostic.featurePath}:${diagnostic.line}\n    Feature: ${diagnostic.featureTitle}\n    Reason: ${diagnostic.message}`;
+      return `  ${displayPath(diagnostic.featurePath)}:${diagnostic.line}\n    Feature: ${diagnostic.featureTitle}\n    Reason: ${diagnostic.message}`;
     }
     case "UnmatchedScenario": {
-      return `  ${diagnostic.featurePath}:${diagnostic.scenarioLine}\n    Scenario: ${diagnostic.scenarioTitle}\n    Reason: ${diagnostic.message}`;
+      return `  ${displayPath(diagnostic.featurePath)}:${diagnostic.scenarioLine}\n    Scenario: ${diagnostic.scenarioTitle}\n    Reason: ${diagnostic.message}`;
     }
   }
 };
+
+const identityPath = (path: string): string => path;
 
 const renderJson = (result: CliRunResult): string =>
   JSON.stringify(

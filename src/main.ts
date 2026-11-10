@@ -201,6 +201,7 @@ export const cli = Command.make(
     }
     const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
       verbose: options.verbose,
+      cwd: process.cwd(),
     }).pipe(Effect.mapError(toUserError));
     const result = yield* Runner.run(options, {
       onEvent: (event) =>
