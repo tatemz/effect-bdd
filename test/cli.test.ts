@@ -515,6 +515,39 @@ export const other = Bdd.feature("Other").pipe(
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("includes the feature path in a parse error", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: "Feature Broken\n\n  Scenario: Whatever\n    Given a step\n",
+          steps: counterStepsFor(`
+  Bdd.scenario("Whatever").pipe(givenCleanCounter, whenRead, thenCounterIs)
+`),
+        });
+
+        const exit = yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("*.mjs"),
+            "--reporter",
+            "text",
+          ]).pipe(Effect.provide(NodeServices.layer)),
+        );
+
+        assert.strictEqual(Exit.isFailure(exit), true);
+        if (Exit.isFailure(exit)) {
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+          assert.strictEqual(error instanceof CliError.UserError, true);
+          if (error instanceof CliError.UserError) {
+            assert.match(String(error.cause), /counter\.feature:1:1/);
+          }
+        }
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("reports unmatched source steps", () =>
     Effect.scoped(
       Effect.gen(function* () {
