@@ -130,6 +130,23 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("prints the step definition location", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: counterFeature,
+          steps: counterStepsFromSource,
+        });
+        const text = yield* reportFailure(fixture);
+
+        assert.match(
+          text,
+          /Definition: test\/\.effect-bdd-reporter-[^/]+\/steps\.mjs:8/,
+        );
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -202,6 +219,24 @@ Feature: Counter
 
 const counterSteps = `
 import { Bdd } from "effect-bdd"
+import { Effect, Schema } from "effect"
+
+const expected = Bdd.capture("expected", Schema.NumberFromString)
+const givenCleanCounter = Bdd.given\`a clean counter\`(() => Effect.succeed(0))
+const whenRead = Bdd.when\`the counter is read\`((state) => Effect.succeed(state ?? 0))
+const thenCounterIs = Bdd.then\`the counter is \${expected}\`(({ expected }, state) =>
+  (state ?? 0) === expected
+    ? Effect.succeed(state ?? 0)
+    : Effect.fail(\`expected \${expected}, got \${state ?? 0}\`)
+)
+
+export const counter = Bdd.feature("Counter").pipe(
+  Bdd.scenario("Fails").pipe(givenCleanCounter, whenRead, thenCounterIs)
+)
+`;
+
+const counterStepsFromSource = `
+import { Bdd } from "../../src/Bdd.ts"
 import { Effect, Schema } from "effect"
 
 const expected = Bdd.capture("expected", Schema.NumberFromString)
