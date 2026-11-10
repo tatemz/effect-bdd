@@ -327,8 +327,29 @@ const renderScenarioText = (
     return base;
   }
   const frame = renderFrame(featureSources.get(result.task.featurePath), line);
-  const error = indentText(renderFailure(result.outcome.failure), 2);
+  const error = indentText(
+    addStepDefinition(result, displayPath, renderFailure(result.outcome.failure)),
+    2,
+  );
   return frame.length === 0 ? `${base}\n\n${error}` : `${base}\n\n${frame.join("\n")}\n\n${error}`;
+};
+
+const addStepDefinition = (
+  result: ScenarioResult,
+  displayPath: (path: string) => string,
+  text: string,
+): string => {
+  if (
+    result.outcome._tag !== "Failed" ||
+    result.outcome.failure._tag !== "RunError" ||
+    result.outcome.failure.error._tag !== "StepError"
+  ) {
+    return text;
+  }
+  const definition = result.outcome.failure.error.definition;
+  return definition === undefined
+    ? text
+    : `${text}\nDefinition: ${displayPath(definition.path)}:${definition.line}`;
 };
 
 const failureLine = (result: ScenarioResult): number => {
@@ -552,6 +573,7 @@ const errorData = (error: RunError): Record<string, unknown> => {
         scenario: error.scenario,
         step: error.step,
         line: error.line,
+        definition: error.definition,
         cause: renderCause(error.cause),
       };
     }

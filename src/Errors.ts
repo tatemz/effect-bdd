@@ -98,12 +98,16 @@ export class MatchError extends Schema.TaggedError<MatchError>()("MatchError", {
  * @category errors
  * @since 0.1.0
  */
+export const StepDefinition = Schema.Struct({ path: Schema.String, line: Schema.Number });
+export type StepDefinition = typeof StepDefinition.Type;
+
 export class StepError extends Schema.TaggedError<StepError>()("StepError", {
   message: Schema.String,
   scenario: Schema.String,
   step: Schema.String,
   line: Schema.Number,
   cause: Schema.Unknown,
+  definition: Schema.optionalKey(StepDefinition),
 }) {}
 
 /**

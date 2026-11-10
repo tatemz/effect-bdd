@@ -472,6 +472,9 @@ const runStep: <E, R>(
           step: step.text,
           line,
           cause,
+          ...(stepDefinition.definition === undefined
+            ? {}
+            : { definition: stepDefinition.definition }),
         }),
     ),
   );
@@ -494,6 +497,9 @@ const runStep: <E, R>(
               message: `Timed out after ${formatDuration(timeout)}`,
               timeout,
             }),
+            ...(stepDefinition.definition === undefined
+              ? {}
+              : { definition: stepDefinition.definition }),
           }),
         ),
     }),
