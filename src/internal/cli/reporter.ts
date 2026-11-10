@@ -6,10 +6,11 @@ import * as Fn from "effect/Function";
 import * as Inspectable from "effect/Inspectable";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
 import * as Str from "effect/String";
-import { StepTimeoutError } from "../../Errors.ts";
+import { StepTimeoutError, type RunError } from "../../Errors.ts";
 import { ReporterError } from "./errors.ts";
 import {
   isFatalDiagnostic,
@@ -507,12 +508,8 @@ const renderScenarioName = (result: ScenarioResult): string =>
     ? `${result.task.core.featureTitle} / ${result.task.core.scenarioTitle}`
     : `${result.task.core.featureTitle} / ${result.task.core.ruleTitle} / ${result.task.core.scenarioTitle}`;
 
-const renderError = (error: {
-  readonly _tag: string;
-  readonly message: string;
-  readonly cause?: unknown;
-}): string => {
-  const cause = renderCause(error.cause);
+const renderError = (error: RunError): string => {
+  const cause = "cause" in error ? renderCause(error.cause) : undefined;
   return cause === undefined
     ? `${error._tag}: ${error.message}`
     : `${error._tag}: ${error.message}\n  Cause: ${cause}`;
@@ -521,7 +518,7 @@ const renderError = (error: {
 const renderCause = (cause: unknown): string | undefined =>
   cause === undefined
     ? undefined
-    : cause instanceof StepTimeoutError
+    : Schema.is(StepTimeoutError)(cause)
       ? `${cause._tag}: ${cause.message} (timeout: ${Duration.format(cause.timeout)})`
       : Predicate.isError(cause)
         ? cause.message
