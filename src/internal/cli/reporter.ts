@@ -291,10 +291,10 @@ const renderDiscoveryText = (
   verbose: boolean,
   displayPath: (path: string) => string,
 ): string => {
-  const summary = `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`;
   if (!verbose) {
-    return summary;
+    return "";
   }
+  const summary = `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`;
   return [
     summary,
     "Feature files:",
