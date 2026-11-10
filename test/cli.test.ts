@@ -128,6 +128,51 @@ Feature: Counter
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("colors the failure status when FORCE_COLOR is set", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Fails
+    Given a clean counter
+    When the counter is read
+    Then the counter is 1
+`,
+          steps: counterStepsFor(`
+  Bdd.scenario("Fails").pipe(givenCleanCounter, whenRead, thenCounterIs)
+`),
+        });
+        const path = yield* Path.Path;
+        const bddRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+        const env = { ...process.env, FORCE_COLOR: "1" };
+        delete env.NO_COLOR;
+        const result = yield* Effect.promise(async () => {
+          try {
+            return await execFilePromise(
+              process.execPath,
+              [
+                path.join(bddRoot, "src", "bin.ts"),
+                "--features",
+                fixture.path("*.feature"),
+                "--steps",
+                fixture.path("*.mjs"),
+                "--reporter",
+                "text",
+              ],
+              { cwd: bddRoot, env },
+            );
+          } catch (error) {
+            return error as { readonly stdout?: string; readonly stderr?: string };
+          }
+        });
+
+        assert.match(result.stdout ?? "", /\u001b\[31mFAIL\u001b\[0m/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("runs checked-in feature and step fixtures", () =>
     Effect.scoped(
       Effect.gen(function* () {
