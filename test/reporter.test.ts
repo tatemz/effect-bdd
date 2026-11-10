@@ -31,6 +31,20 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("quotes the failing step from the feature file", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
+        const text = yield* reportFailure(fixture);
+
+        assert.match(
+          text,
+          /  5 \|     Given a clean counter\n  6 \|     When the counter is read\n> 7 \|     Then the counter is 1/,
+        );
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
