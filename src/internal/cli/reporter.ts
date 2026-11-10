@@ -606,7 +606,7 @@ const errorData = (error: RunError): Record<string, unknown> => {
         step: error.step,
         line: error.line,
         candidates: error.candidates,
-        cause: renderCause(error.cause),
+        cause: renderCauseBody(error.cause),
       };
     }
     case "StepError": {
@@ -617,7 +617,7 @@ const errorData = (error: RunError): Record<string, unknown> => {
         step: error.step,
         line: error.line,
         definition: error.definition,
-        cause: renderCause(error.cause),
+        cause: renderCauseBody(error.cause),
       };
     }
     case "TapError": {
@@ -627,7 +627,7 @@ const errorData = (error: RunError): Record<string, unknown> => {
         scenario: error.scenario,
         step: error.step,
         line: error.line,
-        cause: renderCause(error.cause),
+        cause: renderCauseBody(error.cause),
       };
     }
     case "ScenarioSetupError": {
@@ -636,7 +636,7 @@ const errorData = (error: RunError): Record<string, unknown> => {
         message: error.message,
         scenario: error.scenario,
         line: error.line,
-        cause: renderCause(error.cause),
+        cause: renderCauseBody(error.cause),
       };
     }
     case "ScenarioTeardownError": {
@@ -645,7 +645,7 @@ const errorData = (error: RunError): Record<string, unknown> => {
         message: error.message,
         scenario: error.scenario,
         line: error.line,
-        cause: renderCause(error.cause),
+        cause: renderCauseBody(error.cause),
       };
     }
   }
@@ -753,11 +753,16 @@ const frameLabel = (line: string): string => {
 };
 
 const renderCause = (cause: unknown): string | undefined => {
+  const body = renderCauseBody(cause);
+  return body === undefined ? undefined : `Cause: ${body}`;
+};
+
+const renderCauseBody = (cause: unknown): string | undefined => {
   if (cause === undefined) {
     return undefined;
   }
   const [first, ...rest] = renderCauseLines(cause);
-  return Arr.join([`Cause: ${first}`, ...Arr.map(rest, (line) => `  ${line}`)], "\n");
+  return Arr.join([first, ...Arr.map(rest, (line) => `  ${line}`)], "\n");
 };
 
 // oxlint-disable-next-line complexity
