@@ -151,10 +151,7 @@ describe("text reporter", () => {
         });
         const text = yield* reportFailure(fixture);
 
-        assert.match(
-          text,
-          /Definition: test\/\.effect-bdd-reporter-[^/]+\/steps\.mjs:8/,
-        );
+        assert.match(text, /Definition: test\/\.effect-bdd-reporter-[^/]+\/steps\.mjs:8/);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
