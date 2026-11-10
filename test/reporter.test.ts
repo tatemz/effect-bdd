@@ -89,6 +89,7 @@ describe("text reporter", () => {
         const text = yield* reportFailure(fixture);
 
         assert.match(text, /Defect: kaboom: the cart repository is null/);
+        assert.match(text, /at .*steps\.mjs:\d+/);
         assert.match(text, /Scenarios: 2 total, 1 failed, 1 passed \(\d+ms\)/);
         assert.match(text, /A step throws/);
       }),
