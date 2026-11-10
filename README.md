@@ -242,6 +242,44 @@ NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
 When several reporters are selected, the exits of all of them decide the run
 result, so a failing reporter still fails the CLI.
 
+The `text` reporter answers three questions for each failure: which scenario,
+which Gherkin step, and which failure value. A failing run prints one block per
+failure, then the counts and a one-line list:
+
+```text
+FAIL features/cart.feature:6 Cart pricing / Tax is applied to the subtotal (12ms)
+
+  4 |     Given a cart with 2 items at 10.00 each
+  5 |     When the cart total is calculated with 8.25% tax
+> 6 |     Then the total is 25.00
+  7 |
+
+  StepError: Step failed: the total is 25.00
+  Cause: expected total 25, got 21.65
+  Definition: features/cart.steps.ts:31
+
+Scenarios: 1 total, 1 failed, 0 passed (84ms)
+
+Failed scenarios:
+  Cart pricing / Tax is applied to the subtotal (features/cart.feature:3)
+```
+
+`Cause:` keeps the shape of the failure: an `Error` stack, the fields of a
+tagged error, a Schema issue path, or a thrown defect. `Definition:` names the
+`Bdd.given`/`when`/`then` call site. Paths are relative to the invocation
+directory. A Gherkin syntax error prints `path:line:column` before the parser
+message.
+
+Passing scenarios are omitted unless `--verbose`. `--verbose` also includes the
+discovery counts and selected scenario list. On a TTY the CLI writes `RUNNING`
+lines to stderr; when stdout is a pipe it writes no progress. `NO_COLOR` disables
+color, and `FORCE_COLOR=1` forces it. `--output-file.text` writes the same report
+without color and with a trailing newline.
+
+The `json` reporter keeps the rendered `outcome.error` string and adds
+`outcome.failure` with the tagged error, step text, line, definition, and
+rendered cause. The `junit` and `html` reporters keep their existing shape.
+
 ## Writing Step Modules
 
 A step module is an ordinary ES module that exports a `Bdd.feature(...)`. Keep
@@ -739,7 +777,7 @@ If a tap handler itself fails, the scenario fails with a `TapError` — the same
 - `--step-timeout`: maximum duration for each step, using Effect Duration input such as
   `"500 millis"` or `"5 seconds"`.
 - `--strict`: fail the CLI on unused feature or scenario definitions.
-- `--verbose`, `-v`: show passing scenarios in text output.
+- `--verbose`, `-v`: show passing scenarios and discovery details in text output.
 - `--watch`: rerun on file changes. See [Watch Mode](#watch-mode).
 
 Without `--strict`, failed scenarios and unmatched selected feature files/scenarios still
