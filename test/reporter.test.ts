@@ -141,6 +141,7 @@ describe("text reporter", () => {
         assert.strictEqual(outcome?.failure?.error?.step, "the counter is 1");
         assert.strictEqual(outcome?.failure?.error?.line, 7);
         assert.match(outcome?.failure?.error?.cause ?? "", /expected 1, got 0/);
+        assert.strictEqual(outcome?.failure?.error?.cause, "expected 1, got 0");
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
