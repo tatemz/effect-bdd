@@ -46,6 +46,7 @@ export const makeReporters = (
   options: {
     readonly verbose: boolean;
     readonly cwd: string;
+    readonly progress: "none" | "scenario";
   },
 ): Effect.Effect<ReadonlyArray<Reporter>, ReporterError> =>
   Effect.forEach(names, (name) => makeReporter(name, outputFiles, options));
@@ -60,6 +61,7 @@ type ReporterOutputFiles = {
 type ReporterOptions = {
   readonly verbose: boolean;
   readonly cwd: string;
+  readonly progress: "none" | "scenario";
 };
 
 type ReporterFactory = (
@@ -95,12 +97,8 @@ export const emitAll: (
   result: CliRunResult,
 ) => Effect.Effect<void, ReporterError, FileSystem.FileSystem | Path.Path | Stdio.Stdio> =
   Effect.fnUntraced(function* (reporters: ReadonlyArray<Reporter>, result: CliRunResult) {
-    const exits = yield* Effect.forEach(
-      reporters,
-      (reporter) => Effect.exit(reporter.emit(result)),
-      {
-        concurrency: "unbounded",
-      },
+    const exits = yield* Effect.forEach(reporters, (reporter) =>
+      Effect.exit(reporter.emit(result)),
     );
     const failures = Fn.pipe(
       exits,
@@ -123,15 +121,10 @@ export const emitEventAll: (
   reporters: ReadonlyArray<Reporter>,
   event: RunEvent,
 ) {
-  const exits = yield* Effect.forEach(
-    reporters,
-    (reporter) =>
-      reporter.onEvent === undefined
-        ? Effect.exit(Effect.void)
-        : Effect.exit(reporter.onEvent(event)),
-    {
-      concurrency: "unbounded",
-    },
+  const exits = yield* Effect.forEach(reporters, (reporter) =>
+    reporter.onEvent === undefined
+      ? Effect.exit(Effect.void)
+      : Effect.exit(reporter.onEvent(event)),
   );
   const failures = Fn.pipe(
     exits,
@@ -146,30 +139,27 @@ export const emitEventAll: (
   }
 });
 
-const textReporter = (outputFile: string | undefined, options: ReporterOptions): Reporter => {
-  const streamProgress = outputFile === undefined;
-  return {
-    name: "text",
-    ...(streamProgress
-      ? {
-          onEvent: (event: RunEvent) => {
-            const text = renderRunEvent(event, options.verbose);
-            return text === undefined ? Effect.void : writeStderr(`${text}\n`);
-          },
-        }
-      : {}),
-    emit: Effect.fnUntraced(function* (result: CliRunResult) {
-      const path = yield* Path.Path;
-      const displayPath = (value: string) => path.relative(options.cwd, value);
-      const text = renderText(result, options.verbose, outputFile !== undefined, displayPath);
-      if (outputFile === undefined) {
-        yield* writeStdout(`${text}\n`);
-      } else {
-        yield* writeFile(outputFile, text);
+const textReporter = (outputFile: string | undefined, options: ReporterOptions): Reporter => ({
+  name: "text",
+  ...(outputFile === undefined && options.progress === "scenario"
+    ? {
+        onEvent: (event: RunEvent) =>
+          event._tag === "ScenarioStarted"
+            ? writeStderr(`${renderScenarioStartedEvent(event)}\n`)
+            : Effect.void,
       }
-    }),
-  };
-};
+    : {}),
+  emit: Effect.fnUntraced(function* (result: CliRunResult) {
+    const path = yield* Path.Path;
+    const displayPath = (value: string) => path.relative(options.cwd, value);
+    const text = `${renderText(result, options.verbose, displayPath)}\n`;
+    if (outputFile === undefined) {
+      yield* writeStdout(text);
+    } else {
+      yield* writeFile(outputFile, text);
+    }
+  }),
+});
 
 const htmlReporter = (outputFile: string): Reporter => ({
   name: "html",
@@ -249,15 +239,14 @@ const writeStdio: (
 const renderText = (
   result: CliRunResult,
   verbose: boolean,
-  includeScenarioLines: boolean,
   displayPath: (path: string) => string,
 ): string => {
   const featureSources = featureSourceMap(result);
   const failed = Arr.filter(result.results, (scenario) => scenario.outcome._tag === "Failed");
   const selected = verbose ? result.results : failed;
-  const scenarioLines = includeScenarioLines
-    ? Arr.map(selected, (scenario) => renderScenarioText(scenario, featureSources, displayPath))
-    : [];
+  const scenarioLines = Arr.map(selected, (scenario) =>
+    renderScenarioText(scenario, featureSources, displayPath),
+  );
   const failureList =
     failed.length === 0
       ? ""
@@ -317,23 +306,10 @@ const renderDiscoveredScenario = (
 ): string =>
   `  ${displayPath(scenario.featurePath)}:${scenario.scenarioLine} ${scenario.featureTitle} / ${scenario.scenarioTitle}`;
 
-const renderRunEvent = (event: RunEvent, verbose: boolean): string | undefined =>
-  event._tag === "ScenarioStarted"
-    ? renderScenarioStartedEvent(event)
-    : renderScenarioFinishedEvent(event, verbose);
-
 const renderScenarioStartedEvent = (
   event: Extract<RunEvent, { readonly _tag: "ScenarioStarted" }>,
 ): string =>
   `RUNNING ${event.task.featurePath}:${event.task.core.scenarioLine} ${renderTaskName(event.task)}`;
-
-const renderScenarioFinishedEvent = (
-  event: Extract<RunEvent, { readonly _tag: "ScenarioFinished" }>,
-  verbose: boolean,
-): string | undefined =>
-  event.result.outcome._tag === "Passed" && !verbose
-    ? undefined
-    : renderScenarioText(event.result, emptyFeatureSources, identityPath);
 
 const renderScenarioText = (
   result: ScenarioResult,
@@ -367,8 +343,6 @@ const renderFrame = (source: string | undefined, line: number): ReadonlyArray<st
     return `${marker} ${String(current).padStart(width)} | ${lines[current - 1] ?? ""}`;
   });
 };
-
-const emptyFeatureSources: ReadonlyMap<string, string> = new Map();
 
 const renderTaskName = (task: ScenarioTask): string =>
   task.core.ruleTitle === undefined
