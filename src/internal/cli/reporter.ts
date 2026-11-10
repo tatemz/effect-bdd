@@ -1,4 +1,5 @@
 import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -7,6 +8,7 @@ import * as Inspectable from "effect/Inspectable";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
 import * as Str from "effect/String";
@@ -319,7 +321,7 @@ const renderScenarioText = (result: ScenarioResult): string => {
   )} (${result.durationMillis}ms)`;
   return result.outcome._tag === "Passed"
     ? base
-    : `${base}\n  ${renderError(result.outcome.error)}`;
+    : `${base}\n${indentText(renderError(result.outcome.error), 2)}`;
 };
 
 const renderTaskName = (task: ScenarioTask): string =>
@@ -512,17 +514,81 @@ const renderError = (error: RunError): string => {
   const cause = "cause" in error ? renderCause(error.cause) : undefined;
   return cause === undefined
     ? `${error._tag}: ${error.message}`
-    : `${error._tag}: ${error.message}\n  Cause: ${cause}`;
+    : `${error._tag}: ${error.message}\n${cause}`;
 };
 
-const renderCause = (cause: unknown): string | undefined =>
-  cause === undefined
-    ? undefined
-    : Schema.is(StepTimeoutError)(cause)
-      ? `${cause._tag}: ${cause.message} (timeout: ${Duration.format(cause.timeout)})`
-      : Predicate.isError(cause)
-        ? cause.message
-        : Inspectable.toStringUnknown(cause, 0);
+const renderCause = (cause: unknown): string | undefined => {
+  if (cause === undefined) {
+    return undefined;
+  }
+  const [first, ...rest] = renderCauseLines(cause);
+  return [`Cause: ${first}`, ...rest.map((line) => `  ${line}`)].join("\n");
+};
+
+const renderCauseLines = (cause: unknown): ReadonlyArray<string> => {
+  if (Schema.is(StepTimeoutError)(cause)) {
+    return [`${cause._tag}: ${cause.message} (timeout: ${Duration.format(cause.timeout)})`];
+  }
+  if (Schema.isSchemaError(cause)) {
+    return splitLines(formatSchemaIssue(cause.issue));
+  }
+  if (hasStringTag(cause)) {
+    return renderTaggedCause(cause);
+  }
+  if (Predicate.isError(cause)) {
+    return splitLines(Cause.pretty(Cause.fail(cause)));
+  }
+  return splitLines(
+    Predicate.isString(cause) ||
+      Predicate.isNumber(cause) ||
+      Predicate.isBoolean(cause) ||
+      Predicate.isBigInt(cause)
+      ? String(cause)
+      : Inspectable.toStringUnknown(cause, 0),
+  );
+};
+
+const renderTaggedCause = (cause: { readonly _tag: string }): ReadonlyArray<string> => {
+  const message =
+    Predicate.hasProperty(cause, "message") && Predicate.isString(cause.message)
+      ? cause.message
+      : undefined;
+  const head = message === undefined ? cause._tag : `${cause._tag}: ${message}`;
+  const fields = Object.entries(cause).filter(([key]) => !causeMetadataKeys.has(key));
+  return [head, ...fields.map(([key, value]) => `${key}: ${renderCauseValue(value)}`)];
+};
+
+const renderCauseValue = (value: unknown): string =>
+  Predicate.isString(value) ||
+  Predicate.isNumber(value) ||
+  Predicate.isBoolean(value) ||
+  Predicate.isBigInt(value)
+    ? String(value)
+    : Predicate.isError(value)
+      ? value.message
+      : Inspectable.toStringUnknown(value, 0);
+
+const hasStringTag = (u: unknown): u is { readonly _tag: string } =>
+  Predicate.isObject(u) && Predicate.hasProperty(u, "_tag") && Predicate.isString(u._tag);
+
+const splitLines = (text: string): ReadonlyArray<string> =>
+  text.split("\n").map((line) => line.trimStart());
+
+const indentText = (text: string, spaces: number): string =>
+  text
+    .split("\n")
+    .map((line) => `${" ".repeat(spaces)}${line}`)
+    .join("\n");
+
+const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
+
+const causeMetadataKeys: ReadonlySet<string> = new Set([
+  "_tag",
+  "message",
+  "name",
+  "stack",
+  "cause",
+]);
 
 const escapeHtml = (text: string): string =>
   Fn.pipe(
