@@ -1,8 +1,11 @@
 import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import type * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
+import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
@@ -258,19 +261,34 @@ const runScenario = Effect.fnUntraced(function* (
 ) {
   yield* emitRunEvent(events, { _tag: "ScenarioStarted", task });
   const startedAt = yield* Clock.currentTimeMillis;
-  const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core, runOptions(options)));
+  const exit = yield* Effect.exit(CoreRunner.runScenarioTask(task.core, runOptions(options)));
   const finishedAt = yield* Clock.currentTimeMillis;
+  if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)) {
+    return yield* Effect.interrupt;
+  }
   const scenarioResult = {
     task,
-    outcome:
-      result._tag === "Success"
-        ? { _tag: "Passed", steps: result.success.steps }
-        : { _tag: "Failed", error: result.failure },
+    outcome: outcomeFromExit(exit),
     durationMillis: finishedAt - startedAt,
   } satisfies ScenarioResult;
   yield* emitRunEvent(events, { _tag: "ScenarioFinished", result: scenarioResult });
   return scenarioResult;
 });
+
+const outcomeFromExit = (
+  exit: Exit.Exit<CoreRunner.ScenarioReport, Bdd.RunError>,
+): ScenarioResult["outcome"] => {
+  if (Exit.isSuccess(exit)) {
+    return { _tag: "Passed", steps: exit.value.steps };
+  }
+  if (Cause.hasDies(exit.cause)) {
+    return { _tag: "Failed", failure: { _tag: "Defect", cause: exit.cause } };
+  }
+  const error = Cause.findErrorOption(exit.cause);
+  return Option.isSome(error)
+    ? { _tag: "Failed", failure: { _tag: "RunError", error: error.value } }
+    : { _tag: "Failed", failure: { _tag: "Defect", cause: exit.cause } };
+};
 
 const runScenarios = (
   options: CliOptions,

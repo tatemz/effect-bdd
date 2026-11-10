@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Inspectable from "effect/Inspectable";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
@@ -21,6 +22,7 @@ import {
   type DiscoverySummary,
   type ReporterName,
   type RunEvent,
+  type ScenarioFailure,
   type ScenarioResult,
   type ScenarioTask,
 } from "./models.ts";
@@ -317,8 +319,7 @@ const renderScenarioText = (
   displayPath: (path: string) => string,
 ): string => {
   const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
-  const line =
-    result.outcome._tag === "Passed" ? result.task.core.scenarioLine : result.outcome.error.line;
+  const line = failureLine(result);
   const base = `${prefix} ${displayPath(result.task.featurePath)}:${line} ${renderScenarioName(
     result,
   )} (${result.durationMillis}ms)`;
@@ -326,8 +327,17 @@ const renderScenarioText = (
     return base;
   }
   const frame = renderFrame(featureSources.get(result.task.featurePath), line);
-  const error = indentText(renderError(result.outcome.error), 2);
+  const error = indentText(renderFailure(result.outcome.failure), 2);
   return frame.length === 0 ? `${base}\n\n${error}` : `${base}\n\n${frame.join("\n")}\n\n${error}`;
+};
+
+const failureLine = (result: ScenarioResult): number => {
+  if (result.outcome._tag === "Passed") {
+    return result.task.core.scenarioLine;
+  }
+  return result.outcome.failure._tag === "RunError"
+    ? result.outcome.failure.error.line
+    : result.task.core.scenarioLine;
 };
 
 const renderFrame = (source: string | undefined, line: number): ReadonlyArray<string> => {
@@ -383,7 +393,7 @@ ${Fn.pipe(result.results, Arr.map(renderScenarioHtml), Arr.join("\n"))}
 
 const renderScenarioHtml = (result: ScenarioResult): string => {
   const status = result.outcome._tag === "Passed" ? "passed" : "failed";
-  const error = result.outcome._tag === "Passed" ? "" : renderError(result.outcome.error);
+  const error = result.outcome._tag === "Passed" ? "" : renderFailure(result.outcome.failure);
   return `        <tr>
           <td class="${status}">${status}</td>
           <td>${escapeHtml(`${result.task.featurePath}:${result.task.core.scenarioLine}`)}</td>
@@ -498,7 +508,7 @@ const renderJson = (result: CliRunResult): string =>
               }
             : {
                 status: "failed",
-                error: renderError(scenario.outcome.error),
+                error: renderFailure(scenario.outcome.failure),
               },
       })),
       diagnostics: result.diagnostics,
@@ -526,8 +536,8 @@ const renderJunitScenario = (result: ScenarioResult): string => {
     result.outcome._tag === "Passed"
       ? ""
       : `
-    <failure message="${escapeXml(renderError(result.outcome.error))}">${escapeXml(
-      renderError(result.outcome.error),
+    <failure message="${escapeXml(renderFailure(result.outcome.failure))}">${escapeXml(
+      renderFailure(result.outcome.failure),
     )}</failure>`;
   return `  <testcase classname="${escapeXml(result.task.core.featureTitle)}" name="${escapeXml(name)}" file="${escapeXml(
     result.task.featurePath,
@@ -552,6 +562,49 @@ const renderError = (error: RunError): string => {
   return cause === undefined
     ? `${error._tag}: ${error.message}`
     : `${error._tag}: ${error.message}\n${cause}`;
+};
+
+const renderFailure = (failure: ScenarioFailure): string =>
+  failure._tag === "RunError" ? renderError(failure.error) : renderDefect(failure.cause);
+
+const renderDefect = (cause: Cause.Cause<unknown>): string => {
+  const die = Fn.pipe(
+    cause.reasons,
+    Arr.findFirst((reason) => reason._tag === "Die"),
+  );
+  if (Option.isSome(die) && Predicate.isError(die.value.defect)) {
+    return renderDefectError(die.value.defect);
+  }
+  const [first, ...rest] = splitLines(Cause.pretty(cause));
+  const head = first.startsWith("Error: ") ? `Defect: ${first.slice(7)}` : `Defect: ${first}`;
+  return [head, ...rest.map((line) => `  ${line}`)].join("\n");
+};
+
+const renderDefectError = (error: Error): string => {
+  const [first, ...rest] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
+  const head = first.startsWith("Error: ") ? `Defect: ${first.slice(7)}` : `Defect: ${first}`;
+  const frames = rest
+    .filter((line) => !isNoiseFrame(line))
+    .map(frameLabel)
+    .slice(0, 5);
+  return [head, ...frames.map((line) => `  ${line}`)].join("\n");
+};
+
+const frameLocation = (line: string): string | undefined => {
+  const open = line.lastIndexOf("(");
+  return open === -1 ? line.replace(/^at /, "") : line.slice(open + 1, -1);
+};
+
+const isNoiseFrame = (line: string): boolean => {
+  const location = frameLocation(line);
+  return (
+    location === undefined || location.includes("node_modules/") || location.startsWith("node:")
+  );
+};
+
+const frameLabel = (line: string): string => {
+  const location = frameLocation(line);
+  return location === undefined ? line : `at ${location}`;
 };
 
 const renderCause = (cause: unknown): string | undefined => {

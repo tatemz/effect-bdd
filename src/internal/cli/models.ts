@@ -1,4 +1,5 @@
 import type * as Bdd from "../../Bdd.ts";
+import type * as Cause from "effect/Cause";
 import type * as Duration from "effect/Duration";
 import type * as CoreRunner from "../runner.ts";
 
@@ -15,6 +16,17 @@ export interface ScenarioTask {
 }
 
 /** @internal */
+export type ScenarioFailure =
+  | {
+      readonly _tag: "RunError";
+      readonly error: Bdd.RunError;
+    }
+  | {
+      readonly _tag: "Defect";
+      readonly cause: Cause.Cause<unknown>;
+    };
+
+/** @internal */
 type ScenarioOutcome =
   | {
       readonly _tag: "Passed";
@@ -22,7 +34,7 @@ type ScenarioOutcome =
     }
   | {
       readonly _tag: "Failed";
-      readonly error: Bdd.RunError;
+      readonly failure: ScenarioFailure;
     };
 
 /** @internal */
