@@ -509,6 +509,7 @@ const renderJson = (result: CliRunResult): string =>
             : {
                 status: "failed",
                 error: renderFailure(scenario.outcome.failure),
+                failure: failureData(scenario.outcome.failure),
               },
       })),
       diagnostics: result.diagnostics,
@@ -516,6 +517,74 @@ const renderJson = (result: CliRunResult): string =>
     null,
     2,
   );
+
+const failureData = (failure: ScenarioFailure): Record<string, unknown> =>
+  failure._tag === "RunError"
+    ? { _tag: "RunError", error: errorData(failure.error) }
+    : { _tag: "Defect", cause: renderDefect(failure.cause) };
+
+const errorData = (error: RunError): Record<string, unknown> => {
+  switch (error._tag) {
+    case "ParseError": {
+      return {
+        _tag: error._tag,
+        message: error.message,
+        line: error.line,
+        column: error.column,
+        path: error.path,
+      };
+    }
+    case "MatchError": {
+      return {
+        _tag: error._tag,
+        message: error.message,
+        scenario: error.scenario,
+        step: error.step,
+        line: error.line,
+        candidates: error.candidates,
+        cause: renderCause(error.cause),
+      };
+    }
+    case "StepError": {
+      return {
+        _tag: error._tag,
+        message: error.message,
+        scenario: error.scenario,
+        step: error.step,
+        line: error.line,
+        cause: renderCause(error.cause),
+      };
+    }
+    case "TapError": {
+      return {
+        _tag: error._tag,
+        message: error.message,
+        scenario: error.scenario,
+        step: error.step,
+        line: error.line,
+        cause: renderCause(error.cause),
+      };
+    }
+    case "ScenarioSetupError": {
+      return {
+        _tag: error._tag,
+        message: error.message,
+        scenario: error.scenario,
+        line: error.line,
+        cause: renderCause(error.cause),
+      };
+    }
+    case "ScenarioTeardownError": {
+      return {
+        _tag: error._tag,
+        message: error.message,
+        scenario: error.scenario,
+        line: error.line,
+        cause: renderCause(error.cause),
+      };
+    }
+  }
+};
 
 const renderJunit = (result: CliRunResult): string => {
   const diagnostics = result.diagnostics.length;
