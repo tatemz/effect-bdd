@@ -4,10 +4,21 @@ import { Command } from "effect/cli";
 import { Effect, FileSystem, Path } from "effect";
 import { fileURLToPath } from "node:url";
 import { cli } from "../src/main.ts";
+import { renderDefectError } from "../src/internal/cli/reporter.ts";
 
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
 
 describe("text reporter", () => {
+  it("prints defect stack frames without a file URL", () => {
+    const error = new Error("boom");
+    error.stack = "Error: boom\n    at fn (file:///tmp/steps.mjs:3:4)";
+
+    const text = renderDefectError(error);
+
+    assert.match(text, /at \/tmp\/steps\.mjs:3:4/);
+    assert.strictEqual(text.includes("file://"), false);
+  });
+
   it.effect("reports the failing step line, not the scenario line", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -90,6 +101,7 @@ describe("text reporter", () => {
 
         assert.match(text, /Defect: kaboom: the cart repository is null/);
         assert.match(text, /at .*steps\.mjs:\d+/);
+        assert.strictEqual(/file:\/\//.test(text), false);
         assert.match(text, /Scenarios: 2 total, 1 failed, 1 passed \(\d+ms\)/);
         assert.match(text, /A step throws/);
       }),

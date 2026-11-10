@@ -683,7 +683,8 @@ const renderDefect = (cause: Cause.Cause<unknown>): string => {
   return [head, ...rest.map((line) => `  ${line}`)].join("\n");
 };
 
-const renderDefectError = (error: Error): string => {
+/** @internal */
+export const renderDefectError = (error: Error): string => {
   const [first, ...rest] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
   const head = first.startsWith("Error: ") ? `Defect: ${first.slice(7)}` : `Defect: ${first}`;
   const frames = rest
