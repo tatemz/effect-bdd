@@ -45,6 +45,20 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("puts the summary after the failures and lists them", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
+        const text = yield* reportFailure(fixture);
+
+        assert.match(text, /Scenarios: 1 total, 1 failed, 0 passed \(\d+ms\)/);
+        assert.match(text, /Failed scenarios:\n {2}.*counter\.feature:4 Counter \/ Fails/);
+        assert.ok(text.indexOf("FAIL ") < text.indexOf("Scenarios: 1 total"));
+        assert.ok(text.indexOf("Scenarios: 1 total") < text.indexOf("Failed scenarios:"));
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
