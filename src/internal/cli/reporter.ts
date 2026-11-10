@@ -47,9 +47,7 @@ export const makeReporters = (
 ): Effect.Effect<ReadonlyArray<Reporter>, ReporterError> =>
   Effect.forEach(names, (name) => makeReporter(name, outputFiles, options));
 
-type OutputFiles = CliOptionsOutputFiles;
-
-type CliOptionsOutputFiles = {
+type ReporterOutputFiles = {
   readonly text?: string;
   readonly html?: string;
   readonly json?: string;
@@ -61,7 +59,7 @@ type ReporterOptions = {
 };
 
 type ReporterFactory = (
-  outputFiles: OutputFiles,
+  outputFiles: ReporterOutputFiles,
   options: ReporterOptions,
 ) => Effect.Effect<Reporter, ReporterError>;
 
@@ -75,7 +73,7 @@ const reporterFactories: { readonly [Name in ReporterName]: ReporterFactory } = 
 
 const makeReporter = (
   name: ReporterName,
-  outputFiles: OutputFiles,
+  outputFiles: ReporterOutputFiles,
   options: ReporterOptions,
 ): Effect.Effect<Reporter, ReporterError> => reporterFactories[name](outputFiles, options);
 
