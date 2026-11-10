@@ -96,6 +96,40 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("writes structured failure data to JSON", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
+        const report = fixture.path("report.json");
+
+        yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.path("*.mjs"),
+            "--reporter",
+            "json",
+            "--output-file.json",
+            report,
+          ]),
+        );
+
+        const fs = yield* FileSystem.FileSystem;
+        const json = JSON.parse(yield* fs.readFileString(report)) as JsonFailureReport;
+        const outcome = json.scenarios[0]?.outcome;
+
+        assert.strictEqual(outcome?.status, "failed");
+        assert.match(outcome?.error ?? "", /StepError/);
+        assert.strictEqual(outcome?.failure?._tag, "RunError");
+        assert.strictEqual(outcome?.failure?.error?._tag, "StepError");
+        assert.strictEqual(outcome?.failure?.error?.step, "the counter is 1");
+        assert.strictEqual(outcome?.failure?.error?.line, 7);
+        assert.match(outcome?.failure?.error?.cause ?? "", /expected 1, got 0/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -280,3 +314,21 @@ export const defects = Bdd.feature("Defects").pipe(
   Bdd.scenario("The next scenario runs").pipe(givenWorks, thenContinues)
 )
 `;
+
+interface JsonFailureReport {
+  readonly scenarios: ReadonlyArray<{
+    readonly outcome: {
+      readonly status: string;
+      readonly error?: string;
+      readonly failure?: {
+        readonly _tag: string;
+        readonly error?: {
+          readonly _tag: string;
+          readonly step?: string;
+          readonly line?: number;
+          readonly cause?: string;
+        };
+      };
+    };
+  }>;
+}
