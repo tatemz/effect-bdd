@@ -59,6 +59,18 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("shows failure paths relative to the working directory", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
+        const text = yield* reportFailure(fixture);
+
+        assert.match(text, /FAIL test\/\.effect-bdd-reporter-[^/]+\/counter\.feature:7/);
+        assert.strictEqual(text.includes(process.cwd()), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
