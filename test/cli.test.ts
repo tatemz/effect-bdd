@@ -39,10 +39,7 @@ describe("cli", () => {
         );
 
         assert.match(result.stdout, /Scenarios: 27 total, 0 failed, 27 passed \(\d+ms\)/);
-        assert.match(
-          result.stdout,
-          /Discovery: 9 feature file\(s\), 2 step module\(s\), 9 feature definition\(s\), 27 scenario\(s\) \(27 selected\)/,
-        );
+        assert.strictEqual(/Discovery:/.test(result.stdout), false);
         assert.strictEqual(/RUNNING .*fixtures/.test(result.stdout), false);
         assert.strictEqual(/PASS .*fixtures/.test(result.stdout), false);
         assert.strictEqual(/RUNNING .*fixtures/.test(result.stderr), false);

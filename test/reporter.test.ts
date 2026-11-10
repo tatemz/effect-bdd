@@ -147,6 +147,17 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("keeps discovery details out of the default report", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
+        const text = yield* reportFailure(fixture);
+
+        assert.strictEqual(text.includes("Discovery:"), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
