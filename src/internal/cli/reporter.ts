@@ -243,6 +243,7 @@ const renderText = (
   verbose: boolean,
   includeScenarioLines: boolean,
 ): string => {
+  const featureSources = featureSourceMap(result);
   const discovery = renderDiscoveryText(result.discovery, verbose);
   const summary = [
     `Features: ${result.summary.features}, Scenarios: ${result.summary.total}, passed: ${result.summary.passed}, failed: ${result.summary.failed}`,
@@ -250,11 +251,11 @@ const renderText = (
     "",
   ];
   const scenarioLines = verbose
-    ? Arr.map(result.results, renderScenarioText)
+    ? Arr.map(result.results, (scenario) => renderScenarioText(scenario, featureSources))
     : Fn.pipe(
         result.results,
         Arr.filter((scenario) => scenario.outcome._tag === "Failed"),
-        Arr.map(renderScenarioText),
+        Arr.map((scenario) => renderScenarioText(scenario, featureSources)),
       );
   const diagnosticLines = renderDiagnosticsText(result.diagnostics);
   return Fn.pipe(
@@ -265,6 +266,9 @@ const renderText = (
     Arr.join("\n"),
   );
 };
+
+const featureSourceMap = (result: CliRunResult): ReadonlyMap<string, string> =>
+  new Map(Arr.map(result.featureSources, (source) => [source.path, source.source] as const));
 
 const renderDiscoveryText = (
   discovery: DiscoverySummary,
@@ -310,19 +314,43 @@ const renderScenarioFinishedEvent = (
   event: Extract<RunEvent, { readonly _tag: "ScenarioFinished" }>,
   verbose: boolean,
 ): string | undefined =>
-  event.result.outcome._tag === "Passed" && !verbose ? undefined : renderScenarioText(event.result);
+  event.result.outcome._tag === "Passed" && !verbose
+    ? undefined
+    : renderScenarioText(event.result, emptyFeatureSources);
 
-const renderScenarioText = (result: ScenarioResult): string => {
+const renderScenarioText = (
+  result: ScenarioResult,
+  featureSources: ReadonlyMap<string, string>,
+): string => {
   const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
   const line =
     result.outcome._tag === "Passed" ? result.task.core.scenarioLine : result.outcome.error.line;
   const base = `${prefix} ${result.task.featurePath}:${line} ${renderScenarioName(
     result,
   )} (${result.durationMillis}ms)`;
-  return result.outcome._tag === "Passed"
-    ? base
-    : `${base}\n${indentText(renderError(result.outcome.error), 2)}`;
+  if (result.outcome._tag === "Passed") {
+    return base;
+  }
+  const frame = renderFrame(featureSources.get(result.task.featurePath), line);
+  const error = indentText(renderError(result.outcome.error), 2);
+  return frame.length === 0 ? `${base}\n\n${error}` : `${base}\n\n${frame.join("\n")}\n\n${error}`;
 };
+
+const renderFrame = (source: string | undefined, line: number): ReadonlyArray<string> => {
+  if (source === undefined) {
+    return [];
+  }
+  const lines = source.split("\n");
+  const start = Math.max(1, line - 2);
+  const end = Math.min(lines.length, line + 2);
+  const width = String(end).length;
+  return Arr.map(Arr.range(start, end), (current) => {
+    const marker = current === line ? ">" : " ";
+    return `${marker} ${String(current).padStart(width)} | ${lines[current - 1] ?? ""}`;
+  });
+};
+
+const emptyFeatureSources: ReadonlyMap<string, string> = new Map();
 
 const renderTaskName = (task: ScenarioTask): string =>
   task.core.ruleTitle === undefined

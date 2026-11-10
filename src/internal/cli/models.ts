@@ -119,6 +119,7 @@ export interface CliRunResult {
   readonly diagnostics: ReadonlyArray<CliDiagnostic>;
   readonly summary: RunSummary;
   readonly discovery: DiscoverySummary;
+  readonly featureSources: ReadonlyArray<FeatureSource>;
 }
 
 /** @internal */

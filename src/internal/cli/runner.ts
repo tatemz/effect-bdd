@@ -98,6 +98,7 @@ export const run: (
       built,
       filteredTasks,
     ),
+    featureSources: sources,
   } satisfies CliRunResult;
 });
 
