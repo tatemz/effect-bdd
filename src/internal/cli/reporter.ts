@@ -708,7 +708,7 @@ const isNoiseFrame = (line: string): boolean => {
 
 const frameLabel = (line: string): string => {
   const location = frameLocation(line);
-  return location === undefined ? line : `at ${location}`;
+  return location === undefined ? line : `at ${location.replace(/^file:\/\//, "")}`;
 };
 
 const renderCause = (cause: unknown): string | undefined => {
