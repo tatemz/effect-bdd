@@ -82,6 +82,19 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("reports a thrown defect and continues the run", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: defectFeature, steps: defectSteps });
+        const text = yield* reportFailure(fixture);
+
+        assert.match(text, /Defect: kaboom: the cart repository is null/);
+        assert.match(text, /Scenarios: 2 total, 1 failed, 1 passed \(\d+ms\)/);
+        assert.match(text, /A step throws/);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -234,5 +247,35 @@ const thenItems = Bdd.then\`the cart has items\`(() => Effect.void)
 
 export const tables = Bdd.feature("Table decoding").pipe(
   Bdd.scenario("The table carries a bad row").pipe(givenProducts, thenItems)
+)
+`;
+
+const defectFeature = `
+Feature: Defects
+
+  Scenario: A step throws
+    Given a step that throws
+    Then the run continues
+
+  Scenario: The next scenario runs
+    Given a step that works
+    Then the run continues
+`;
+
+const defectSteps = `
+import { Bdd } from "effect-bdd"
+import { Effect } from "effect"
+
+const givenThrows = Bdd.given\`a step that throws\`(() =>
+  Effect.sync(() => {
+    throw new Error("kaboom: the cart repository is null")
+  })
+)
+const givenWorks = Bdd.given\`a step that works\`(() => Effect.void)
+const thenContinues = Bdd.then\`the run continues\`(() => Effect.void)
+
+export const defects = Bdd.feature("Defects").pipe(
+  Bdd.scenario("A step throws").pipe(givenThrows, thenContinues),
+  Bdd.scenario("The next scenario runs").pipe(givenWorks, thenContinues)
 )
 `;
