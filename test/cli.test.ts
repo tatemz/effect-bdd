@@ -45,13 +45,13 @@ describe("cli", () => {
         );
         assert.strictEqual(/RUNNING .*fixtures/.test(result.stdout), false);
         assert.strictEqual(/PASS .*fixtures/.test(result.stdout), false);
-        assert.match(result.stderr, /RUNNING .*fixtures/);
+        assert.strictEqual(/RUNNING .*fixtures/.test(result.stderr), false);
         assert.strictEqual(/PASS .*fixtures/.test(result.stderr), false);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("streams passing scenario results to stderr in verbose text output", () =>
+  it.effect("writes passing scenarios to stdout in verbose text output", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -76,9 +76,54 @@ describe("cli", () => {
         );
 
         assert.match(result.stdout, /Scenarios: 27 total, 0 failed, 27 passed \(\d+ms\)/);
-        assert.strictEqual(/PASS .*Minimal \/ minimalistic/.test(result.stdout), false);
-        assert.match(result.stderr, /RUNNING .*Minimal \/ minimalistic/);
-        assert.match(result.stderr, /PASS .*Minimal \/ minimalistic/);
+        assert.match(result.stdout, /PASS .*Minimal \/ minimalistic/);
+        assert.strictEqual(/RUNNING .*Minimal \/ minimalistic/.test(result.stderr), false);
+        assert.strictEqual(/PASS .*Minimal \/ minimalistic/.test(result.stderr), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("writes failure detail to stdout and leaves progress off a pipe", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: `
+Feature: Counter
+
+  Scenario: Fails
+    Given a clean counter
+    When the counter is read
+    Then the counter is 1
+`,
+          steps: counterStepsFor(`
+  Bdd.scenario("Fails").pipe(givenCleanCounter, whenRead, thenCounterIs)
+`),
+        });
+        const path = yield* Path.Path;
+        const bddRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+        const result = yield* Effect.promise(async () => {
+          try {
+            return await execFilePromise(
+              process.execPath,
+              [
+                path.join(bddRoot, "src", "bin.ts"),
+                "--features",
+                fixture.path("*.feature"),
+                "--steps",
+                fixture.path("*.mjs"),
+                "--reporter",
+                "text",
+              ],
+              { cwd: bddRoot },
+            );
+          } catch (error) {
+            return error as { readonly stdout?: string; readonly stderr?: string };
+          }
+        });
+
+        assert.match(result.stdout ?? "", /FAIL .*counter\.feature:7/);
+        assert.match(result.stdout ?? "", /Cause: expected 1, got 0/);
+        assert.strictEqual(/RUNNING/.test(result.stderr ?? ""), false);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );

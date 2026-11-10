@@ -71,6 +71,17 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("ends the file report with a newline", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: counterFeature, steps: counterSteps });
+        const text = yield* reportFailure(fixture);
+
+        assert.strictEqual(text.endsWith("\n"), true);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("renders the fields of a tagged cause", () =>
     Effect.scoped(
       Effect.gen(function* () {
