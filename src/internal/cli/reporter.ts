@@ -312,7 +312,9 @@ const renderScenarioFinishedEvent = (
 
 const renderScenarioText = (result: ScenarioResult): string => {
   const prefix = result.outcome._tag === "Passed" ? "PASS" : "FAIL";
-  const base = `${prefix} ${result.task.featurePath}:${result.task.core.scenarioLine} ${renderScenarioName(
+  const line =
+    result.outcome._tag === "Passed" ? result.task.core.scenarioLine : result.outcome.error.line;
+  const base = `${prefix} ${result.task.featurePath}:${line} ${renderScenarioName(
     result,
   )} (${result.durationMillis}ms)`;
   return result.outcome._tag === "Passed"
