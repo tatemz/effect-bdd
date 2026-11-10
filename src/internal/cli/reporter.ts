@@ -244,55 +244,48 @@ const renderText = (
   includeScenarioLines: boolean,
 ): string => {
   const featureSources = featureSourceMap(result);
-  const discovery = renderDiscoveryText(result.discovery, verbose);
-  const summary = [
-    `Features: ${result.summary.features}, Scenarios: ${result.summary.total}, passed: ${result.summary.passed}, failed: ${result.summary.failed}`,
-    `Duration: ${result.summary.durationMillis}ms`,
-    "",
-  ];
-  const scenarioLines = verbose
-    ? Arr.map(result.results, (scenario) => renderScenarioText(scenario, featureSources))
-    : Fn.pipe(
-        result.results,
-        Arr.filter((scenario) => scenario.outcome._tag === "Failed"),
-        Arr.map((scenario) => renderScenarioText(scenario, featureSources)),
-      );
-  const diagnosticLines = renderDiagnosticsText(result.diagnostics);
-  return Fn.pipe(
-    discovery,
-    Arr.appendAll(summary),
-    Arr.appendAll(includeScenarioLines ? scenarioLines : []),
-    Arr.appendAll(diagnosticLines),
-    Arr.join("\n"),
-  );
+  const failed = Arr.filter(result.results, (scenario) => scenario.outcome._tag === "Failed");
+  const selected = verbose ? result.results : failed;
+  const scenarioLines = includeScenarioLines
+    ? Arr.map(selected, (scenario) => renderScenarioText(scenario, featureSources))
+    : [];
+  const failureList =
+    failed.length === 0
+      ? ""
+      : ["Failed scenarios:", ...Arr.map(failed, renderFailureListItem)].join("\n");
+  return [
+    renderDiscoveryText(result.discovery, verbose),
+    scenarioLines.join("\n\n"),
+    renderDiagnosticsText(result.diagnostics),
+    `Scenarios: ${result.summary.total} total, ${result.summary.failed} failed, ${result.summary.passed} passed (${result.summary.durationMillis}ms)`,
+    failureList,
+  ]
+    .filter((section) => section.length > 0)
+    .join("\n\n");
 };
 
 const featureSourceMap = (result: CliRunResult): ReadonlyMap<string, string> =>
   new Map(Arr.map(result.featureSources, (source) => [source.path, source.source] as const));
 
-const renderDiscoveryText = (
-  discovery: DiscoverySummary,
-  verbose: boolean,
-): ReadonlyArray<string> => {
-  const summary = [
-    `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`,
-    "",
-  ];
+const renderFailureListItem = (result: ScenarioResult): string =>
+  `  ${result.task.featurePath}:${result.task.core.scenarioLine} ${renderScenarioName(result)}`;
+
+const renderDiscoveryText = (discovery: DiscoverySummary, verbose: boolean): string => {
+  const summary = `Discovery: ${discovery.featurePaths.length} feature file(s), ${discovery.stepModulePaths.length} step module(s), ${discovery.featureDefinitions.length} feature definition(s), ${discovery.scenariosDiscovered} scenario(s) (${discovery.scenariosSelected} selected)`;
   if (!verbose) {
     return summary;
   }
-  return Fn.pipe(
+  return [
     summary,
-    Arr.appendAll(["Feature files:"]),
-    Arr.appendAll(Arr.map(discovery.featurePaths, (path) => `  ${path}`)),
-    Arr.appendAll(["Step modules:"]),
-    Arr.appendAll(Arr.map(discovery.stepModulePaths, (path) => `  ${path}`)),
-    Arr.appendAll(["Feature definitions:"]),
-    Arr.appendAll(Arr.map(discovery.featureDefinitions, (title) => `  ${title}`)),
-    Arr.appendAll(["Selected scenarios:"]),
-    Arr.appendAll(Arr.map(discovery.selectedScenarios, renderDiscoveredScenario)),
-    Arr.appendAll([""]),
-  );
+    "Feature files:",
+    ...Arr.map(discovery.featurePaths, (path) => `  ${path}`),
+    "Step modules:",
+    ...Arr.map(discovery.stepModulePaths, (path) => `  ${path}`),
+    "Feature definitions:",
+    ...Arr.map(discovery.featureDefinitions, (title) => `  ${title}`),
+    "Selected scenarios:",
+    ...Arr.map(discovery.selectedScenarios, renderDiscoveredScenario),
+  ].join("\n");
 };
 
 const renderDiscoveredScenario = (
@@ -384,7 +377,7 @@ ${Fn.pipe(result.results, Arr.map(renderScenarioHtml), Arr.join("\n"))}
       </tbody>
     </table>
     <h2>Diagnostics</h2>
-    <pre>${escapeHtml(Fn.pipe(renderDiagnosticsText(result.diagnostics), Arr.join("\n")))}</pre>
+    <pre>${escapeHtml(renderDiagnosticsText(result.diagnostics))}</pre>
   </body>
 </html>
 `;
@@ -403,11 +396,9 @@ const renderScenarioHtml = (result: ScenarioResult): string => {
         </tr>`;
 };
 
-const renderDiagnosticsText = (
-  diagnostics: ReadonlyArray<CliDiagnostic>,
-): ReadonlyArray<string> => {
+const renderDiagnosticsText = (diagnostics: ReadonlyArray<CliDiagnostic>): string => {
   if (diagnostics.length === 0) {
-    return [];
+    return "";
   }
   const unmatched = Fn.pipe(
     diagnostics,
@@ -424,12 +415,16 @@ const renderDiagnosticsText = (
         diagnostic._tag === "UnusedScenarioDefinition",
     ),
   );
-  return Fn.pipe(
-    unmatched.length === 0 ? [] : ["", "Unmatched source:"],
-    Arr.appendAll(Arr.map(unmatched, renderDiagnosticText)),
-    Arr.appendAll(unused.length === 0 ? [] : ["", "Unused definitions:"]),
-    Arr.appendAll(Arr.map(unused, renderDiagnosticText)),
-  );
+  return [
+    unmatched.length === 0
+      ? ""
+      : ["Unmatched source:", ...Arr.map(unmatched, renderDiagnosticText)].join("\n"),
+    unused.length === 0
+      ? ""
+      : ["Unused definitions:", ...Arr.map(unused, renderDiagnosticText)].join("\n"),
+  ]
+    .filter((section) => section.length > 0)
+    .join("\n\n");
 };
 
 const renderDiagnosticText = (diagnostic: CliDiagnostic): string => {
