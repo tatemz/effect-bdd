@@ -31,6 +31,7 @@ export class ParseError extends Schema.TaggedError<ParseError>()("ParseError", {
   message: Schema.String,
   line: Schema.Number,
   column: Schema.Number,
+  path: Schema.optionalKey(Schema.String),
 }) {}
 
 /**

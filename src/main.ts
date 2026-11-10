@@ -9,10 +9,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as CliError from "effect/cli/CliError";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
 import PackageJson from "../package.json" with { type: "json" };
+import { ParseError } from "./Errors.ts";
 import { GlobResolver } from "./internal/cli/glob.ts";
 import {
   isFatalDiagnostic,
@@ -232,7 +234,12 @@ export const run = Command.run(cli, {
 });
 
 const toUserError = (error: { readonly message: string }): CliError.UserError =>
-  new CliError.UserError({ cause: error.message });
+  new CliError.UserError({
+    cause: Schema.is(ParseError)(error) ? formatParseError(error) : error.message,
+  });
+
+const formatParseError = (error: ParseError): string =>
+  `${error.path ?? "<inline>"}:${error.line}:${error.column}: ${error.message}`;
 
 const processArgv: Effect.Effect<ReadonlyArray<string>> = Effect.sync(() => process.argv);
 
