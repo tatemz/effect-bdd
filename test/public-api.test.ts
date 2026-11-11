@@ -39,6 +39,32 @@ describe("public API", () => {
       }, TypeError);
     });
 
+    it("freezes the nested model collections", () => {
+      const step = Bdd.then`the value is stable`(() => Effect.succeed(1));
+      const scenario = Bdd.scenario("Stable value").pipe(
+        step,
+        Bdd.tap(() => Effect.void),
+      );
+      const feature = Bdd.feature("Counter").pipe(
+        scenario,
+        Bdd.tap(() => Effect.void),
+      );
+
+      assert.strictEqual(Object.isFrozen(scenario.steps), true);
+      assert.strictEqual(Object.isFrozen(scenario.providers), true);
+      assert.strictEqual(Object.isFrozen(scenario.errorTaps), true);
+      assert.strictEqual(Object.isFrozen(feature.scenarios), true);
+      assert.strictEqual(Object.isFrozen(feature.taps), true);
+      assert.strictEqual(Object.isFrozen(feature.taps[0]), true);
+      assert.strictEqual(Object.isFrozen(feature.taps[0].taps), true);
+      const tapNode = scenario.steps[1];
+      if (!Bdd.isStep(tapNode)) {
+        assert.strictEqual(Object.isFrozen(tapNode.taps), true);
+      }
+      assert.throws(() => Reflect.apply(Array.prototype.push, scenario.steps, [step]), TypeError);
+      assert.throws(() => Reflect.apply(Array.prototype.push, feature.scenarios, []), TypeError);
+    });
+
     it("exposes model guards backed by non-enumerable symbol brands", () => {
       const step = Bdd.then`the value is stable`(() => Effect.succeed(1));
       const scenario = Bdd.scenario("Stable value").pipe(step);
