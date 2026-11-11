@@ -466,9 +466,7 @@ const runStep: <E, R>(
   const stepMetadata = Context.make(StepMetadata, {
     step: step.text,
     line,
-    ...(stepDefinition.definition === undefined
-      ? {}
-      : { definition: stepDefinition.definition }),
+    ...(stepDefinition.definition === undefined ? {} : { definition: stepDefinition.definition }),
   });
   const stepEffect = Fn.pipe(
     stepDefinition.run(captures, argument, state),
@@ -485,10 +483,9 @@ const runStep: <E, R>(
             : { definition: stepDefinition.definition }),
         }),
     ),
-    Effect.catchCause((cause: Cause.Cause<StepError>) =>
-      Cause.hasDies(cause)
-        ? Effect.failCause(Cause.annotate(cause, stepMetadata))
-        : Effect.failCause(cause),
+    Effect.catchCauseIf(
+      (cause: Cause.Cause<StepError>) => Cause.hasDies(cause),
+      (cause: Cause.Cause<StepError>) => Effect.failCause(Cause.annotate(cause, stepMetadata)),
     ),
   );
   const timeout = stepDefinition.timeout ?? options.stepTimeout;

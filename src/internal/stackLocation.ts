@@ -18,10 +18,7 @@ export const filePathFromStackUrl = (url: string): string => {
   return /^\/[A-Za-z]:\//.test(decoded) ? Str.slice(1)(decoded) : decoded;
 };
 
-const pathnameFromFileUrl = (
-  host: string,
-  segments: ReadonlyArray<string>,
-): string =>
+const pathnameFromFileUrl = (host: string, segments: ReadonlyArray<string>): string =>
   host === "" || host === "localhost"
     ? `/${Arr.join(segments, "/")}`
     : `//${host}/${Arr.join(segments, "/")}`;

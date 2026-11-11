@@ -277,6 +277,7 @@ const runScenario = Effect.fnUntraced(function* (
   return scenarioResult;
 });
 
+// oxlint-disable-next-line complexity
 const outcomeFromExit = (
   exit: Exit.Exit<CoreRunner.ScenarioReport, Bdd.RunError>,
 ): ScenarioResult["outcome"] => {
