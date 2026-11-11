@@ -257,8 +257,8 @@ Feature: Scenario providers
         const events = yield* fs.readFileString(fixture.path("events.log"));
 
         // The earlier provider is released, the failing provider never reaches
-        // its steps, and the error tap does not run for setup failures.
-        assert.strictEqual(events, "database:acquire\nmessage:setup\ndatabase:release\n");
+        // its steps, and the error tap observes the setup failure afterwards.
+        assert.strictEqual(events, "database:acquire\nmessage:setup\ndatabase:release\ntapError\n");
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
