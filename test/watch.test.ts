@@ -202,6 +202,23 @@ describe("child invocation", () => {
     assert.deepStrictEqual(invocation.args, ["--watchdog", "true"]);
   });
 
+  it("strips Node watch flags from inherited exec argv", () => {
+    const invocation = childInvocation(
+      ["node", "bin.ts"],
+      [
+        "--watch",
+        "--watch-path=src",
+        "--watch-preserve-output",
+        "--watch-path",
+        "lib",
+        "--import",
+        "tsx",
+      ],
+    );
+
+    assert.deepStrictEqual(invocation.execArgv, ["--import", "tsx"]);
+  });
+
   it("falls back to the running interpreter when argv is empty", () => {
     const invocation = childInvocation([], []);
     assert.strictEqual(invocation.executable, process.execPath);
@@ -238,8 +255,8 @@ describe("watch narrowing environment", () => {
     assert.deepStrictEqual(narrowFromEnv({ [narrowEnvName]: "not-json" }), Option.none());
   });
 
-  it("applies narrowing only to marked watch children", () => {
-    const options = { features: ["features/*.feature"], parallel: 2 };
+  it("narrows marked watch children and disables strict for the narrowed run", () => {
+    const options = { features: ["features/*.feature"], parallel: 2, strict: true };
     const env = {
       [watchChildEnvName]: "1",
       [narrowEnvName]: '["features/login.feature"]',
@@ -247,11 +264,13 @@ describe("watch narrowing environment", () => {
     assert.deepStrictEqual(applyFeatureNarrowing(options, env), {
       ...options,
       features: ["features/login.feature"],
+      strict: false,
     });
     assert.strictEqual(
       applyFeatureNarrowing(options, { [narrowEnvName]: env[narrowEnvName] }),
       options,
     );
+    assert.strictEqual(applyFeatureNarrowing(options, { [watchChildEnvName]: "1" }), options);
   });
 
   it("detects a watch child by its marker variable", () => {

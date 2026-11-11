@@ -219,7 +219,10 @@ NODE_OPTIONS="--import tsx" pnpm exec effect-bdd \
 The first run covers every selected feature. After that, editing one feature file
 reruns only that file, while editing a step module reruns everything, because a
 shared step change can affect any feature. `--tags` and `--title` apply to every
-rerun. Stop the session with Ctrl+C.
+rerun. A narrowed rerun is a focused run, so `--strict` is ignored for it:
+definitions belonging to features outside the changed set would otherwise always
+be reported as unused. A full rerun still honors `--strict`. Stop the session with
+Ctrl+C.
 
 Each rerun starts a fresh child process, so step modules are reloaded and Node's
 module cache cannot serve you stale definitions.

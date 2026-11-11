@@ -39,21 +39,29 @@ export const narrowFromEnv = (
   return Schema.decodeOption(featurePathsJson)(value);
 };
 
+type Narrowed<A> = Omit<A, "features" | "strict"> & {
+  readonly features: ReadonlyArray<string>;
+  readonly strict: boolean;
+};
+
 /**
  * Apply the narrowing only to a marked watch child. The parent may inherit
  * variables from its shell, so an unmarked CLI invocation must use its parsed
- * feature patterns unchanged.
+ * feature patterns unchanged. A narrowed run also drops `strict`, because
+ * definitions for the features it did not select are necessarily unused.
  *
  * @internal
  */
-export const applyFeatureNarrowing = <A extends { readonly features: ReadonlyArray<string> }>(
+export const applyFeatureNarrowing = <
+  A extends { readonly features: ReadonlyArray<string>; readonly strict: boolean },
+>(
   options: A,
   env: Record<string, string | undefined>,
-): A =>
+): Narrowed<A> =>
   isWatchChildEnv(env)
     ? Option.match(narrowFromEnv(env), {
         onNone: () => options,
-        onSome: (features) => ({ ...options, features }),
+        onSome: (features) => ({ ...options, features, strict: false }),
       })
     : options;
 
