@@ -114,6 +114,8 @@ describe("text reporter", () => {
         assert.match(text, /Defect: kaboom: the cart repository is null/);
         assert.match(text, /at .*steps\.mjs:\d+/);
         assert.strictEqual(/file:\/\//.test(text), false);
+        assert.match(text, /FAIL .*defect\.feature:6 Defects \/ A step throws/);
+        assert.match(text, /Definition: .*steps\.mjs:\d+/);
         assert.match(text, /Scenarios: 2 total, 1 failed, 1 passed \(\d+ms\)/);
         assert.match(text, /A step throws/);
       }),
@@ -154,6 +156,41 @@ describe("text reporter", () => {
         assert.strictEqual(outcome?.failure?.error?.line, 7);
         assert.match(outcome?.failure?.error?.cause ?? "", /expected 1, got 0/);
         assert.strictEqual(outcome?.failure?.error?.cause, "expected 1, got 0");
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("writes defect step metadata to JSON", () =>
+    Effect.scoped(
+      // oxlint-disable-next-line complexity
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({ feature: defectFeature, steps: defectSteps });
+        const report = fixture.path("report.json");
+
+        yield* Effect.exit(
+          runCli([
+            "--features",
+            fixture.path("*.feature"),
+            "--steps",
+            fixture.stepFiles(),
+            "--reporter",
+            "json",
+            "--output-file.json",
+            report,
+          ]),
+        );
+
+        const fs = yield* FileSystem.FileSystem;
+        const json = yield* Schema.decodeUnknownEffect(JsonFailureReport)(
+          JSON.parse(yield* fs.readFileString(report)),
+        );
+        const outcome = json.scenarios[0]?.outcome;
+
+        assert.strictEqual(outcome?.failure?._tag, "Defect");
+        assert.strictEqual(outcome?.failure?.step, "a step that throws");
+        assert.strictEqual(outcome?.failure?.line, 6);
+        assert.match(outcome?.failure?.definition?.path ?? "", /steps\.mjs$/);
+        assert.strictEqual(typeof outcome?.failure?.definition?.line, "number");
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -422,7 +459,8 @@ const defectFeature = `
 Feature: Defects
 
   Scenario: A step throws
-    Given a step that throws
+    Given a step that works
+    Then a step that throws
     Then the run continues
 
   Scenario: The next scenario runs
@@ -434,19 +472,21 @@ const defectSteps = `
 import { Bdd } from "effect-bdd"
 import { Effect } from "effect"
 
-const givenThrows = Bdd.given\`a step that throws\`(() =>
+const givenWorks = Bdd.given\`a step that works\`(() => Effect.void)
+const thenThrows = Bdd.then\`a step that throws\`(() =>
   Effect.sync(() => {
     throw new Error("kaboom: the cart repository is null")
   })
 )
-const givenWorks = Bdd.given\`a step that works\`(() => Effect.void)
 const thenContinues = Bdd.then\`the run continues\`(() => Effect.void)
 
 export const defects = Bdd.feature("Defects").pipe(
-  Bdd.scenario("A step throws").pipe(givenThrows, thenContinues),
+  Bdd.scenario("A step throws").pipe(givenWorks, thenThrows, thenContinues),
   Bdd.scenario("The next scenario runs").pipe(givenWorks, thenContinues)
 )
 `;
+
+const JsonDefinition = Schema.Struct({ path: Schema.String, line: Schema.Number });
 
 const JsonFailureReport = Schema.Struct({
   scenarios: Schema.Array(
@@ -465,9 +505,13 @@ const JsonFailureReport = Schema.Struct({
                 step: Schema.optionalKey(Schema.String),
                 line: Schema.optionalKey(Schema.Number),
                 cause: Schema.optionalKey(Schema.String),
-                definition: Schema.optionalKey(Schema.Unknown),
+                definition: Schema.optionalKey(JsonDefinition),
               }),
             ),
+            cause: Schema.optionalKey(Schema.String),
+            step: Schema.optionalKey(Schema.String),
+            line: Schema.optionalKey(Schema.Number),
+            definition: Schema.optionalKey(JsonDefinition),
           }),
         ),
       }),
