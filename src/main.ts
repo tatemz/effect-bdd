@@ -275,12 +275,20 @@ const reporterOptions = Effect.fnUntraced(function* (verbose: boolean) {
   } as const;
 });
 
-const useColor = (
+/** @internal */
+export const useColor = (
   noColor: Option.Option<string>,
   forceColor: Option.Option<string>,
   isTTY: boolean,
-): boolean =>
-  Option.isNone(noColor) && (isTTY || Option.exists(forceColor, (value) => value !== "0"));
+): boolean => {
+  if (Option.isSome(noColor)) {
+    return false;
+  }
+  if (Option.isSome(forceColor)) {
+    return forceColor.value !== "0";
+  }
+  return isTTY;
+};
 
 const timedMillis: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<number, E, R> =
   Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {

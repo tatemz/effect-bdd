@@ -1,9 +1,9 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
 import { Command } from "effect/cli";
-import { Cause, Effect, FileSystem, Path, Schema } from "effect";
+import { Cause, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { fileURLToPath } from "node:url";
-import { cli } from "../src/main.ts";
+import { cli, useColor } from "../src/main.ts";
 import { renderDefect, renderDefectError } from "../src/internal/cli/reporter.ts";
 
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
@@ -29,6 +29,12 @@ describe("text reporter", () => {
 
     assert.match(text, /body boom/);
     assert.match(text, /teardown boom/);
+  });
+
+  it("lets FORCE_COLOR=0 override a TTY", () => {
+    assert.strictEqual(useColor(Option.none(), Option.some("0"), true), false);
+    assert.strictEqual(useColor(Option.none(), Option.some("1"), false), true);
+    assert.strictEqual(useColor(Option.some("1"), Option.some("1"), true), false);
   });
 
   it.effect("reports the failing step line, not the scenario line", () =>
