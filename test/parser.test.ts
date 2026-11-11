@@ -226,4 +226,55 @@ Feature: Shopping cart
       ]);
     }),
   );
+
+  it.effect("reports a localized leading step with its source keyword", () => {
+    const feature = Bdd.feature("Compteur").pipe(
+      Bdd.scenario("Incrément").pipe(Bdd.given`un compteur vide`(() => Effect.succeed(0))),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `# language: fr
+Fonctionnalité: Compteur
+  Scénario: Incrément
+    Et un compteur vide
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "ParseError");
+      if (error._tag === "ParseError") {
+        assert.strictEqual(error.message, "Et found before a Given, When, or Then step");
+        assert.strictEqual(error.line, 4);
+      }
+    });
+  });
+
+  it.effect("reports an outline with no examples as not runnable", () => {
+    const feature = Bdd.feature("Probe").pipe(
+      Bdd.scenario("Outline").pipe(Bdd.given`a value`(() => Effect.succeed(0))),
+    );
+
+    return Effect.gen(function* () {
+      const error = yield* runError(
+        runBdd(
+          feature,
+          `Feature: Probe
+  Scenario Outline: Outline
+    Given a <value>
+  Examples:
+    | value |
+`,
+        ),
+      );
+
+      assert.strictEqual(error._tag, "ParseError");
+      if (error._tag === "ParseError") {
+        assert.match(error.message, /at least one runnable Scenario/);
+        assert.match(error.message, /Examples row/);
+      }
+    });
+  });
 });

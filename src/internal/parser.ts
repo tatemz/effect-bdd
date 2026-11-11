@@ -18,9 +18,6 @@ import * as Str from "effect/String";
 import { ParseError } from "../Errors.ts";
 
 /** @internal */
-export type Keyword = "Given" | "When" | "Then" | "And" | "But" | "*";
-
-/** @internal */
 export interface CompiledFeature {
   readonly name: string;
   readonly line: number;
@@ -82,7 +79,7 @@ const toFeature: (parsed: ParsedSource) => Effect.Effect<CompiledFeature, ParseE
     }
     if (parsed.pickles.length === 0) {
       return yield* parseError(
-        "Expected at least one Scenario",
+        "Expected at least one runnable Scenario (a Scenario Outline needs at least one Examples row)",
         feature.location.line,
         feature.location.column ?? 1,
       );
@@ -191,21 +188,10 @@ export const stepLine = (
 export const stepKeyword = (
   step: { readonly astNodeIds: ReadonlyArray<string> },
   index: SourceIndex,
-): Keyword => {
+): string => {
   const source = findStep(step, index);
-  return source === undefined ? "Given" : normalizeKeyword(source.keyword);
+  return source === undefined ? "Given" : Str.trim(source.keyword);
 };
-
-const keywords: Readonly<Record<string, Keyword>> = {
-  Given: "Given",
-  When: "When",
-  Then: "Then",
-  And: "And",
-  But: "But",
-  "*": "*",
-};
-
-const normalizeKeyword = (keyword: string): Keyword => keywords[Str.trim(keyword)] ?? "Given";
 
 const parseError = (
   message: string,
