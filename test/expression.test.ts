@@ -76,4 +76,13 @@ describe("expressions", () => {
 
     assert.throws(() => Bdd.when`${value} and ${value}`, /Duplicate capture name "value"/);
   });
+
+  it("allows the same capture name in different expressions", () => {
+    const value = Bdd.capture("value", Schema.String);
+    const first = Bdd.when`first ${value}`;
+    const second = Bdd.when`second ${value}`;
+
+    assert.strictEqual(Option.isSome(first.expression.match("first one")), true);
+    assert.strictEqual(Option.isSome(second.expression.match("second two")), true);
+  });
 });
