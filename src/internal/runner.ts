@@ -145,7 +145,6 @@ export const runScenarioTask = <E, R>(
           runSteps(task, options),
           provideScenarioContext(context),
           Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
-          tapScenarioFailures(task),
           Scope.provide(scope),
         );
       });
@@ -161,7 +160,7 @@ export const runScenarioTask = <E, R>(
         tags: task.tags,
       };
     }),
-  );
+  ).pipe(tapScenarioFailures(task));
 
 const buildScenarioProviders = <R>(
   task: ScenarioTask<unknown, R>,
@@ -198,15 +197,14 @@ const provideScenarioContext =
  * `Effect.tapError`: the original failure is preserved, and a handler failure
  * becomes a `TapError` that replaces it.
  */
-const tapScenarioFailures = <E, R>(
-  task: ScenarioTask<E, R>,
-): (<A>(effect: Effect.Effect<A, RunError, R>) => Effect.Effect<A, RunError, R>) => {
-  const handlers = task.scenarioDefinition.errorTaps;
-  if (handlers.length === 0) {
-    return (effect) => effect;
-  }
-  return (effect) =>
-    Fn.pipe(
+const tapScenarioFailures =
+  <E, R>(task: ScenarioTask<E, R>) =>
+  <A, R0>(effect: Effect.Effect<A, RunError, R0>): Effect.Effect<A, RunError, R0> => {
+    const handlers = task.scenarioDefinition.errorTaps;
+    if (handlers.length === 0) {
+      return effect;
+    }
+    return Fn.pipe(
       effect,
       Effect.catchIf(
         () => true,
@@ -229,7 +227,7 @@ const tapScenarioFailures = <E, R>(
           ),
       ),
     );
-};
+  };
 
 const closeScenarioScope = <A, E>(
   scope: Scope.Closeable,

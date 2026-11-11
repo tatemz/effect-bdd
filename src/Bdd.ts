@@ -757,9 +757,10 @@ export interface TapErrorOn {
  * scenario's failures. On a feature it observes the failures of the scenarios
  * declared before it — a tap declared before every scenario observes nothing.
  * The handler receives the failure — {@link ScenarioSetupError},
- * {@link StepError}, {@link ScenarioTeardownError}, or {@link TapError} — and
- * the scenario still fails with the original error. `ParseError` and
- * `MatchError` are never observed because they fail before a scenario executes.
+ * {@link StepError}, {@link ScenarioTeardownError}, {@link TapError}, or a
+ * {@link MatchError} from step verification — and the scenario still fails with
+ * the original error. `ParseError` is never observed because it fails before a
+ * scenario executes.
  *
  * If the handler itself fails, its {@link TapError} replaces the original
  * failure, exactly as an `Effect.tapError` handler failure would.

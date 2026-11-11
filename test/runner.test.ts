@@ -842,7 +842,7 @@ Feature: Scenario providers
       if (error._tag === "ScenarioSetupError") {
         assert.strictEqual(error.cause, setupFailure);
       }
-      assert.deepStrictEqual(events, ["acquire", "release"]);
+      assert.deepStrictEqual(events, ["acquire", "release", "tapError"]);
     });
   });
 
