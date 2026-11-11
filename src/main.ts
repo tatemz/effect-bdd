@@ -87,12 +87,12 @@ const parallel = Flag.Int("parallel").pipe(
 
 const stepTimeout = Flag.String("step-timeout").pipe(
   Flag.withDescription(
-    'Maximum duration for each step, using Effect Duration input such as "500 millis" or "5 seconds".',
+    'Maximum duration for each step, using Effect Duration input such as "500 millis", "5 seconds", or "Infinity".',
   ),
   Flag.mapTryCatch(
     (value) => parseStepTimeout(value),
     () =>
-      'Expected --step-timeout to be a positive finite Effect duration, such as "500 millis" or "5 seconds"',
+      'Expected --step-timeout to be a positive Effect duration, such as "500 millis", "5 seconds", or "Infinity"',
   ),
   Flag.optional,
 );
@@ -105,17 +105,17 @@ export function parseStepTimeout(value: string): Duration.Duration {
     Option.getOrThrowWith(
       () =>
         new Error(
-          'Expected --step-timeout to be a positive finite Effect duration, such as "500 millis" or "5 seconds"',
+          'Expected --step-timeout to be a positive Effect duration, such as "500 millis", "5 seconds", or "Infinity"',
         ),
     ),
   );
   return Fn.pipe(
     Duration.fromInput(input),
-    Option.filter((duration) => Duration.isPositive(duration) && Duration.isFinite(duration)),
+    Option.filter(Duration.isPositive),
     Option.getOrThrowWith(
       () =>
         new Error(
-          'Expected --step-timeout to be a positive finite Effect duration, such as "500 millis" or "5 seconds"',
+          'Expected --step-timeout to be a positive Effect duration, such as "500 millis", "5 seconds", or "Infinity"',
         ),
     ),
   );
