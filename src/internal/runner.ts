@@ -35,6 +35,8 @@ export type DocStringInput = Discovery.DocStringInput;
 /** @internal */
 type ConcreteStepKind = Discovery.ConcreteStepKind;
 
+type StepKeyword = ConcreteStepKind | "*";
+
 type RunError =
   | ParseError
   | MatchError
@@ -520,7 +522,7 @@ const verifyStep = (
   task: ScenarioTask<unknown, unknown>,
   stepDefinition: AnyStep,
   step: PickleStep,
-  kind: ConcreteStepKind,
+  kind: StepKeyword,
   index: number,
 ): Effect.Effect<unknown, MatchError> => {
   const keywordMatches = stepDefinition.kind === "Step" || stepDefinition.kind === kind;
@@ -766,18 +768,30 @@ const hasStepArgument = (step: PickleStep): boolean => step.argument !== undefin
 const stepKind = (
   step: PickleStep,
   source: Parser.SourceIndex,
-): Effect.Effect<ConcreteStepKind, ParseError> =>
+): Effect.Effect<StepKeyword, ParseError> =>
   Fn.pipe(
     concreteStepKind(step),
-    Effect.fromOption(
-      () =>
+    Option.match({
+      onNone: () => unknownStepKind(step, source),
+      onSome: Effect.succeed,
+    }),
+  );
+
+const unknownStepKind = (
+  step: PickleStep,
+  source: Parser.SourceIndex,
+): Effect.Effect<StepKeyword, ParseError> => {
+  const keyword = Parser.stepKeyword(step, source);
+  return keyword === "*"
+    ? Effect.succeed("*")
+    : Effect.fail(
         new ParseError({
-          message: `${Parser.stepKeyword(step, source)} found before a Given, When, or Then step`,
+          message: `${keyword} found before a Given, When, or Then step`,
           line: Parser.stepLine(step, source),
           column: 1,
         }),
-    ),
-  );
+      );
+};
 
 const failStep = (
   message: string,
