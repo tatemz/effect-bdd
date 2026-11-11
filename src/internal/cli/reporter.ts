@@ -708,6 +708,7 @@ export const renderDefect = (cause: Cause.Cause<unknown>): string =>
     ? "Defect: Unknown failure"
     : Arr.join(Arr.map(cause.reasons, renderDefectReason), "\n");
 
+// oxlint-disable-next-line complexity
 const renderDefectReason = (reason: Cause.Reason<unknown>): string => {
   switch (reason._tag) {
     case "Die": {
@@ -727,17 +728,21 @@ const renderDefectReason = (reason: Cause.Reason<unknown>): string => {
 
 /** @internal */
 export const renderDefectError = (error: Error): string => {
-  const [first, ...rest] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
+  const [first] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
   const head = Str.startsWith("Error: ")(first)
     ? `Defect: ${Str.slice(7)(first)}`
     : `Defect: ${first}`;
-  const frames = Fn.pipe(
+  return Arr.join([head, ...Arr.map(errorStackLines(error), (line) => `  ${line}`)], "\n");
+};
+
+const errorStackLines = (error: Error): ReadonlyArray<string> => {
+  const [, ...rest] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
+  return Fn.pipe(
     rest,
     Arr.filter((line) => !isNoiseFrame(line)),
     Arr.map((line) => frameLabel(line)),
     Arr.take(5),
   );
-  return Arr.join([head, ...Arr.map(frames, (line) => `  ${line}`)], "\n");
 };
 
 const frameLocation = (line: string): string | undefined => {
@@ -770,16 +775,16 @@ const renderCause = (cause: unknown): string | undefined => {
   return body === undefined ? undefined : `Cause: ${body}`;
 };
 
-const renderCauseBody = (cause: unknown): string | undefined => {
+const renderCauseBody = (cause: unknown, depth = 0): string | undefined => {
   if (cause === undefined) {
     return undefined;
   }
-  const [first, ...rest] = renderCauseLines(cause);
+  const [first, ...rest] = renderCauseLines(cause, depth);
   return Arr.join([first, ...Arr.map(rest, (line) => `  ${line}`)], "\n");
 };
 
 // oxlint-disable-next-line complexity
-const renderCauseLines = (cause: unknown): ReadonlyArray<string> => {
+const renderCauseLines = (cause: unknown, depth: number): ReadonlyArray<string> => {
   if (Schema.is(StepTimeoutError)(cause)) {
     return [`${cause._tag}: ${cause.message} (timeout: ${Duration.format(cause.timeout)})`];
   }
@@ -787,7 +792,7 @@ const renderCauseLines = (cause: unknown): ReadonlyArray<string> => {
     return splitLines(formatSchemaIssue(cause.issue));
   }
   if (hasStringTag(cause)) {
-    return renderTaggedCause(cause);
+    return renderTaggedCause(cause, depth);
   }
   if (Predicate.isError(cause)) {
     return splitLines(Cause.pretty(Cause.fail(cause)));
@@ -803,7 +808,10 @@ const renderCauseLines = (cause: unknown): ReadonlyArray<string> => {
 };
 
 // oxlint-disable-next-line complexity
-const renderTaggedCause = (cause: { readonly _tag: string }): ReadonlyArray<string> => {
+const renderTaggedCause = (
+  cause: { readonly _tag: string },
+  depth: number,
+): ReadonlyArray<string> => {
   const message =
     Predicate.hasProperty(cause, "message") && Predicate.isString(cause.message)
       ? cause.message
@@ -813,7 +821,19 @@ const renderTaggedCause = (cause: { readonly _tag: string }): ReadonlyArray<stri
     Record.toEntries<string, unknown>(cause),
     Arr.filter(([key]) => !Arr.contains(key)(causeMetadataKeys)),
   );
-  return [head, ...Arr.map(fields, ([key, value]) => `${key}: ${renderCauseValue(value)}`)];
+  const lines = [head, ...Arr.map(fields, ([key, value]) => `${key}: ${renderCauseValue(value)}`)];
+  const stackLines = Predicate.isError(cause)
+    ? Arr.map(errorStackLines(cause), (line) => `  ${line}`)
+    : [];
+  const nestedCause = Predicate.hasProperty(cause, "cause") ? cause.cause : undefined;
+  const nested = depth < 2 ? renderCauseBody(nestedCause, depth + 1) : undefined;
+  const nestedLines = nested === undefined ? [] : renderNestedCause(nested);
+  return Arr.appendAll(Arr.appendAll(lines, stackLines), nestedLines);
+};
+
+const renderNestedCause = (nested: string): ReadonlyArray<string> => {
+  const [nestedFirst, ...nestedRest] = Str.split(nested, "\n");
+  return [`cause: ${nestedFirst}`, ...Arr.map(nestedRest, (line) => `  ${line}`)];
 };
 
 const renderCauseValue = (value: unknown): string =>
