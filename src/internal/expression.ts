@@ -64,6 +64,15 @@ export const makeMatcher = (
       appendTemplatePart(state, literal, captures[index]),
     ),
   );
+  const duplicateName = Arr.findFirst(state.names, (name, index) =>
+    Fn.pipe(state.names, Arr.take(index), Arr.contains(name)),
+  );
+  if (Option.isSome(duplicateName)) {
+    // oxlint-disable-next-line effect-bdd/no-throw-statements
+    throw new TypeError(
+      `Duplicate capture name "${duplicateName.value}" in step expression "${state.source}"`,
+    );
+  }
   const regex = new globalThis.RegExp(`${state.pattern}$`);
   const decoders = Arr.map(state.captures, (capture) => ({
     name: capture.name,
