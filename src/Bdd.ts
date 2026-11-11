@@ -727,7 +727,7 @@ const tap_: Tap = Fn.dual(
         )
       : makeFeature(self.title, self.scenarios, [
           ...self.taps,
-          { afterScenarios: self.scenarios.length, taps: [tap] },
+          makeFeatureTapNode(self.scenarios.length, [tap]),
         ]);
   },
 );
@@ -1093,8 +1093,8 @@ const makeFeature = <E, R>(
   const feature: Feature<E, R> = {
     [FeatureTypeId]: FeatureTypeId,
     title,
-    scenarios,
-    taps,
+    scenarios: Object.freeze(scenarios),
+    taps: Object.freeze(taps),
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
@@ -1122,9 +1122,9 @@ const makeScenario = <State, E, R>(
   > = {
     [ScenarioTypeId]: ScenarioTypeId,
     title,
-    steps,
-    providers,
-    errorTaps,
+    steps: Object.freeze(steps),
+    providers: Object.freeze(providers),
+    errorTaps: Object.freeze(errorTaps),
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
@@ -1138,7 +1138,7 @@ const makeScenario = <State, E, R>(
 const makeTapNode = (taps: ReadonlyArray<TapHandler<any>>): TapNode => {
   const node: TapNode = {
     [TapTypeId]: TapTypeId,
-    taps,
+    taps: Object.freeze(taps),
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
     },
@@ -1146,6 +1146,11 @@ const makeTapNode = (taps: ReadonlyArray<TapHandler<any>>): TapNode => {
   hideTypeId(node, TapTypeId);
   return Object.freeze(node);
 };
+
+const makeFeatureTapNode = (
+  afterScenarios: number,
+  taps: ReadonlyArray<TapHandler<any>>,
+): FeatureTapNode => Object.freeze({ afterScenarios, taps: Object.freeze(taps) });
 
 interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> {
   readonly kind: Kind;
