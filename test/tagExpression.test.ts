@@ -88,4 +88,32 @@ describe("tagExpression", () => {
       assert.strictEqual(result._tag, "Failure");
     }),
   );
+
+  it.effect("decodes escaped whitespace in tag names", () =>
+    Effect.gen(function* () {
+      const TagExpression = yield* loadTagExpression;
+      const predicate = yield* TagExpression.compileAll(["@two\\ words"]);
+
+      assert.strictEqual(predicate(["@two words"]), true);
+      assert.strictEqual(predicate(["@two"]), false);
+    }),
+  );
+
+  it.effect("rejects a trailing backslash", () =>
+    Effect.gen(function* () {
+      const TagExpression = yield* loadTagExpression;
+      const result = yield* Effect.exit(TagExpression.compileAll(["@tag\\"]));
+
+      assert.strictEqual(result._tag, "Failure");
+    }),
+  );
+
+  it.effect("rejects operators glued to a tag", () =>
+    Effect.gen(function* () {
+      const TagExpression = yield* loadTagExpression;
+      const result = yield* Effect.exit(TagExpression.compileAll(["@a and@b"]));
+
+      assert.strictEqual(result._tag, "Failure");
+    }),
+  );
 });
