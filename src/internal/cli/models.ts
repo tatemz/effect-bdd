@@ -2,6 +2,7 @@ import type * as Bdd from "../../Bdd.ts";
 import type * as Cause from "effect/Cause";
 import type * as Duration from "effect/Duration";
 import type * as CoreRunner from "../runner.ts";
+import type { StepMetadataValue } from "../stepMetadata.ts";
 
 /** @internal */
 export interface FeatureSource {
@@ -24,6 +25,7 @@ export type ScenarioFailure =
   | {
       readonly _tag: "Defect";
       readonly cause: Cause.Cause<unknown>;
+      readonly step?: StepMetadataValue;
     };
 
 /** @internal */

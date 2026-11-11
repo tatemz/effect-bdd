@@ -24,6 +24,7 @@ import * as Discovery from "./discovery.ts";
 import type { TapHandler } from "../Errors.ts";
 import type * as Expression from "./expression.ts";
 import * as Parser from "./parser.ts";
+import { StepMetadata } from "./stepMetadata.ts";
 
 /** @internal */
 export type DataTableInput = Discovery.DataTableInput;
@@ -462,6 +463,13 @@ const runStep: <E, R>(
     task.source,
   );
   const line = Parser.stepLine(step, task.source);
+  const stepMetadata = Context.make(StepMetadata, {
+    step: step.text,
+    line,
+    ...(stepDefinition.definition === undefined
+      ? {}
+      : { definition: stepDefinition.definition }),
+  });
   const stepEffect = Fn.pipe(
     stepDefinition.run(captures, argument, state),
     Effect.mapError(
@@ -476,6 +484,11 @@ const runStep: <E, R>(
             ? {}
             : { definition: stepDefinition.definition }),
         }),
+    ),
+    Effect.catchCause((cause: Cause.Cause<StepError>) =>
+      Cause.hasDies(cause)
+        ? Effect.failCause(Cause.annotate(cause, stepMetadata))
+        : Effect.failCause(cause),
     ),
   );
   const timeout = stepDefinition.timeout ?? options.stepTimeout;

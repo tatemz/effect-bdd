@@ -365,14 +365,16 @@ const addStepDefinition = (
   displayPath: (path: string) => string,
   text: string,
 ): string => {
-  if (
-    result.outcome._tag !== "Failed" ||
-    result.outcome.failure._tag !== "RunError" ||
-    result.outcome.failure.error._tag !== "StepError"
-  ) {
+  if (result.outcome._tag !== "Failed") {
     return text;
   }
-  const definition = result.outcome.failure.error.definition;
+  const failure = result.outcome.failure;
+  const definition =
+    failure._tag === "RunError"
+      ? failure.error._tag === "StepError"
+        ? failure.error.definition
+        : undefined
+      : failure.step?.definition;
   return definition === undefined
     ? text
     : `${text}\nDefinition: ${displayPath(definition.path)}:${definition.line}`;
@@ -384,7 +386,7 @@ const failureLine = (result: ScenarioResult): number => {
   }
   return result.outcome.failure._tag === "RunError"
     ? result.outcome.failure.error.line
-    : result.task.core.scenarioLine;
+    : (result.outcome.failure.step?.line ?? result.task.core.scenarioLine);
 };
 
 const renderFrame = (source: string | undefined, line: number): ReadonlyArray<string> => {
@@ -585,7 +587,19 @@ const renderJson = (result: CliRunResult): string =>
 const failureData = (failure: ScenarioFailure): Record<string, unknown> =>
   failure._tag === "RunError"
     ? { _tag: "RunError", error: errorData(failure.error) }
-    : { _tag: "Defect", cause: renderDefect(failure.cause) };
+    : {
+        _tag: "Defect",
+        cause: renderDefect(failure.cause),
+        ...(failure.step === undefined
+          ? {}
+          : {
+              step: failure.step.step,
+              line: failure.step.line,
+              ...(failure.step.definition === undefined
+                ? {}
+                : { definition: failure.step.definition }),
+            }),
+      };
 
 // oxlint-disable-next-line complexity
 const errorData = (error: RunError): Record<string, unknown> => {

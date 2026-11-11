@@ -1,6 +1,7 @@
 import * as Arr from "effect/Array";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import type * as FileSystem from "effect/FileSystem";
@@ -31,6 +32,7 @@ import type {
 } from "./models.ts";
 import type { ModuleLoader } from "./moduleLoader.ts";
 import * as TagExpression from "./tagExpression.ts";
+import { StepMetadata, type StepMetadataValue } from "../stepMetadata.ts";
 
 interface BuiltScenarios {
   readonly tasks: ReadonlyArray<ScenarioTask>;
@@ -281,14 +283,23 @@ const outcomeFromExit = (
   if (Exit.isSuccess(exit)) {
     return { _tag: "Passed", steps: exit.value.steps };
   }
+  const step = defectStep(exit.cause);
+  const defect = {
+    _tag: "Defect",
+    cause: exit.cause,
+    ...(step === undefined ? {} : { step }),
+  } as const;
   if (Cause.hasDies(exit.cause)) {
-    return { _tag: "Failed", failure: { _tag: "Defect", cause: exit.cause } };
+    return { _tag: "Failed", failure: defect };
   }
   const error = Cause.findErrorOption(exit.cause);
   return Option.isSome(error)
     ? { _tag: "Failed", failure: { _tag: "RunError", error: error.value } }
-    : { _tag: "Failed", failure: { _tag: "Defect", cause: exit.cause } };
+    : { _tag: "Failed", failure: defect };
 };
+
+const defectStep = (cause: Cause.Cause<unknown>): StepMetadataValue | undefined =>
+  Option.getOrUndefined(Context.getOption(Cause.annotations(cause), StepMetadata));
 
 const runScenarios = (
   options: CliOptions,
