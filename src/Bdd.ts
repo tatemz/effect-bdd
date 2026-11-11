@@ -435,6 +435,7 @@ type StepType<Kind extends StepKind, In, Out, E, R, Captures, Argument> = Step<
 >;
 type TapType = Tap;
 type TapErrorCombinatorType = TapError;
+type TapNodeType = TapNode;
 type ReportType = Report;
 type RunErrorType = RunError;
 type ScenarioFailureType = ScenarioFailure;
@@ -851,6 +852,7 @@ export const Bdd = {
   isFeature,
   isScenario,
   isStep,
+  isTap,
   isStepTimeoutError: isStepTimeoutError_,
   capture: capture_,
   table: table_,
@@ -978,6 +980,8 @@ export declare namespace Bdd {
    * @since 0.10.0
    */
   export type Tap = TapType;
+
+  export type TapNode = TapNodeType;
 
   /**
    * The tapError combinator type.

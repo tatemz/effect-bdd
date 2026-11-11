@@ -821,8 +821,8 @@ Most users should import from `effect-bdd` and use the `Bdd` namespace:
 - step metadata: `Bdd.withTimeout`
 - runner: `Bdd.run`
 - compiler service: `Bdd.GherkinCompiler`, `Bdd.layerCucumber`
-- guards: `Bdd.isFeature`, `Bdd.isScenario`, `Bdd.isStep`, `Bdd.isStepTimeoutError`
-- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.Report`,
+- guards: `Bdd.isFeature`, `Bdd.isScenario`, `Bdd.isStep`, `Bdd.isTap`, `Bdd.isStepTimeoutError`
+- models/errors: `Bdd.Feature`, `Bdd.Scenario`, `Bdd.Step`, `Bdd.TapNode`, `Bdd.Report`,
   `Bdd.RunOptions`, `Bdd.RunError`, `Bdd.ParseError`, `Bdd.MatchError`, `Bdd.StepError`,
   `Bdd.ScenarioSetupError`, `Bdd.ScenarioTeardownError`, `Bdd.StepTimeoutError`,
   `Bdd.TapError`, `Bdd.ScenarioFailure`

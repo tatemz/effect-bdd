@@ -16,6 +16,7 @@ import type {
   ScenarioFailure as ScenarioFailure_,
   Step as Step_,
   TableArg as TableArg_,
+  TapNode as TapNode_,
 } from "./Bdd.ts";
 import type {
   ScenarioSetupError as ScenarioSetupError_,
@@ -143,6 +144,14 @@ export declare namespace Bdd {
    * @since 0.10.0
    */
   export type ScenarioFailure = ScenarioFailure_;
+
+  /**
+   * A node in a scenario chain that observes state without changing it.
+   *
+   * @category models
+   * @since 0.12.0
+   */
+  export type TapNode = TapNode_;
 
   /**
    * Service used to compile Gherkin source into executable scenarios.

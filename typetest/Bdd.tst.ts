@@ -61,6 +61,16 @@ describe("Bdd", () => {
     expect(Bdd.isStep).type.toBeCallableWith({});
   });
 
+  test("isTap narrows unknown values to a tap node", () => {
+    const value: unknown = undefined;
+
+    if (Bdd.isTap(value)) {
+      expect(value).type.toBe<Bdd.TapNode>();
+    }
+
+    expect(Bdd.isTap).type.toBeCallableWith({});
+  });
+
   test("feature definitions carry the Feature brand", () => {
     const feature = Bdd.feature("Counter");
 
