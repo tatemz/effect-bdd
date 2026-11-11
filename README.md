@@ -778,7 +778,11 @@ Patterns without wildcards are treated as literal file paths. Brace expansion
 
 Feature files are parsed and compiled with Cucumber's Gherkin implementation. The runner
 supports `Feature`, `Scenario`, `Scenario Outline`, `Examples`, `Background`, `Rule`, tags,
-`Given`, `When`, `Then`, `And`, `But`, DataTables, DocStrings, comments, and descriptions.
+`Given`, `When`, `Then`, `And`, `But`, `*`, DataTables, DocStrings, comments, and
+descriptions.
+
+`*` steps are keyword-agnostic, so they match `Bdd.step` definitions only. `Bdd.given`,
+`Bdd.when`, and `Bdd.then` reject a `*` step because it names no concrete keyword.
 
 Scenario Outlines are expanded before execution. Every Examples row runs the same source
 scenario chain independently.
