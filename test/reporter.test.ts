@@ -1,10 +1,10 @@
 import { NodeServices } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
 import { Command } from "effect/cli";
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Cause, Effect, FileSystem, Path, Schema } from "effect";
 import { fileURLToPath } from "node:url";
 import { cli } from "../src/main.ts";
-import { renderDefectError } from "../src/internal/cli/reporter.ts";
+import { renderDefect, renderDefectError } from "../src/internal/cli/reporter.ts";
 
 const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
 
@@ -17,6 +17,18 @@ describe("text reporter", () => {
 
     assert.match(text, /at \/tmp\/step definitions\/steps\.mjs:3:4/);
     assert.strictEqual(text.includes("file://"), false);
+  });
+
+  it("renders every reason in a compound defect cause", () => {
+    const cause = Cause.combine(
+      Cause.die(new Error("body boom")),
+      Cause.die(new Error("teardown boom")),
+    );
+
+    const text = renderDefect(cause);
+
+    assert.match(text, /body boom/);
+    assert.match(text, /teardown boom/);
   });
 
   it.effect("reports the failing step line, not the scenario line", () =>

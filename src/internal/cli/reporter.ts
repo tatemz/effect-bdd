@@ -15,6 +15,7 @@ import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
 import * as Str from "effect/String";
 import { StepTimeoutError, type RunError } from "../../Errors.ts";
+import { parseStackLocation } from "../stackLocation.ts";
 import { ReporterError } from "./errors.ts";
 import {
   isFatalDiagnostic,
@@ -701,7 +702,8 @@ const renderError = (error: RunError): string => {
 const renderFailure = (failure: ScenarioFailure): string =>
   failure._tag === "RunError" ? renderError(failure.error) : renderDefect(failure.cause);
 
-const renderDefect = (cause: Cause.Cause<unknown>): string => {
+/** @internal */
+export const renderDefect = (cause: Cause.Cause<unknown>): string => {
   const die = Fn.pipe(
     cause.reasons,
     Arr.findFirst((reason) => reason._tag === "Die"),
@@ -749,7 +751,11 @@ const isNoiseFrame = (line: string): boolean => {
 
 const frameLabel = (line: string): string => {
   const location = frameLocation(line);
-  return location === undefined ? line : `at ${Str.replace(/^file:\/\//, "")(location)}`;
+  if (location === undefined) {
+    return line;
+  }
+  const frame = parseStackLocation(location);
+  return frame === undefined ? `at ${location}` : `at ${frame.path}:${frame.line}:${frame.column}`;
 };
 
 const renderCause = (cause: unknown): string | undefined => {

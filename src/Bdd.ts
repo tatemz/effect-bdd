@@ -29,6 +29,7 @@ import * as cucumberCompiler from "./internal/cucumberCompiler.ts";
 import * as expression from "./internal/expression.ts";
 import * as parser from "./internal/parser.ts";
 import * as runner from "./internal/runner.ts";
+import { filePathFromStackUrl, parseStackLocation } from "./internal/stackLocation.ts";
 
 const FeatureTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Feature");
 const ScenarioTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Scenario");
@@ -1215,6 +1216,8 @@ const optionalStepFields = <Kind extends StepKind, In, Out, E, R, Captures, Argu
   ...(definition === undefined ? {} : { definition }),
 });
 
+const definitionModulePath = filePathFromStackUrl(import.meta.url);
+
 const captureStepDefinition = (): StepDefinition | undefined => {
   const stack = new Error().stack;
   if (stack === undefined) {
@@ -1231,16 +1234,11 @@ const captureStepDefinition = (): StepDefinition | undefined => {
 
 const stepDefinitionFromLine = (line: string): Result.Result<StepDefinition, undefined> => {
   const location = stackLocation(line);
-  if (location === undefined || isInternalDefinitionLocation(location)) {
+  const frame = location === undefined ? undefined : parseStackLocation(location);
+  if (frame === undefined || frame.path === definitionModulePath) {
     return Result.fail(undefined);
   }
-  const match = /^(.*):(\d+):(\d+)$/.exec(location);
-  return match === null
-    ? Result.fail(undefined)
-    : Result.succeed({
-        path: Str.replace(/^file:\/\//, "")(match[1]),
-        line: Number(match[2]),
-      });
+  return Result.succeed({ path: frame.path, line: frame.line });
 };
 
 const stackLocation = (line: string): string | undefined => {
@@ -1249,12 +1247,6 @@ const stackLocation = (line: string): string | undefined => {
     ? Str.slice(open.value + 1, -1)(line)
     : Fn.pipe(line, Str.trim, Str.replace(/^at /, ""));
 };
-
-const isInternalDefinitionLocation = (location: string): boolean =>
-  Str.includes("/Bdd.")(location) ||
-  Str.includes("\\Bdd.")(location) ||
-  Str.includes("/internal/")(location) ||
-  Str.includes("\\internal\\")(location);
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {
   function stepTag(strings: TemplateStringsArray): EmptyStepFactory<Kind>;
