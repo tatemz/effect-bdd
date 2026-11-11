@@ -11,11 +11,11 @@ const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: 
 describe("text reporter", () => {
   it("prints defect stack frames without a file URL", () => {
     const error = new Error("boom");
-    error.stack = "Error: boom\n    at fn (file:///tmp/steps.mjs:3:4)";
+    error.stack = "Error: boom\n    at fn (file:///tmp/step%20definitions/steps.mjs:3:4)";
 
     const text = renderDefectError(error);
 
-    assert.match(text, /at \/tmp\/steps\.mjs:3:4/);
+    assert.match(text, /at \/tmp\/step definitions\/steps\.mjs:3:4/);
     assert.strictEqual(text.includes("file://"), false);
   });
 
@@ -160,6 +160,25 @@ describe("text reporter", () => {
     ).pipe(Effect.provide(NodeServices.layer)),
   );
 
+  it.effect("records definitions under an internal directory with spaces", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fixture = yield* makeFixture({
+          feature: counterFeature,
+          steps: counterStepsFromNestedSource,
+          stepDirectory: "internal/step definitions",
+        });
+        const text = yield* reportFailure(fixture);
+
+        assert.match(
+          text,
+          /Definition: test\/\.effect-bdd-reporter-[^/]+\/internal\/step definitions\/steps\.mjs:8/,
+        );
+        assert.strictEqual(text.includes("%20"), false);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("keeps discovery details out of the default report", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -199,6 +218,7 @@ describe("text reporter", () => {
 
 const reportFailure = Effect.fnUntraced(function* (fixture: {
   readonly path: (name: string) => string;
+  readonly stepFiles: () => string;
 }) {
   const report = fixture.path("report.txt");
   yield* Effect.exit(
@@ -206,7 +226,7 @@ const reportFailure = Effect.fnUntraced(function* (fixture: {
       "--features",
       fixture.path("*.feature"),
       "--steps",
-      fixture.path("*.mjs"),
+      fixture.stepFiles(),
       "--reporter",
       "text",
       "--output-file.text",
@@ -217,7 +237,11 @@ const reportFailure = Effect.fnUntraced(function* (fixture: {
   return yield* fs.readFileString(report);
 });
 
-const makeFixture = (options: { readonly feature: string; readonly steps: string }) =>
+const makeFixture = (options: {
+  readonly feature: string;
+  readonly steps: string;
+  readonly stepDirectory?: string;
+}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -225,10 +249,14 @@ const makeFixture = (options: { readonly feature: string; readonly steps: string
       directory: path.dirname(fileURLToPath(import.meta.url)),
       prefix: ".effect-bdd-reporter-",
     });
+    const stepDirectory = options.stepDirectory ?? "";
+    const stepsPath = path.join(directory, stepDirectory, "steps.mjs");
     yield* fs.writeFileString(path.join(directory, "counter.feature"), options.feature);
-    yield* fs.writeFileString(path.join(directory, "steps.mjs"), options.steps);
+    yield* fs.makeDirectory(path.dirname(stepsPath), { recursive: true });
+    yield* fs.writeFileString(stepsPath, options.steps);
     return {
       path: (name: string) => path.join(directory, name),
+      stepFiles: () => path.join(directory, stepDirectory, "*.mjs"),
     };
   });
 
@@ -261,6 +289,24 @@ export const counter = Bdd.feature("Counter").pipe(
 
 const counterStepsFromSource = `
 import { Bdd } from "../../src/Bdd.ts"
+import { Effect, Schema } from "effect"
+
+const expected = Bdd.capture("expected", Schema.NumberFromString)
+const givenCleanCounter = Bdd.given\`a clean counter\`(() => Effect.succeed(0))
+const whenRead = Bdd.when\`the counter is read\`((state) => Effect.succeed(state ?? 0))
+const thenCounterIs = Bdd.then\`the counter is \${expected}\`(({ expected }, state) =>
+  (state ?? 0) === expected
+    ? Effect.succeed(state ?? 0)
+    : Effect.fail(\`expected \${expected}, got \${state ?? 0}\`)
+)
+
+export const counter = Bdd.feature("Counter").pipe(
+  Bdd.scenario("Fails").pipe(givenCleanCounter, whenRead, thenCounterIs)
+)
+`;
+
+const counterStepsFromNestedSource = `
+import { Bdd } from "../../../../src/Bdd.ts"
 import { Effect, Schema } from "effect"
 
 const expected = Bdd.capture("expected", Schema.NumberFromString)
