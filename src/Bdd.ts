@@ -434,8 +434,8 @@ type StepType<Kind extends StepKind, In, Out, E, R, Captures, Argument> = Step<
   Argument
 >;
 type TapType = Tap;
-type TapNodeType = TapNode;
 type TapErrorCombinatorType = TapError;
+type TapNodeType = TapNode;
 type ReportType = Report;
 type RunErrorType = RunError;
 type ScenarioFailureType = ScenarioFailure;
