@@ -144,7 +144,6 @@ export const runScenarioTask = <E, R>(
           runSteps(task, options),
           provideScenarioContext(context),
           Effect.mapError((error) => (isRunError(error) ? error : scenarioSetupError(task, error))),
-          tapScenarioFailures(task),
           Scope.provide(scope),
         );
       });
@@ -160,7 +159,7 @@ export const runScenarioTask = <E, R>(
         tags: task.tags,
       };
     }),
-  ).pipe(tapLifecycleFailures(task));
+  ).pipe(tapScenarioFailures(task));
 
 const buildScenarioProviders = <R>(
   task: ScenarioTask<unknown, R>,
@@ -197,62 +196,37 @@ const provideScenarioContext =
  * `Effect.tapError`: the original failure is preserved, and a handler failure
  * becomes a `TapError` that replaces it.
  */
-const tapScenarioFailures = <E, R>(
-  task: ScenarioTask<E, R>,
-): (<A>(effect: Effect.Effect<A, RunError, R>) => Effect.Effect<A, RunError, R>) => {
-  const handlers = task.scenarioDefinition.errorTaps;
-  if (handlers.length === 0) {
-    return (effect) => effect;
-  }
-  return (effect) =>
-    Fn.pipe(
-      effect,
-      Effect.catchIf(
-        () => true,
-        (failure: RunError) => runErrorTaps(task, failure),
-      ),
-    );
-};
-
-const tapLifecycleFailures =
+const tapScenarioFailures =
   <E, R>(task: ScenarioTask<E, R>) =>
   <A, R0>(effect: Effect.Effect<A, RunError, R0>): Effect.Effect<A, RunError, R0> => {
-    if (task.scenarioDefinition.errorTaps.length === 0) {
+    const handlers = task.scenarioDefinition.errorTaps;
+    if (handlers.length === 0) {
       return effect;
     }
     return Fn.pipe(
       effect,
-      Effect.catchIf(isLifecycleFailure, (failure) => runErrorTaps(task, failure)),
+      Effect.catchIf(
+        () => true,
+        (failure: RunError) =>
+          Fn.pipe(
+            Effect.forEach(handlers, (handler) => Effect.asVoid(handler(failure)), {
+              discard: true,
+            }),
+            Effect.mapError(
+              (cause): RunError =>
+                new TapError({
+                  message: `Tap error handler failed: ${task.sourceScenarioTitle}`,
+                  scenario: task.sourceScenarioTitle,
+                  step: task.sourceScenarioTitle,
+                  line: task.scenarioLine,
+                  cause,
+                }),
+            ),
+            Effect.andThen(Effect.fail(failure)),
+          ),
+      ),
     );
   };
-
-const isLifecycleFailure = (u: unknown): u is ScenarioSetupError | ScenarioTeardownError =>
-  u instanceof ScenarioSetupError || u instanceof ScenarioTeardownError;
-
-const runErrorTaps = <E, R>(
-  task: ScenarioTask<E, R>,
-  failure: RunError,
-): Effect.Effect<never, RunError> =>
-  Fn.pipe(
-    Effect.forEach(
-      task.scenarioDefinition.errorTaps,
-      (handler) => Effect.asVoid(handler(failure)),
-      {
-        discard: true,
-      },
-    ),
-    Effect.mapError(
-      (cause): RunError =>
-        new TapError({
-          message: `Tap error handler failed: ${task.sourceScenarioTitle}`,
-          scenario: task.sourceScenarioTitle,
-          step: task.sourceScenarioTitle,
-          line: task.scenarioLine,
-          cause,
-        }),
-    ),
-    Effect.andThen(Effect.fail(failure)),
-  );
 
 const closeScenarioScope = <A, E>(
   scope: Scope.Closeable,
