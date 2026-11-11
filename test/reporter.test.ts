@@ -211,6 +211,8 @@ describe("text reporter", () => {
         assert.match(text, /Cause: OutOfStock: not enough stock/);
         assert.match(text, /sku: lamp/);
         assert.match(text, /available: 0/);
+        assert.match(text, /at .*steps\.mjs:\d+/);
+        assert.match(text, /connection refused/);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
@@ -367,10 +369,24 @@ Feature: Failure values
 
 const stockSteps = `
 import { Bdd } from "effect-bdd"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
+
+class OutOfStock extends Schema.TaggedError()("OutOfStock", {
+  message: Schema.String,
+  sku: Schema.String,
+  available: Schema.Number,
+  cause: Schema.optionalKey(Schema.Unknown),
+}) {}
 
 const givenStock = Bdd.given\`stock is checked for lamp\`(() =>
-  Effect.fail({ _tag: "OutOfStock", message: "not enough stock", sku: "lamp", available: 0 })
+  Effect.fail(
+    new OutOfStock({
+      message: "not enough stock",
+      sku: "lamp",
+      available: 0,
+      cause: new Error("connection refused"),
+    }),
+  ),
 )
 const thenOrder = Bdd.then\`the order is placed\`(() => Effect.void)
 
