@@ -368,6 +368,9 @@ Prefer strict schemas. `Schema.FiniteFromString` rejects `"abc"`, `"Infinity"`, 
 non-numeric text as `MatchError`s. An empty capture fails earlier, as a text
 mismatch, because the pattern requires at least one character.
 
+Capture names must be unique within one step expression. A repeated name would make the
+decoded record ambiguous, so the step rejects it when it is defined.
+
 ### DataTables and DocStrings
 
 Use `Bdd.table(schema)` for Gherkin DataTables. The first row supplies the column
