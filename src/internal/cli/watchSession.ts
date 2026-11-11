@@ -47,7 +47,8 @@ export interface WatchSessionOptions {
  * the interpreter, the interpreter's own options (`--import tsx` and friends,
  * which must reach the child or TypeScript step modules will not load), the
  * script path, and the user's flags with any `--watch` spelling removed so a
- * child process does not start its own watcher.
+ * child process does not start its own watcher. Node's own watch options are
+ * removed from `execArgv` for the same reason.
  *
  * @internal
  */
@@ -58,7 +59,7 @@ export const childInvocation = (
   const [executable, script, ...flags] = argv;
   return {
     executable: executable ?? process.execPath,
-    execArgv,
+    execArgv: Arr.filter(execArgv, (token) => !isNodeWatchArg(token)),
     script: script ?? "",
     args: Arr.filter(flags, (token) => !isWatchFlag(token)),
   };
@@ -66,6 +67,17 @@ export const childInvocation = (
 
 const isWatchFlag = (token: string): boolean =>
   token === "--watch" || Fn.pipe(token, Str.startsWith("--watch="));
+
+const isNodeWatchArg = (token: string): boolean =>
+  isWatchFlag(token) || isNodeWatchPath(token) || isNodeWatchOutput(token);
+
+const isNodeWatchPath = (token: string): boolean =>
+  token === "--watch-path" || Fn.pipe(token, Str.startsWith("--watch-path="));
+
+const isNodeWatchOutput = (token: string): boolean =>
+  token === "--watch-preserve-output" ||
+  token === "--no-watch-preserve-output" ||
+  Fn.pipe(token, Str.startsWith("--watch-preserve-output="));
 
 /**
  * Execute one child CLI run with inherited stdio, so reports stream to the
