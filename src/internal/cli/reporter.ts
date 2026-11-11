@@ -1,5 +1,5 @@
 import * as Arr from "effect/Array";
-import * as Cause from "effect/Cause";
+import type * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -15,7 +15,7 @@ import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
 import * as Str from "effect/String";
 import { StepTimeoutError, type RunError } from "../../Errors.ts";
-import { parseStackLocation } from "../stackLocation.ts";
+import { filePathFromStackUrl, parseStackLocation } from "../stackLocation.ts";
 import { ReporterError } from "./errors.ts";
 import {
   isFatalDiagnostic,
@@ -380,6 +380,7 @@ const addStepDefinition = (
     : `${text}\nDefinition: ${displayPath(definition.path)}:${definition.line}`;
 };
 
+// oxlint-disable-next-line complexity
 const failureLine = (result: ScenarioResult): number => {
   if (result.outcome._tag === "Passed") {
     return result.task.core.scenarioLine;
@@ -759,6 +760,11 @@ const errorStackLines = (error: Error): ReadonlyArray<string> => {
   );
 };
 
+const errorCauseLines = (error: Error): ReadonlyArray<string> => {
+  const [first] = splitLines(error.stack ?? `${error.name}: ${error.message}`);
+  return [first, ...Arr.map(errorStackLines(error), (line) => `  ${line}`)];
+};
+
 const frameLocation = (line: string): string | undefined => {
   const open = Str.lastIndexOf("(")(line);
   return Option.isSome(open)
@@ -766,14 +772,29 @@ const frameLocation = (line: string): string | undefined => {
     : Fn.pipe(line, Str.trim, Str.replace(/^at /, ""));
 };
 
+// oxlint-disable-next-line complexity
 const isNoiseFrame = (line: string): boolean => {
   const location = frameLocation(line);
+  if (location === undefined) {
+    return true;
+  }
+  const frame = parseStackLocation(location);
   return (
-    location === undefined ||
+    frame === undefined ||
+    isLibraryPath(frame.path) ||
     Str.includes("node_modules/")(location) ||
     Str.startsWith("node:")(location)
   );
 };
+
+const reporterModulePath = filePathFromStackUrl(import.meta.url);
+const packageRoot = Str.replace(
+  /\/(?:src|dist)\/internal\/cli\/reporter\.[jt]s$/,
+  "",
+)(reporterModulePath);
+
+const isLibraryPath = (path: string): boolean =>
+  Str.startsWith(`${packageRoot}/src/`)(path) || Str.startsWith(`${packageRoot}/dist/`)(path);
 
 const frameLabel = (line: string): string => {
   const location = frameLocation(line);
@@ -809,7 +830,7 @@ const renderCauseLines = (cause: unknown, depth: number): ReadonlyArray<string> 
     return renderTaggedCause(cause, depth);
   }
   if (Predicate.isError(cause)) {
-    return splitLines(Cause.pretty(Cause.fail(cause)));
+    return errorCauseLines(cause);
   }
   return splitLines(
     Predicate.isString(cause) ||
