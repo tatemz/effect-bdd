@@ -703,19 +703,26 @@ const renderFailure = (failure: ScenarioFailure): string =>
   failure._tag === "RunError" ? renderError(failure.error) : renderDefect(failure.cause);
 
 /** @internal */
-export const renderDefect = (cause: Cause.Cause<unknown>): string => {
-  const die = Fn.pipe(
-    cause.reasons,
-    Arr.findFirst((reason) => reason._tag === "Die"),
-  );
-  if (Option.isSome(die) && Predicate.isError(die.value.defect)) {
-    return renderDefectError(die.value.defect);
+export const renderDefect = (cause: Cause.Cause<unknown>): string =>
+  cause.reasons.length === 0
+    ? "Defect: Unknown failure"
+    : Arr.join(Arr.map(cause.reasons, renderDefectReason), "\n");
+
+const renderDefectReason = (reason: Cause.Reason<unknown>): string => {
+  switch (reason._tag) {
+    case "Die": {
+      return Predicate.isError(reason.defect)
+        ? renderDefectError(reason.defect)
+        : `Defect: ${renderCauseValue(reason.defect)}`;
+    }
+    case "Fail": {
+      const body = renderCauseBody(reason.error);
+      return body === undefined ? "Failure" : `Failure: ${body}`;
+    }
+    case "Interrupt": {
+      return "Interrupt";
+    }
   }
-  const [first, ...rest] = splitLines(Cause.pretty(cause));
-  const head = Str.startsWith("Error: ")(first)
-    ? `Defect: ${Str.slice(7)(first)}`
-    : `Defect: ${first}`;
-  return Arr.join([head, ...Arr.map(rest, (line) => `  ${line}`)], "\n");
 };
 
 /** @internal */
