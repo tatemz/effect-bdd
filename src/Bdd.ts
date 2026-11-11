@@ -1172,7 +1172,7 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
       // oxlint-disable-next-line effect-bdd/no-throw-statements
       throw new TypeError("Expected a Bdd.Scenario when appending a step.");
     }
-    return makeScenario(self.title, [...self.steps, step], self.providers);
+    return makeScenario(self.title, [...self.steps, step], self.providers, self.errorTaps);
   }
   const properties: Pick<
     Step<Kind, In, Out, E, R, Captures, Argument>,
