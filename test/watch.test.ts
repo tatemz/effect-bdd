@@ -205,7 +205,15 @@ describe("child invocation", () => {
   it("strips Node watch flags from inherited exec argv", () => {
     const invocation = childInvocation(
       ["node", "bin.ts"],
-      ["--watch", "--watch-path=src", "--watch-preserve-output", "--import", "tsx"],
+      [
+        "--watch",
+        "--watch-path=src",
+        "--watch-preserve-output",
+        "--watch-path",
+        "lib",
+        "--import",
+        "tsx",
+      ],
     );
 
     assert.deepStrictEqual(invocation.execArgv, ["--import", "tsx"]);

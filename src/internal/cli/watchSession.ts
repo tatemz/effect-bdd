@@ -59,7 +59,7 @@ export const childInvocation = (
   const [executable, script, ...flags] = argv;
   return {
     executable: executable ?? process.execPath,
-    execArgv: Arr.filter(execArgv, (token) => !isNodeWatchArg(token)),
+    execArgv: stripNodeWatchArgs(execArgv),
     script: script ?? "",
     args: Arr.filter(flags, (token) => !isWatchFlag(token)),
   };
@@ -70,6 +70,27 @@ const isWatchFlag = (token: string): boolean =>
 
 const isNodeWatchArg = (token: string): boolean =>
   isWatchFlag(token) || isNodeWatchPath(token) || isNodeWatchOutput(token);
+
+interface WatchArgState {
+  readonly args: ReadonlyArray<string>;
+  readonly skipNext: boolean;
+}
+
+const stripNodeWatchArgs = (execArgv: ReadonlyArray<string>): ReadonlyArray<string> =>
+  Fn.pipe(
+    execArgv,
+    Arr.reduce<WatchArgState, string>({ args: [], skipNext: false }, (state, token) =>
+      state.skipNext
+        ? { args: state.args, skipNext: false }
+        : token === "--watch-path"
+          ? { args: state.args, skipNext: true }
+          : {
+              args: isNodeWatchArg(token) ? state.args : Arr.append(state.args, token),
+              skipNext: false,
+            },
+    ),
+    (state) => state.args,
+  );
 
 const isNodeWatchPath = (token: string): boolean =>
   token === "--watch-path" || Fn.pipe(token, Str.startsWith("--watch-path="));
