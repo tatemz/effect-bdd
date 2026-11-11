@@ -1,7 +1,7 @@
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
-import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Str from "effect/String";
 import { DiscoveryError } from "./errors.ts";
 
@@ -200,16 +200,64 @@ const evaluateOr = (
   tags: ReadonlyArray<string>,
 ): boolean => evaluate(expression.left, tags) || evaluate(expression.right, tags);
 
+interface TokenState {
+  readonly tokens: ReadonlyArray<string>;
+  readonly current: string;
+  readonly escaped: boolean;
+}
+
+const initialTokenState: TokenState = { tokens: [], current: "", escaped: false };
+
 const tokenize = (expression: string): ReadonlyArray<string> | undefined => {
-  const matches = Fn.pipe(
-    expression,
-    Str.match(/\(|\)|\b(?:and|or|not)\b|@[A-Za-z0-9][A-Za-z0-9_-]*/g),
-    Option.getOrElse((): ReadonlyArray<string> => []),
+  const result: Result.Result<TokenState, undefined> = Fn.pipe(
+    Str.split(expression, ""),
+    Arr.reduce(Result.succeed(initialTokenState), stepToken),
   );
-  const normalized = Fn.pipe(expression, Str.replace(/\s+/g, ""));
-  const matched = Fn.pipe(matches, Arr.join(""));
-  return normalized === matched ? matches : undefined;
+  return Result.isFailure(result) ? undefined : finishToken(result.success);
 };
+
+const stepToken = (
+  state: Result.Result<TokenState, undefined>,
+  character: string,
+): Result.Result<TokenState, undefined> =>
+  Result.isFailure(state) ? state : stepTokenCharacter(state.success, character);
+
+// oxlint-disable-next-line complexity
+const stepTokenCharacter = (
+  state: TokenState,
+  character: string,
+): Result.Result<TokenState, undefined> => {
+  if (state.escaped) {
+    return isEscapable(character)
+      ? Result.succeed({ ...state, current: `${state.current}${character}`, escaped: false })
+      : Result.fail(undefined);
+  }
+  if (character === "\\") {
+    return Result.succeed({ ...state, escaped: true });
+  }
+  if (character === "(" || character === ")") {
+    const flushed = flushToken(state);
+    return Result.succeed({ ...flushed, tokens: Arr.append(flushed.tokens, character) });
+  }
+  return Result.succeed(
+    isWhitespace(character)
+      ? flushToken(state)
+      : { ...state, current: `${state.current}${character}` },
+  );
+};
+
+const flushToken = (state: TokenState): TokenState =>
+  state.current.length === 0
+    ? state
+    : { ...state, tokens: Arr.append(state.tokens, state.current), current: "" };
+
+const finishToken = (state: TokenState): ReadonlyArray<string> | undefined =>
+  state.escaped ? undefined : flushToken(state).tokens;
+
+const isEscapable = (character: string): boolean =>
+  character === "(" || character === ")" || character === "\\" || isWhitespace(character);
+
+const isWhitespace = (character: string): boolean => /\s/.test(character);
 
 const fail = (expression: string, message: string): Effect.Effect<never, DiscoveryError> =>
   Effect.fail(new DiscoveryError({ message: `${message}: ${expression}` }));
