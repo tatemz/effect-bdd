@@ -97,7 +97,8 @@ const stepTimeout = Flag.String("step-timeout").pipe(
   Flag.optional,
 );
 
-function parseStepTimeout(value: string): Duration.Duration {
+/** @internal */
+export function parseStepTimeout(value: string): Duration.Duration {
   const input = Fn.pipe(
     value,
     Option.liftPredicate(isDurationInputString),
