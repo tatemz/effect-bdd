@@ -70,4 +70,10 @@ describe("expressions", () => {
       assert.deepStrictEqual(match.value, { left: "a", right: "b" });
     }
   });
+
+  it("rejects duplicate capture names in one expression", () => {
+    const value = Bdd.capture("value", Schema.String);
+
+    assert.throws(() => Bdd.when`${value} and ${value}`, /Duplicate capture name "value"/);
+  });
 });
