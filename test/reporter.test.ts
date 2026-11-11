@@ -256,6 +256,9 @@ describe("text reporter", () => {
         assert.match(text, /available: 0/);
         assert.match(text, /at .*steps\.mjs:\d+/);
         assert.match(text, /connection refused/);
+        assert.strictEqual(text.includes("dist/Bdd.js"), false);
+        assert.strictEqual(text.includes("src/internal/runner.ts"), false);
+        assert.strictEqual(text.includes("file://"), false);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
   );
