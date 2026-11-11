@@ -114,7 +114,7 @@ describe("text reporter", () => {
         assert.match(text, /Defect: kaboom: the cart repository is null/);
         assert.match(text, /at .*steps\.mjs:\d+/);
         assert.strictEqual(/file:\/\//.test(text), false);
-        assert.match(text, /FAIL .*defect\.feature:6 Defects \/ A step throws/);
+        assert.match(text, /FAIL .*counter\.feature:6 Defects \/ A step throws/);
         assert.match(text, /Definition: .*steps\.mjs:\d+/);
         assert.match(text, /Scenarios: 2 total, 1 failed, 1 passed \(\d+ms\)/);
         assert.match(text, /A step throws/);
