@@ -6,7 +6,7 @@ import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type { MatchResult } from "./expression.ts";
-import type { TapHandler, TapErrorHandler } from "../Errors.ts";
+import type { StepDefinition, TapHandler, TapErrorHandler } from "../Errors.ts";
 import * as Parser from "./parser.ts";
 
 /** @internal */
@@ -53,6 +53,7 @@ export interface AnyStep<R = unknown> {
   readonly expression: Expression<unknown>;
   readonly argument?: StepArg<unknown>;
   readonly timeout?: Duration.Duration;
+  readonly definition?: StepDefinition;
   readonly run: (
     captures: unknown,
     argument: unknown,

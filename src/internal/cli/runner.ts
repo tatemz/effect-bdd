@@ -1,8 +1,12 @@
 import * as Arr from "effect/Array";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import type * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
+import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Str from "effect/String";
@@ -28,6 +32,7 @@ import type {
 } from "./models.ts";
 import type { ModuleLoader } from "./moduleLoader.ts";
 import * as TagExpression from "./tagExpression.ts";
+import { StepMetadata, type StepMetadataValue } from "../stepMetadata.ts";
 
 interface BuiltScenarios {
   readonly tasks: ReadonlyArray<ScenarioTask>;
@@ -98,6 +103,7 @@ export const run: (
       built,
       filteredTasks,
     ),
+    featureSources: sources,
   } satisfies CliRunResult;
 });
 
@@ -257,19 +263,44 @@ const runScenario = Effect.fnUntraced(function* (
 ) {
   yield* emitRunEvent(events, { _tag: "ScenarioStarted", task });
   const startedAt = yield* Clock.currentTimeMillis;
-  const result = yield* Effect.result(CoreRunner.runScenarioTask(task.core, runOptions(options)));
+  const exit = yield* Effect.exit(CoreRunner.runScenarioTask(task.core, runOptions(options)));
   const finishedAt = yield* Clock.currentTimeMillis;
+  if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)) {
+    return yield* Effect.interrupt;
+  }
   const scenarioResult = {
     task,
-    outcome:
-      result._tag === "Success"
-        ? { _tag: "Passed", steps: result.success.steps }
-        : { _tag: "Failed", error: result.failure },
+    outcome: outcomeFromExit(exit),
     durationMillis: finishedAt - startedAt,
   } satisfies ScenarioResult;
   yield* emitRunEvent(events, { _tag: "ScenarioFinished", result: scenarioResult });
   return scenarioResult;
 });
+
+// oxlint-disable-next-line complexity
+const outcomeFromExit = (
+  exit: Exit.Exit<CoreRunner.ScenarioReport, Bdd.RunError>,
+): ScenarioResult["outcome"] => {
+  if (Exit.isSuccess(exit)) {
+    return { _tag: "Passed", steps: exit.value.steps };
+  }
+  const step = defectStep(exit.cause);
+  const defect = {
+    _tag: "Defect",
+    cause: exit.cause,
+    ...(step === undefined ? {} : { step }),
+  } as const;
+  if (Cause.hasDies(exit.cause)) {
+    return { _tag: "Failed", failure: defect };
+  }
+  const error = Cause.findErrorOption(exit.cause);
+  return Option.isSome(error)
+    ? { _tag: "Failed", failure: { _tag: "RunError", error: error.value } }
+    : { _tag: "Failed", failure: defect };
+};
+
+const defectStep = (cause: Cause.Cause<unknown>): StepMetadataValue | undefined =>
+  Option.getOrUndefined(Context.getOption(Cause.annotations(cause), StepMetadata));
 
 const runScenarios = (
   options: CliOptions,

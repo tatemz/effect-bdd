@@ -9,10 +9,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Fn from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as CliError from "effect/cli/CliError";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
 import PackageJson from "../package.json" with { type: "json" };
+import { ParseError } from "./Errors.ts";
 import { GlobResolver } from "./internal/cli/glob.ts";
 import {
   isFatalDiagnostic,
@@ -199,9 +201,12 @@ export const cli = Command.make(
       }).pipe(Effect.mapError(toUserError));
       return;
     }
-    const reporters = yield* Reporter.makeReporters(options.reporters, options.outputFiles, {
-      verbose: options.verbose,
-    }).pipe(Effect.mapError(toUserError));
+    const reportOptions = yield* reporterOptions(options.verbose);
+    const reporters = yield* Reporter.makeReporters(
+      options.reporters,
+      options.outputFiles,
+      reportOptions,
+    ).pipe(Effect.mapError(toUserError));
     const result = yield* Runner.run(options, {
       onEvent: (event) =>
         Reporter.emitEventAll(reporters, event).pipe(Effect.orElseSucceed(() => undefined)),
@@ -230,13 +235,23 @@ export const run = Command.run(cli, {
 });
 
 const toUserError = (error: { readonly message: string }): CliError.UserError =>
-  new CliError.UserError({ cause: error.message });
+  new CliError.UserError({
+    cause: Schema.is(ParseError)(error) ? formatParseError(error) : error.message,
+  });
+
+const formatParseError = (error: ParseError): string =>
+  `${error.path ?? "<inline>"}:${error.line}:${error.column}: ${error.message}`;
 
 const processArgv: Effect.Effect<ReadonlyArray<string>> = Effect.sync(() => process.argv);
 
 const watchEnvironmentConfig = Config.all({
   watchChild: Config.option(Config.String(watchChildEnvName)),
   narrowedFeatures: Config.option(Config.String(narrowEnvName)),
+});
+
+const colorConfig = Config.all({
+  noColor: Config.option(Config.String("NO_COLOR")),
+  forceColor: Config.option(Config.String("FORCE_COLOR")),
 });
 
 const readWatchEnvironment = Effect.gen(function* () {
@@ -247,6 +262,33 @@ const readWatchEnvironment = Effect.gen(function* () {
     [narrowEnvName]: Option.getOrUndefined(configured.narrowedFeatures),
   };
 });
+
+const reporterOptions = Effect.fnUntraced(function* (verbose: boolean) {
+  const provider = yield* ConfigProvider.ConfigProvider;
+  const configured = yield* colorConfig.parse(provider);
+  const isTTY = process.stdout.isTTY ?? false;
+  return {
+    verbose,
+    cwd: process.cwd(),
+    progress: isTTY ? "scenario" : "none",
+    color: useColor(configured.noColor, configured.forceColor, isTTY),
+  } as const;
+});
+
+/** @internal */
+export const useColor = (
+  noColor: Option.Option<string>,
+  forceColor: Option.Option<string>,
+  isTTY: boolean,
+): boolean => {
+  if (Option.isSome(noColor)) {
+    return false;
+  }
+  if (Option.isSome(forceColor)) {
+    return forceColor.value !== "0";
+  }
+  return isTTY;
+};
 
 const timedMillis: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<number, E, R> =
   Effect.fnUntraced(function* <A, E, R>(effect: Effect.Effect<A, E, R>) {

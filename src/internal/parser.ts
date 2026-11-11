@@ -68,8 +68,22 @@ export const parse = (
   uri = "<inline>",
 ): Effect.Effect<CompiledFeature, ParseError, GherkinCompiler> =>
   Effect.flatMap(GherkinCompiler, (compiler) =>
-    Fn.pipe(compiler.compile(source, uri), Effect.flatMap(toFeature)),
+    Fn.pipe(
+      compiler.compile(source, uri),
+      Effect.flatMap(toFeature),
+      Effect.mapError((error) => withPath(error, uri)),
+    ),
   );
+
+const withPath = (error: ParseError, path: string): ParseError =>
+  error.path === undefined
+    ? new ParseError({
+        message: error.message,
+        line: error.line,
+        column: error.column,
+        path,
+      })
+    : error;
 
 const toFeature: (parsed: ParsedSource) => Effect.Effect<CompiledFeature, ParseError> =
   Effect.fnUntraced(function* (parsed) {

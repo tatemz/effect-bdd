@@ -6,12 +6,14 @@ import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Fn from "effect/Function";
 import type * as Layer from "effect/Layer";
-import type * as Option from "effect/Option";
+import * as Option from "effect/Option";
 import type { Pipeable } from "effect/Pipeable";
 import * as PipeableRuntime from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
 import type * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
+import * as Str from "effect/String";
 import {
   MatchError,
   ParseError,
@@ -20,12 +22,14 @@ import {
   StepError,
   StepTimeoutError,
   TapError as TapErrorClass,
+  type StepDefinition,
 } from "./Errors.ts";
 import * as ErrorsModule from "./Errors.ts";
 import * as cucumberCompiler from "./internal/cucumberCompiler.ts";
 import * as expression from "./internal/expression.ts";
 import * as parser from "./internal/parser.ts";
 import * as runner from "./internal/runner.ts";
+import { filePathFromStackUrl, parseStackLocation } from "./internal/stackLocation.ts";
 
 const FeatureTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Feature");
 const ScenarioTypeId: unique symbol = Symbol.for("~effect-bdd/Bdd/Scenario");
@@ -220,6 +224,7 @@ export interface Step<
   readonly expression: Expression<Captures>;
   readonly argument?: StepArg<Argument>;
   readonly timeout?: Duration.Duration;
+  readonly definition?: StepDefinition;
   readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
 }
 
@@ -434,6 +439,7 @@ type StepType<Kind extends StepKind, In, Out, E, R, Captures, Argument> = Step<
   Argument
 >;
 type TapType = Tap;
+type StepDefinitionType = StepDefinition;
 type TapErrorCombinatorType = TapError;
 type TapNodeType = TapNode;
 type ReportType = Report;
@@ -594,6 +600,7 @@ const withTimeout_: WithTimeout = Fn.dual(
       kind: self.kind,
       expression: self.expression,
       ...(self.argument === undefined ? {} : { argument: self.argument }),
+      ...(self.definition === undefined ? {} : { definition: self.definition }),
       timeout,
       run: self.run,
     }),
@@ -909,6 +916,8 @@ export declare namespace Bdd {
     Argument = undefined,
   > = StepType<Kind, In, Out, E, R, Captures, Argument>;
 
+  export type StepDefinition = StepDefinitionType;
+
   /**
    * Result returned after all scenarios pass.
    *
@@ -1161,6 +1170,7 @@ interface StepOptions<Kind extends StepKind, In, Out, E, R, Captures, Argument> 
   readonly expression: Expression<Captures>;
   readonly argument?: StepArg<Argument>;
   readonly timeout?: Duration.Duration;
+  readonly definition?: StepDefinition;
   readonly run: (captures: Captures, argument: Argument, state: In) => Effect.Effect<Out, E, R>;
 }
 
@@ -1174,18 +1184,19 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
     }
     return makeScenario(self.title, [...self.steps, step], self.providers, self.errorTaps);
   }
+  const definition = resolveStepDefinition(options.definition);
   const properties: Pick<
     Step<Kind, In, Out, E, R, Captures, Argument>,
     typeof StepTypeId | "kind" | "expression" | "run" | "pipe"
   > & {
     readonly argument?: StepArg<Argument>;
     readonly timeout?: Duration.Duration;
+    readonly definition?: StepDefinition;
   } = {
     [StepTypeId]: StepTypeId,
     kind: options.kind,
     expression: options.expression,
-    ...(options.argument === undefined ? {} : { argument: options.argument }),
-    ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+    ...optionalStepFields(options, definition),
     run: options.run,
     pipe() {
       return PipeableRuntime.pipeArguments(this, arguments);
@@ -1195,6 +1206,55 @@ const makeStep = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
   const step: Step<Kind, In, Out, E, R, Captures, Argument> = Object.assign(appendStep, properties);
   hideTypeId(step, StepTypeId);
   return Object.freeze(step);
+};
+
+const resolveStepDefinition = (
+  definition: StepDefinition | undefined,
+): StepDefinition | undefined => (definition === undefined ? captureStepDefinition() : definition);
+
+const optionalStepFields = <Kind extends StepKind, In, Out, E, R, Captures, Argument>(
+  options: StepOptions<Kind, In, Out, E, R, Captures, Argument>,
+  definition: StepDefinition | undefined,
+): {
+  readonly argument?: StepArg<Argument>;
+  readonly timeout?: Duration.Duration;
+  readonly definition?: StepDefinition;
+} => ({
+  ...(options.argument === undefined ? {} : { argument: options.argument }),
+  ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+  ...(definition === undefined ? {} : { definition }),
+});
+
+const definitionModulePath = filePathFromStackUrl(import.meta.url);
+
+const captureStepDefinition = (): StepDefinition | undefined => {
+  const stack = new Error().stack;
+  if (stack === undefined) {
+    return undefined;
+  }
+  return Fn.pipe(
+    Str.split(stack, "\n"),
+    Arr.drop(1),
+    Arr.filterMap((line) => stepDefinitionFromLine(line)),
+    Arr.head,
+    Option.getOrUndefined,
+  );
+};
+
+const stepDefinitionFromLine = (line: string): Result.Result<StepDefinition, undefined> => {
+  const location = stackLocation(line);
+  const frame = location === undefined ? undefined : parseStackLocation(location);
+  if (frame === undefined || frame.path === definitionModulePath) {
+    return Result.fail(undefined);
+  }
+  return Result.succeed({ path: frame.path, line: frame.line });
+};
+
+const stackLocation = (line: string): string | undefined => {
+  const open = Str.lastIndexOf("(")(line);
+  return Option.isSome(open)
+    ? Str.slice(open.value + 1, -1)(line)
+    : Fn.pipe(line, Str.trim, Str.replace(/^at /, ""));
 };
 
 function makeStepTag<Kind extends StepKind>(kind: Kind): StepTag<Kind> {

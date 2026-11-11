@@ -234,6 +234,14 @@ describe("public API", () => {
       assert.strictEqual(step.kind, "When");
       assert.deepStrictEqual(step.timeout, Duration.seconds(1));
     });
+
+    it("carries the step definition location through withTimeout", () => {
+      const step = Bdd.when`increment`(() => Effect.succeed(1));
+      const timed = step.pipe(Bdd.withTimeout(Duration.seconds(1)));
+
+      assert.notStrictEqual(step.definition, undefined);
+      assert.deepStrictEqual(timed.definition, step.definition);
+    });
   });
 
   describe("scenario providers", () => {
